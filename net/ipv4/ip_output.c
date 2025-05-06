@@ -447,7 +447,7 @@ int ip_output(struct net *net, struct sock *sk, struct sk_buff *skb)
 	skb->protocol = htons(ETH_P_IP);
 
 	if (is_dst_k2pro(skb))
-		printk(KERN_INFO "ip_output -> ip_finish_output\n");
+		printk(KERN_INFO "%s: ->ip_finish_output\n", __func__);
 
 	return NF_HOOK_COND(NFPROTO_IPV4, NF_INET_POST_ROUTING,
 			    net, sk, skb, indev, dev,
@@ -495,11 +495,11 @@ int __ip_queue_xmit(struct sock *sk, struct sk_buff *skb, struct flowi *fl,
 
 	/* Make sure we can route this packet. */
 	rt = (struct rtable *)__sk_dst_check(sk, 0);
-
-	if (fl->u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "__ip_queue_xmit -> ip_route_output_ports\n");
 	
 	if (!rt) {
+		if (fl->u.ip4.daddr == 0xa4dc77a)
+			printk(KERN_INFO "%s ->ip_route_output_ports\n", __func__);
+
 		__be32 daddr;
 
 		/* Use correct destination address if we have options. */
@@ -557,7 +557,7 @@ packet_routed:
 	skb->mark = sk->sk_mark;
 
 	if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
-		printk(KERN_INFO "__ip_queue_xmit -> ip_local_out\n");
+		printk(KERN_INFO "%s: ->ip_local_out\n", __func__);
 
 	res = ip_local_out(net, sk, skb);
 	rcu_read_unlock();

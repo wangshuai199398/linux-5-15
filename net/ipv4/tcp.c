@@ -735,7 +735,7 @@ void tcp_push(struct sock *sk, int flags, int mss_now,
 	if (flags & MSG_MORE)
 		nonagle = TCP_NAGLE_CORK;
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "tcp_push\n");
+		printk(KERN_INFO "%s: -> __tcp_push_pending_frames\n", __func__);
 	__tcp_push_pending_frames(sk, mss_now, nonagle);
 }
 
@@ -1318,6 +1318,9 @@ restart:
 		goto do_error;
 
 	while (msg_data_left(msg)) {
+		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+			printk(KERN_INFO "%s: iov_iter_count(&msg->msg_iter)->count %zu\n", __func__, iov_iter_count(&msg->msg_iter));
+
 		int copy = 0;
 
 		skb = tcp_write_queue_tail(sk);
