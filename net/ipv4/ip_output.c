@@ -100,7 +100,14 @@ int __ip_local_out(struct net *net, struct sock *sk, struct sk_buff *skb)
 {
 	struct iphdr *iph = ip_hdr(skb);
 
+	if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: ->ip_local_out skb->len 0x%x\n", __func__, skb->len);
+
 	iph->tot_len = htons(skb->len);
+
+	if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: ->ip_local_out iph->tot_len 0x%x\n", __func__, iph->tot_len);
+
 	ip_send_check(iph);
 
 	/* if egress device is enslaved to an L3 master device pass the
@@ -122,8 +129,11 @@ int ip_local_out(struct net *net, struct sock *sk, struct sk_buff *skb)
 	int err;
 
 	err = __ip_local_out(net, sk, skb);
-	if (likely(err == 1))
+	if (likely(err == 1)) {
+		if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
+			printk(KERN_INFO "%s: err==1 ->dst_output\n", __func__);
 		err = dst_output(net, sk, skb);
+	}
 
 	return err;
 }

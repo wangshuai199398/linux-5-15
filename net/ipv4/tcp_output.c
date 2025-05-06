@@ -1395,7 +1395,8 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	if (after(tcb->end_seq, tp->snd_nxt) || tcb->seq == tcb->end_seq)
 		TCP_ADD_STATS(sock_net(sk), TCP_MIB_OUTSEGS,
 			      tcp_skb_pcount(skb));
-
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: tp->segs_out %d tcp_skb_pcount(skb) %d\n", __func__, tp->segs_out, tcp_skb_pcount(skb));
 	tp->segs_out += tcp_skb_pcount(skb);
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
 		printk(KERN_INFO "%s: tp->segs_out %d tcp_skb_pcount(skb) %d\n", __func__, tp->segs_out, tcp_skb_pcount(skb));
@@ -1417,7 +1418,7 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	tcp_add_tx_delay(skb, tp);
 
 	if (inet->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s ->ip_queue_xmit\n", __func__);
+		printk(KERN_INFO "%s: ->ip_queue_xmit\n", __func__);
 
 	err = INDIRECT_CALL_INET(icsk->icsk_af_ops->queue_xmit,
 				 inet6_csk_xmit, ip_queue_xmit,
