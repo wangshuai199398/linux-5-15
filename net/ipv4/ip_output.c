@@ -105,9 +105,6 @@ int __ip_local_out(struct net *net, struct sock *sk, struct sk_buff *skb)
 
 	iph->tot_len = htons(skb->len);
 
-	if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->ip_local_out iph->tot_len 0x%x\n", __func__, iph->tot_len);
-
 	ip_send_check(iph);
 
 	/* if egress device is enslaved to an L3 master device pass the
@@ -118,6 +115,9 @@ int __ip_local_out(struct net *net, struct sock *sk, struct sk_buff *skb)
 		return 0;
 
 	skb->protocol = htons(ETH_P_IP);
+
+	if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: ->ip_local_out iph->tot_len 0x%x nf_hook\n", __func__, iph->tot_len);
 
 	return nf_hook(NFPROTO_IPV4, NF_INET_LOCAL_OUT,
 		       net, sk, skb, NULL, skb_dst(skb)->dev,

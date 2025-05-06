@@ -1229,7 +1229,7 @@ int tcp_sendmsg_locked(struct sock *sk, struct msghdr *msg, size_t size)
 	long timeo;
 
 	flags = msg->msg_flags;
-
+	//用户请求了零拷贝且数据不为0且socket支持
 	if (flags & MSG_ZEROCOPY && size && sock_flag(sk, SOCK_ZEROCOPY)) {
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
 			printk(KERN_INFO "%s: MSG_ZEROCOPY \n",  __func__);
@@ -1244,7 +1244,7 @@ int tcp_sendmsg_locked(struct sock *sk, struct msghdr *msg, size_t size)
 		if (!zc)
 			uarg->zerocopy = 0;
 	}
-
+	//启用TFO(允许在初始握手SYN包中就附带数据)或当前socket处于延迟连接模式 且TCP连接不是处于repair模式(故障恢复)
 	if (unlikely(flags & MSG_FASTOPEN || inet_sk(sk)->defer_connect) &&
 	    !tp->repair) {
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
@@ -1258,13 +1258,19 @@ int tcp_sendmsg_locked(struct sock *sk, struct msghdr *msg, size_t size)
 	}
 
 	timeo = sock_sndtimeo(sk, flags & MSG_DONTWAIT);
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: timeo %ld tp->app_limited %u\n", __func__, timeo, tp->app_limited);
 
 	tcp_rate_check_app_limited(sk);  /* is sending application-limited? */
+
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: timeo %ld tp->app_limited %u\n", __func__, timeo, tp->app_limited);
 
 	/* Wait for a connection to finish. One exception is TCP Fast Open
 	 * (passive side) where data is allowed to be sent before a connection
 	 * is fully established.
 	 */
+	//TCP连接还没完成(不是已连接也不是半关闭)并且这不是一个允许提前发送数据的TFO连接,就阻塞等待连接完成
 	if (((1 << sk->sk_state) & ~(TCPF_ESTABLISHED | TCPF_CLOSE_WAIT)) &&
 	    !tcp_passive_fastopen(sk)) {
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
@@ -1292,7 +1298,7 @@ int tcp_sendmsg_locked(struct sock *sk, struct msghdr *msg, size_t size)
 	sockcm_init(&sockc, sk);
 
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: sock_cmsg_send msg->msg_controllen %lu\n", __func__, msg->msg_controllen);
+		printk(KERN_INFO "%s: sock_cmsg_send msg->msg_controllen %lu sk->sk_tsflags %hu SOCK_FASYNC %d\n", __func__, msg->msg_controllen, sk->sk_tsflags, sock_flag(sk, SOCK_FASYNC));
 
 	if (msg->msg_controllen) {
 		err = sock_cmsg_send(sk, msg, &sockc);
