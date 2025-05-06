@@ -880,6 +880,7 @@ void skb_dump(const char *level, const struct sk_buff *skb, bool full_pkt)
 		skb_walk_frags(skb, list_skb)
 			skb_dump(level, list_skb, true);
 	}
+	printk("================\n");
 }
 EXPORT_SYMBOL(skb_dump);
 
@@ -2692,6 +2693,8 @@ do_frag_list:
 		memset(&msg, 0, sizeof(msg));
 		msg.msg_flags = MSG_DONTWAIT;
 
+		//if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		//	printk(KERN_INFO "__skb_send_sock -> kernel_sendmsg_locked\n");
 		ret = INDIRECT_CALL_2(sendmsg, kernel_sendmsg_locked,
 				      sendmsg_unlocked, sk, &msg, &kv, 1, slen);
 		if (ret <= 0)
@@ -2765,6 +2768,9 @@ error:
 int skb_send_sock_locked(struct sock *sk, struct sk_buff *skb, int offset,
 			 int len)
 {
+	//if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+	//	printk(KERN_INFO "skb_send_sock_locked -> kernel_sendmsg_locked\n");
+
 	return __skb_send_sock(sk, skb, offset, len, kernel_sendmsg_locked,
 			       kernel_sendpage_locked);
 }
@@ -5690,6 +5696,8 @@ static inline bool skb_gso_size_check(const struct sk_buff *skb,
  */
 bool skb_gso_validate_network_len(const struct sk_buff *skb, unsigned int mtu)
 {
+	if (is_dst_k2pro(skb))
+		printk(KERN_INFO "skb_gso_validate_network_len: skb_gso_network_seglen = %u transport_seglen= %u tcp header %d\n", skb_gso_network_seglen(skb), skb_gso_transport_seglen(skb), tcp_hdrlen(skb));
 	return skb_gso_size_check(skb, skb_gso_network_seglen(skb), mtu);
 }
 EXPORT_SYMBOL_GPL(skb_gso_validate_network_len);
@@ -6649,3 +6657,20 @@ free_now:
 }
 EXPORT_SYMBOL(__skb_ext_put);
 #endif /* CONFIG_SKB_EXTENSIONS */
+
+int is_dst_k2pro(struct sk_buff *skb)
+{
+	if (skb == NULL)
+		return 0;
+	struct iphdr *iph = ip_hdr(skb);
+	__be32 specific_ip;
+
+	//printk(KERN_INFO "dip 0x%x sip 0x%x\n", ntohl(iph->daddr), ntohl(iph->saddr));
+	//printk(KERN_INFO "daddr %pI4\n", &iph->daddr);
+	specific_ip = in_aton("122.199.77.10");
+	if (iph != NULL && iph->daddr == specific_ip) {
+		return 1;
+	}
+	return 0;
+}
+

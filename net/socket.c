@@ -701,6 +701,9 @@ INDIRECT_CALLABLE_DECLARE(int inet6_sendmsg(struct socket *, struct msghdr *,
 					    size_t));
 static inline int sock_sendmsg_nosec(struct socket *sock, struct msghdr *msg)
 {
+	if (inet_sk(sock->sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: -> sock->ops->sendmsg \n", __func__);
+
 	int ret = INDIRECT_CALL_INET(sock->ops->sendmsg, inet6_sendmsg,
 				     inet_sendmsg, sock, msg,
 				     msg_data_left(msg));
@@ -712,6 +715,9 @@ static int __sock_sendmsg(struct socket *sock, struct msghdr *msg)
 {
 	int err = security_socket_sendmsg(sock, msg,
 					  msg_data_left(msg));
+
+	if (inet_sk(sock->sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: -> sock_sendmsg_nosec \n", __func__);
 
 	return err ?: sock_sendmsg_nosec(sock, msg);
 }
@@ -735,6 +741,9 @@ int sock_sendmsg(struct socket *sock, struct msghdr *msg)
 		memcpy(&address, msg->msg_name, msg->msg_namelen);
 		msg->msg_name = &address;
 	}
+
+	if (inet_sk(sock->sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "sock_sendmsg -> __sock_sendmsg \n");
 
 	ret = __sock_sendmsg(sock, msg);
 	msg->msg_name = save_addr;
@@ -781,6 +790,13 @@ int kernel_sendmsg_locked(struct sock *sk, struct msghdr *msg,
 			  struct kvec *vec, size_t num, size_t size)
 {
 	struct socket *sock = sk->sk_socket;
+
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
+		if (!sock->ops->sendmsg_locked)
+			printk(KERN_INFO "kernel_sendmsg_locked -> sock_no_sendmsg_locked\n");
+		else
+			printk(KERN_INFO "kernel_sendmsg_locked -> sendmsg_locked\n");
+	}
 
 	if (!sock->ops->sendmsg_locked)
 		return sock_no_sendmsg_locked(sk, msg, size);
@@ -1071,10 +1087,13 @@ static ssize_t sock_write_iter(struct kiocb *iocb, struct iov_iter *from)
 		return -ESPIPE;
 
 	if (file->f_flags & O_NONBLOCK || (iocb->ki_flags & IOCB_NOWAIT))
-		msg.msg_flags = MSG_DONTWAIT;
+		msg.msg_flags = MSG_DONTWAIT; // 0x40
 
 	if (sock->type == SOCK_SEQPACKET)
-		msg.msg_flags |= MSG_EOR;
+		msg.msg_flags |= MSG_EOR;     // 0x80
+
+	if (inet_sk(sock->sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: __sock_sendmsg msg.msg_flags 0x%x\n", __func__, msg.msg_flags);
 
 	res = __sock_sendmsg(sock, &msg);
 	*from = msg.msg_iter;
@@ -2060,6 +2079,10 @@ int __sys_sendto(int fd, void __user *buff, size_t len, unsigned int flags,
 	if (sock->file->f_flags & O_NONBLOCK)
 		flags |= MSG_DONTWAIT;
 	msg.msg_flags = flags;
+
+	if (inet_sk(sock->sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "__sys_sendto -> __sock_sendmsg \n");
+
 	err = __sock_sendmsg(sock, &msg);
 
 out_put:
@@ -2433,6 +2456,8 @@ static int ____sys_sendmsg(struct socket *sock, struct msghdr *msg_sys,
 		err = sock_sendmsg_nosec(sock, msg_sys);
 		goto out_freectl;
 	}
+	if (inet_sk(sock->sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "____sys_sendmsg -> __sock_sendmsg \n");
 	err = __sock_sendmsg(sock, msg_sys);
 	/*
 	 * If this is sendmmsg() and sending to current destination address was
@@ -2486,7 +2511,8 @@ static int ___sys_sendmsg(struct socket *sock, struct user_msghdr __user *msg,
 	err = sendmsg_copy_msghdr(msg_sys, msg, flags, &iov);
 	if (err < 0)
 		return err;
-
+	if (inet_sk(sock->sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "___sys_sendmsg -> ____sys_sendmsg \n");
 	err = ____sys_sendmsg(sock, msg_sys, flags, used_address,
 				allowed_msghdr_flags);
 	kfree(iov);
@@ -2499,6 +2525,8 @@ static int ___sys_sendmsg(struct socket *sock, struct user_msghdr __user *msg,
 long __sys_sendmsg_sock(struct socket *sock, struct msghdr *msg,
 			unsigned int flags)
 {
+	if (inet_sk(sock->sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "__sys_sendmsg_sock -> ____sys_sendmsg \n");
 	return ____sys_sendmsg(sock, msg, flags, NULL, 0);
 }
 

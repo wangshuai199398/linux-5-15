@@ -734,7 +734,8 @@ void tcp_push(struct sock *sk, int flags, int mss_now,
 
 	if (flags & MSG_MORE)
 		nonagle = TCP_NAGLE_CORK;
-
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "tcp_push\n");
 	__tcp_push_pending_frames(sk, mss_now, nonagle);
 }
 
@@ -923,9 +924,15 @@ static unsigned int tcp_xmit_size_goal(struct sock *sk, u32 mss_now,
 	if (!large_allowed)
 		return mss_now;
 
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: -> sk->sk_gso_max_size %u MAX_TCP_HEADER %d\n", __func__, sk->sk_gso_max_size, MAX_TCP_HEADER);
+
 	/* Note : tcp_tso_autosize() will eventually split this later */
 	new_size_goal = sk->sk_gso_max_size - 1 - MAX_TCP_HEADER;
 	new_size_goal = tcp_bound_to_half_wnd(tp, new_size_goal);
+
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: -> new_size_goal %u, tp->gso_segs: %hu\n", __func__, new_size_goal, tp->gso_segs);
 
 	/* We try hard to avoid divides here */
 	size_goal = tp->gso_segs * mss_now;
@@ -935,6 +942,9 @@ static unsigned int tcp_xmit_size_goal(struct sock *sk, u32 mss_now,
 				     sk->sk_gso_max_segs);
 		size_goal = tp->gso_segs * mss_now;
 	}
+
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: -> tp->gso_segs: %hu, size_goal: %u\n", __func__, tp->gso_segs, size_goal);
 
 	return max(size_goal, mss_now);
 }
@@ -1082,7 +1092,8 @@ ssize_t do_tcp_sendpages(struct sock *sk, struct page *page, int offset,
 
 		if (skb->len < size_goal || (flags & MSG_OOB))
 			continue;
-
+		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+			printk(KERN_INFO "do_tcp_sendpages\n");
 		if (forced_push(tp)) {
 			tcp_mark_push(tp, skb);
 			__tcp_push_pending_frames(sk, mss_now, TCP_NAGLE_PUSH);
@@ -1220,6 +1231,8 @@ int tcp_sendmsg_locked(struct sock *sk, struct msghdr *msg, size_t size)
 	flags = msg->msg_flags;
 
 	if (flags & MSG_ZEROCOPY && size && sock_flag(sk, SOCK_ZEROCOPY)) {
+		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+			printk(KERN_INFO "%s: MSG_ZEROCOPY \n",  __func__);
 		skb = tcp_write_queue_tail(sk);
 		uarg = msg_zerocopy_realloc(sk, size, skb_zcopy(skb));
 		if (!uarg) {
@@ -1234,6 +1247,9 @@ int tcp_sendmsg_locked(struct sock *sk, struct msghdr *msg, size_t size)
 
 	if (unlikely(flags & MSG_FASTOPEN || inet_sk(sk)->defer_connect) &&
 	    !tp->repair) {
+		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+			printk(KERN_INFO "%s: tcp_sendmsg_fastopen \n", __func__);
+
 		err = tcp_sendmsg_fastopen(sk, msg, &copied_syn, size, uarg);
 		if (err == -EINPROGRESS && copied_syn > 0)
 			goto out;
@@ -1251,12 +1267,16 @@ int tcp_sendmsg_locked(struct sock *sk, struct msghdr *msg, size_t size)
 	 */
 	if (((1 << sk->sk_state) & ~(TCPF_ESTABLISHED | TCPF_CLOSE_WAIT)) &&
 	    !tcp_passive_fastopen(sk)) {
+		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+			printk(KERN_INFO "%s: sk_stream_wait_connect \n", __func__);
 		err = sk_stream_wait_connect(sk, &timeo);
 		if (err != 0)
 			goto do_error;
 	}
 
 	if (unlikely(tp->repair)) {
+		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+			printk(KERN_INFO "%s: TCP_RECV_QUEUE tp->repair_queue %02x\n", __func__, tp->repair_queue);
 		if (tp->repair_queue == TCP_RECV_QUEUE) {
 			copied = tcp_send_rcvq(sk, msg, size);
 			goto out_nopush;
@@ -1270,6 +1290,10 @@ int tcp_sendmsg_locked(struct sock *sk, struct msghdr *msg, size_t size)
 	}
 
 	sockcm_init(&sockc, sk);
+
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: sock_cmsg_send msg->msg_controllen %lu\n", __func__, msg->msg_controllen);
+
 	if (msg->msg_controllen) {
 		err = sock_cmsg_send(sk, msg, &sockc);
 		if (unlikely(err)) {
@@ -1286,6 +1310,8 @@ int tcp_sendmsg_locked(struct sock *sk, struct msghdr *msg, size_t size)
 
 restart:
 	mss_now = tcp_send_mss(sk, &size_goal, flags);
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: tcp_send_mss mss_now %d size_goal %d\n", __func__, mss_now, size_goal);
 
 	err = -EPIPE;
 	if (sk->sk_err || (sk->sk_shutdown & SEND_SHUTDOWN))
@@ -1295,8 +1321,11 @@ restart:
 		int copy = 0;
 
 		skb = tcp_write_queue_tail(sk);
-		if (skb)
+		if (skb) {
+			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+				printk(KERN_INFO "%s: skb skb->len %d size_goal %d\n", __func__, skb->len, size_goal);
 			copy = size_goal - skb->len;
+		}
 
 		if (copy <= 0 || !tcp_skb_can_collapse_to(skb)) {
 			bool first_skb;
@@ -1311,6 +1340,8 @@ new_segment:
 					goto restart;
 			}
 			first_skb = tcp_rtx_and_write_queues_empty(sk);
+			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+				printk(KERN_INFO "%s: sk_stream_alloc_skb sk->sk_allocation 0x%x\n", __func__, sk->sk_allocation);
 			skb = sk_stream_alloc_skb(sk, 0, sk->sk_allocation,
 						  first_skb);
 			if (!skb)
@@ -1351,6 +1382,8 @@ new_segment:
 				merge = false;
 			}
 
+			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+				printk(KERN_INFO "%s: merge %d, copy %d pfrag->size %hu pfrag->offset %hu\n", __func__, merge, copy, pfrag->size, pfrag->offset);
 			copy = min_t(int, copy, pfrag->size - pfrag->offset);
 
 			if (!sk_wmem_schedule(sk, copy))
@@ -1375,6 +1408,8 @@ new_segment:
 		} else {
 			if (!sk_wmem_schedule(sk, copy))
 				goto wait_for_space;
+			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+				printk(KERN_INFO "%s: skb_zerocopy_iter_stream \n", __func__);
 
 			err = skb_zerocopy_iter_stream(sk, skb, msg, copy, uarg);
 			if (err == -EMSGSIZE || err == -EEXIST) {
@@ -1387,13 +1422,17 @@ new_segment:
 		}
 
 		if (!copied)
-			TCP_SKB_CB(skb)->tcp_flags &= ~TCPHDR_PSH;
+			TCP_SKB_CB(skb)->tcp_flags &= ~TCPHDR_PSH; // 0x08
+		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+			printk(KERN_INFO "%s: copied %d TCP_SKB_CB(skb)->tcp_flags 0x%x copy %d\n", __func__, copied, TCP_SKB_CB(skb)->tcp_flags, copy);
 
 		WRITE_ONCE(tp->write_seq, tp->write_seq + copy);
 		TCP_SKB_CB(skb)->end_seq += copy;
 		tcp_skb_pcount_set(skb, 0);
 
 		copied += copy;
+		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+			printk(KERN_INFO "%s: copied %d msg_data_left(msg) %lu skb->len %d size_goal %d flags 0x%x tp->repair %d\n", __func__, copied, msg_data_left(msg), skb->len, size_goal, flags, tp->repair);
 		if (!msg_data_left(msg)) {
 			if (unlikely(flags & MSG_EOR))
 				TCP_SKB_CB(skb)->eor = 1;
@@ -1404,14 +1443,22 @@ new_segment:
 			continue;
 
 		if (forced_push(tp)) {
+			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+				printk(KERN_INFO "%s: __tcp_push_pending_frames write_seq %u, pushed_seq %u max_window %u\n", __func__, tp->write_seq, tp->pushed_seq, tp->max_window);
 			tcp_mark_push(tp, skb);
 			__tcp_push_pending_frames(sk, mss_now, TCP_NAGLE_PUSH);
-		} else if (skb == tcp_send_head(sk))
+		} else if (skb == tcp_send_head(sk)) {
+			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+				printk(KERN_INFO "%s: -> tcp_push_one write_seq %u, pushed_seq %u max_window %u\n",  __func__, tp->write_seq, tp->pushed_seq, tp->max_window);
 			tcp_push_one(sk, mss_now);
+		}
 		continue;
 
 wait_for_space:
 		set_bit(SOCK_NOSPACE, &sk->sk_socket->flags);
+		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+			printk(KERN_INFO "%s: -> wait_for_space tcp_push\n", __func__);
+
 		if (copied)
 			tcp_push(sk, flags & ~MSG_MORE, mss_now,
 				 TCP_NAGLE_PUSH, size_goal);
@@ -1426,6 +1473,8 @@ wait_for_space:
 out:
 	if (copied) {
 		tcp_tx_timestamp(sk, sockc.tsflags);
+		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+			printk(KERN_INFO "%s: out tcp_push\n", __func__);
 		tcp_push(sk, flags, mss_now, tp->nonagle, size_goal);
 	}
 out_nopush:
@@ -1454,6 +1503,9 @@ int tcp_sendmsg(struct sock *sk, struct msghdr *msg, size_t size)
 	int ret;
 
 	lock_sock(sk);
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: -> tcp_sendmsg_locked \n", __func__);
+
 	ret = tcp_sendmsg_locked(sk, msg, size);
 	release_sock(sk);
 

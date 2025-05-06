@@ -3052,6 +3052,10 @@ ssize_t sock_no_sendpage_locked(struct sock *sk, struct page *page,
 
 	iov.iov_base = kaddr + offset;
 	iov.iov_len = size;
+
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "sock_no_sendpage_locked -> kernel_sendmsg_locked\n");
+
 	res = kernel_sendmsg_locked(sk, &msg, &iov, 1, size);
 	kunmap(page);
 	return res;

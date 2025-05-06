@@ -3360,12 +3360,14 @@ struct sk_buff *skb_mac_gso_segment(struct sk_buff *skb,
 	rcu_read_lock();
 	list_for_each_entry_rcu(ptype, &offload_base, list) {
 		if (ptype->type == type && ptype->callbacks.gso_segment) {
-			segs = ptype->callbacks.gso_segment(skb, features);
+			//printk(KERN_INFO "skb_mac_gso_segment: ptype->type = %d\n", ptype->type); //8
+			segs = ptype->callbacks.gso_segment(skb, features); // inet_gso_segment
 			break;
 		}
 	}
 	rcu_read_unlock();
-
+	if (is_dst_k2pro(skb))
+		printk(KERN_INFO "skb_mac_gso_segment end\n");
 	__skb_push(skb, skb->data - skb_mac_header(skb));
 
 	return segs;
@@ -3416,6 +3418,7 @@ struct sk_buff *__skb_gso_segment(struct sk_buff *skb,
 	 * work.
 	 */
 	if (features & NETIF_F_GSO_PARTIAL) {
+		printk(KERN_INFO "GSO partial support enabled\n");
 		netdev_features_t partial_features = NETIF_F_GSO_ROBUST;
 		struct net_device *dev = skb->dev;
 
@@ -3429,10 +3432,11 @@ struct sk_buff *__skb_gso_segment(struct sk_buff *skb,
 
 	SKB_GSO_CB(skb)->mac_offset = skb_headroom(skb);
 	SKB_GSO_CB(skb)->encap_level = 0;
-
+	
 	skb_reset_mac_header(skb);
 	skb_reset_mac_len(skb);
-
+	if (is_dst_k2pro(skb))
+		printk(KERN_INFO "__skb_gso_segment->skb_mac_gso_segment\n");
 	segs = skb_mac_gso_segment(skb, features);
 
 	if (segs != skb && unlikely(skb_needs_check(skb, tx_path) && !IS_ERR(segs)))
@@ -3614,9 +3618,12 @@ static int xmit_one(struct sk_buff *skb, struct net_device *dev,
 	len = skb->len;
 	PRANDOM_ADD_NOISE(skb, dev, txq, len + jiffies);
 	trace_net_dev_start_xmit(skb, dev);
+	if (is_dst_k2pro(skb))
+		printk(KERN_INFO "netdev_start_xmit: skb->next =\n");
 	rc = netdev_start_xmit(skb, dev, txq, more);
 	trace_net_dev_xmit(skb, rc, dev, len);
-
+	if (is_dst_k2pro(skb))
+		printk(KERN_INFO "********* kernel tx end ********* \n\n");
 	return rc;
 }
 
@@ -3630,6 +3637,8 @@ struct sk_buff *dev_hard_start_xmit(struct sk_buff *first, struct net_device *de
 		struct sk_buff *next = skb->next;
 
 		skb_mark_not_on_list(skb);
+		if (is_dst_k2pro(skb))
+			printk(KERN_INFO "dev_hard_start_xmit: skb->next =\n");
 		rc = xmit_one(skb, dev, txq, next != NULL);
 		if (unlikely(!dev_xmit_complete(rc))) {
 			skb->next = next;
@@ -3691,13 +3700,18 @@ static struct sk_buff *validate_xmit_skb(struct sk_buff *skb, struct net_device 
 	skb = validate_xmit_vlan(skb, features);
 	if (unlikely(!skb))
 		goto out_null;
-
 	skb = sk_validate_xmit_skb(skb, dev);
 	if (unlikely(!skb))
 		goto out_null;
 
+	if (is_dst_k2pro(skb))
+		printk(KERN_INFO "validate_xmit_skb -> netif_needs_gso? \n");
+
 	if (netif_needs_gso(skb, features)) {
 		struct sk_buff *segs;
+
+		if (is_dst_k2pro(skb))
+			printk(KERN_INFO "validate_xmit_skb: skb_gso_segment \n");
 
 		segs = skb_gso_segment(skb, features);
 		if (IS_ERR(segs)) {
@@ -3748,7 +3762,6 @@ struct sk_buff *validate_xmit_skb_list(struct sk_buff *skb, struct net_device *d
 
 		/* in case skb wont be segmented, point to itself */
 		skb->prev = skb;
-
 		skb = validate_xmit_skb(skb, dev, again);
 		if (!skb)
 			continue;
@@ -3835,8 +3848,12 @@ static inline int __dev_xmit_skb(struct sk_buff *skb, struct Qdisc *q,
 	qdisc_calculate_pkt_len(skb, q);
 
 	if (q->flags & TCQ_F_NOLOCK) {
+		if (is_dst_k2pro(skb))
+			printk(KERN_INFO "__dev_xmit_skb TCQ_F_NOLOCK q->flags = %d\n", q->flags);
 		if (q->flags & TCQ_F_CAN_BYPASS && nolock_qdisc_is_empty(q) &&
 		    qdisc_run_begin(q)) {
+			if (is_dst_k2pro(skb))
+				printk(KERN_INFO "__dev_xmit_skb: q->flags = %d\n", q->flags);
 			/* Retest nolock_qdisc_is_empty() within the protection
 			 * of q->seqlock to protect from racing with requeuing.
 			 */
@@ -3890,6 +3907,8 @@ no_lock_out:
 
 		qdisc_bstats_update(q, skb);
 
+		if (is_dst_k2pro(skb))
+			printk(KERN_INFO "lock -> sch_direct_xmit\n");
 		if (sch_direct_xmit(skb, q, dev, txq, root_lock, true)) {
 			if (unlikely(contended)) {
 				spin_unlock(&q->busylock);
@@ -4218,6 +4237,8 @@ static int __dev_queue_xmit(struct sk_buff *skb, struct net_device *sb_dev)
 
 	trace_net_dev_queue(skb);
 	if (q->enqueue) {
+		if (is_dst_k2pro(skb))
+			printk(KERN_INFO "dev_queue_xmit: q->enqueue \n");
 		rc = __dev_xmit_skb(skb, q, dev, txq);
 		goto out;
 	}
@@ -4243,7 +4264,6 @@ static int __dev_queue_xmit(struct sk_buff *skb, struct net_device *sb_dev)
 		if (READ_ONCE(txq->xmit_lock_owner) != cpu) {
 			if (dev_xmit_recursion())
 				goto recursion_alert;
-
 			skb = validate_xmit_skb(skb, dev, &again);
 			if (!skb)
 				goto out;
@@ -4253,6 +4273,8 @@ static int __dev_queue_xmit(struct sk_buff *skb, struct net_device *sb_dev)
 
 			if (!netif_xmit_stopped(txq)) {
 				dev_xmit_recursion_inc();
+				if (is_dst_k2pro(skb))
+					printk(KERN_INFO "dev_hard_start_xmit \n");
 				skb = dev_hard_start_xmit(skb, dev, txq, &rc);
 				dev_xmit_recursion_dec();
 				if (dev_xmit_complete(rc)) {

@@ -1179,9 +1179,9 @@ static inline void security_transfer_creds(struct cred *new,
 {
 }
 
-static inline void security_cred_getsecid(const struct cred *c, u32 *secid)
+static inline void security_cred_getsecid(const struct cred *c, struct lsmblob *blob)
 {
-	*secid = 0;
+	return;
 }
 
 static inline int security_kernel_act_as(struct cred *cred,

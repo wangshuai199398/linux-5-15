@@ -505,8 +505,7 @@ static inline int neigh_output(struct neighbour *n, struct sk_buff *skb,
 	    (READ_ONCE(n->nud_state) & NUD_CONNECTED) &&
 	    READ_ONCE(hh->hh_len))
 		return neigh_hh_output(hh, skb);
-
-	return n->output(n, skb);
+	return n->output(n, skb); // neigh_resolve_output
 }
 
 static inline struct neighbour *

@@ -1912,7 +1912,8 @@ static inline void tcp_push_pending_frames(struct sock *sk)
 {
 	if (tcp_send_head(sk)) {
 		struct tcp_sock *tp = tcp_sk(sk);
-
+		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+			printk(KERN_INFO "tcp_push_pending_frames\n");
 		__tcp_push_pending_frames(sk, tcp_current_mss(sk), tp->nonagle);
 	}
 }

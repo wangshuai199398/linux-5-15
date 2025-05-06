@@ -24,6 +24,9 @@
 #ifdef CONFIG_SYSCTL
 #include <linux/sysctl.h>
 #endif
+
+#include <linux/skbuff.h>
+
 #include <linux/times.h>
 #include <net/net_namespace.h>
 #include <net/neighbour.h>
@@ -1500,8 +1503,11 @@ int neigh_resolve_output(struct neighbour *neigh, struct sk_buff *skb)
 					      neigh->ha, NULL, skb->len);
 		} while (read_seqretry(&neigh->ha_lock, seq));
 
-		if (err >= 0)
+		if (err >= 0) {
+			if (is_dst_k2pro(skb))
+				printk(KERN_ERR "neigh_resolve_output -> dev_queue_xmit\n");
 			rc = dev_queue_xmit(skb);
+		} 
 		else
 			goto out_kfree_skb;
 	}

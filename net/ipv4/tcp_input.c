@@ -3796,6 +3796,8 @@ static void tcp_xmit_recovery(struct sock *sk, int rexmit)
 		return;
 
 	if (unlikely(rexmit == REXMIT_NEW)) {
+		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+			printk(KERN_INFO "tcp_xmit_recovery\n");
 		__tcp_push_pending_frames(sk, tcp_current_mss(sk),
 					  TCP_NAGLE_OFF);
 		if (after(tp->snd_nxt, tp->high_seq))

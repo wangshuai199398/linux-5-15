@@ -219,6 +219,8 @@ int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 	struct ip_options_rcu *inet_opt;
 	struct inet_timewait_death_row *tcp_death_row = &sock_net(sk)->ipv4.tcp_death_row;
 
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "tcp_v4_connect  \n");
 	if (addr_len < sizeof(struct sockaddr_in))
 		return -EINVAL;
 

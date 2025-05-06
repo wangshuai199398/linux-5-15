@@ -225,6 +225,8 @@ static int ip_finish_output2(struct net *net, struct sock *sk, struct sk_buff *s
 
 		sock_confirm_neigh(skb, neigh);
 		/* if crossing protocols, can not use the cached header */
+		if (is_dst_k2pro(skb))
+			printk(KERN_INFO "ip_finish_output2 neigh_output\n");
 		res = neigh_output(neigh, skb, is_v6gw);
 		rcu_read_unlock_bh();
 		return res;
@@ -246,8 +248,11 @@ static int ip_finish_output_gso(struct net *net, struct sock *sk,
 
 	/* common case: seglen is <= mtu
 	 */
-	if (skb_gso_validate_network_len(skb, mtu))
+	if (skb_gso_validate_network_len(skb, mtu)) {
+		if (is_dst_k2pro(skb))
+			printk(KERN_INFO "ip_finish_output_gso -> ip_finish_output2 \n");
 		return ip_finish_output2(net, sk, skb);
+	}
 
 	/* Slowpath -  GSO segment length exceeds the egress MTU.
 	 *
@@ -264,6 +269,8 @@ static int ip_finish_output_gso(struct net *net, struct sock *sk,
 	 */
 	features = netif_skb_features(skb);
 	BUILD_BUG_ON(sizeof(*IPCB(skb)) > SKB_GSO_CB_OFFSET);
+	if (is_dst_k2pro(skb))
+		printk(KERN_INFO "ip_finish_output_gso -> skb_gso_segment\n");
 	segs = skb_gso_segment(skb, features & ~NETIF_F_GSO_MASK);
 	if (IS_ERR_OR_NULL(segs)) {
 		kfree_skb(skb);
@@ -276,6 +283,7 @@ static int ip_finish_output_gso(struct net *net, struct sock *sk,
 		int err;
 
 		skb_mark_not_on_list(segs);
+		printk(KERN_INFO "ip_finish_output_gso -> ip_fragment\n");
 		err = ip_fragment(net, sk, segs, mtu, ip_finish_output2);
 
 		if (err && ret == 0)
@@ -297,8 +305,19 @@ static int __ip_finish_output(struct net *net, struct sock *sk, struct sk_buff *
 	}
 #endif
 	mtu = ip_skb_dst_mtu(sk, skb);
-	if (skb_is_gso(skb))
+
+	if (is_dst_k2pro(skb)) {
+		printk("======== begin ========\n");
+		printk(KERN_INFO "IPCB(skb)->frag_max_size %hu\n", IPCB(skb)->frag_max_size);
+		skb_dump(KERN_INFO, skb, false);
+	}
+
+	if (skb_is_gso(skb)) {
+		if (is_dst_k2pro(skb))
+			printk(KERN_INFO "__ip_finish_output -> ip_finish_output_gso skb->len %d mtu %d\n", skb->len, mtu);
 		return ip_finish_output_gso(net, sk, skb, mtu);
+	}
+		
 
 	if (skb->len > mtu || IPCB(skb)->frag_max_size)
 		return ip_fragment(net, sk, skb, mtu, ip_finish_output2);
@@ -427,6 +446,9 @@ int ip_output(struct net *net, struct sock *sk, struct sk_buff *skb)
 	skb->dev = dev;
 	skb->protocol = htons(ETH_P_IP);
 
+	if (is_dst_k2pro(skb))
+		printk(KERN_INFO "ip_output -> ip_finish_output\n");
+
 	return NF_HOOK_COND(NFPROTO_IPV4, NF_INET_POST_ROUTING,
 			    net, sk, skb, indev, dev,
 			    ip_finish_output,
@@ -473,6 +495,10 @@ int __ip_queue_xmit(struct sock *sk, struct sk_buff *skb, struct flowi *fl,
 
 	/* Make sure we can route this packet. */
 	rt = (struct rtable *)__sk_dst_check(sk, 0);
+
+	if (fl->u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "__ip_queue_xmit -> ip_route_output_ports\n");
+	
 	if (!rt) {
 		__be32 daddr;
 
@@ -496,6 +522,7 @@ int __ip_queue_xmit(struct sock *sk, struct sk_buff *skb, struct flowi *fl,
 			goto no_route;
 		sk_setup_caps(sk, &rt->dst);
 	}
+
 	skb_dst_set_noref(skb, &rt->dst);
 
 packet_routed:
@@ -528,6 +555,9 @@ packet_routed:
 	/* TODO : should we use skb->sk here instead of sk ? */
 	skb->priority = sk->sk_priority;
 	skb->mark = sk->sk_mark;
+
+	if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
+		printk(KERN_INFO "__ip_queue_xmit -> ip_local_out\n");
 
 	res = ip_local_out(net, sk, skb);
 	rcu_read_unlock();
@@ -577,8 +607,11 @@ static int ip_fragment(struct net *net, struct sock *sk, struct sk_buff *skb,
 {
 	struct iphdr *iph = ip_hdr(skb);
 
-	if ((iph->frag_off & htons(IP_DF)) == 0)
+	if ((iph->frag_off & htons(IP_DF)) == 0) {
+		if (is_dst_k2pro(skb)) 
+			printk(KERN_INFO " ip_fragment is IP_DF \n");
 		return ip_do_fragment(net, sk, skb, output);
+	}
 
 	if (unlikely(!skb->ignore_df ||
 		     (IPCB(skb)->frag_max_size &&
@@ -854,6 +887,8 @@ int ip_do_fragment(struct net *net, struct sock *sk, struct sk_buff *skb,
 			}
 
 			skb->tstamp = tstamp;
+			if (is_dst_k2pro(skb))
+				printk(KERN_INFO "ip_do_fragment -> output\n");
 			err = output(net, sk, skb);
 
 			if (!err)
@@ -888,7 +923,8 @@ slow_path:
 	/*
 	 *	Fragment the datagram.
 	 */
-
+	if (is_dst_k2pro(skb))
+		printk(KERN_INFO "slow_path \n");
 	ip_frag_init(skb, hlen, ll_rs, mtu, IPCB(skb)->flags & IPSKB_FRAG_PMTU,
 		     &state);
 
@@ -898,7 +934,6 @@ slow_path:
 
 	while (state.left > 0) {
 		bool first_frag = (state.offset == 0);
-
 		skb2 = ip_frag_next(skb, &state);
 		if (IS_ERR(skb2)) {
 			err = PTR_ERR(skb2);
@@ -910,6 +945,8 @@ slow_path:
 		 *	Put this fragment into the sending queue.
 		 */
 		skb2->tstamp = tstamp;
+		if (is_dst_k2pro(skb2))
+			printk(KERN_INFO "output \n");
 		err = output(net, sk, skb2);
 		if (err)
 			goto fail;

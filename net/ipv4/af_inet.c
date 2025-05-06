@@ -668,8 +668,9 @@ int __inet_stream_connect(struct socket *sock, struct sockaddr *uaddr,
 			if (err)
 				goto out;
 		}
-
-		err = sk->sk_prot->connect(sk, uaddr, addr_len);
+		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+			printk(KERN_INFO "sk->sk_prot->connect  \n");
+		err = sk->sk_prot->connect(sk, uaddr, addr_len); //tcp_v4_connect
 		if (err < 0)
 			goto out;
 
@@ -830,6 +831,8 @@ int inet_sendmsg(struct socket *sock, struct msghdr *msg, size_t size)
 
 	if (unlikely(inet_send_prepare(sk)))
 		return -EAGAIN;
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: -> tcp_sendmsg size %lu\n", __func__, size);
 
 	return INDIRECT_CALL_2(sk->sk_prot->sendmsg, tcp_sendmsg, udp_sendmsg,
 			       sk, msg, size);
@@ -1392,10 +1395,11 @@ struct sk_buff *inet_gso_segment(struct sk_buff *skb,
 		if (fixedid && !(ip_hdr(skb)->frag_off & htons(IP_DF)))
 			goto out;
 	}
-
+	if (is_dst_k2pro(skb))
+		printk(KERN_INFO "inet_gso_segment -> gso_segment\n");
 	ops = rcu_dereference(inet_offloads[proto]);
 	if (likely(ops && ops->callbacks.gso_segment)) {
-		segs = ops->callbacks.gso_segment(skb, features);
+		segs = ops->callbacks.gso_segment(skb, features); // tcp4_gso_segment
 		if (!segs)
 			skb->network_header = skb_mac_header(skb) + nhoff - skb->head;
 	}
@@ -1407,6 +1411,8 @@ struct sk_buff *inet_gso_segment(struct sk_buff *skb,
 
 	skb = segs;
 	do {
+		if (is_dst_k2pro(skb))
+			printk(KERN_INFO "do inet_gso_segment \n");
 		iph = (struct iphdr *)(skb_mac_header(skb) + nhoff);
 		if (udpfrag) {
 			iph->frag_off = htons(offset >> 3);

@@ -1017,7 +1017,8 @@ static void tcp_tsq_write(struct sock *sk)
 			tcp_mstamp_refresh(tp);
 			tcp_xmit_retransmit_queue(sk);
 		}
-
+		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+			printk(KERN_INFO "tcp_tsq_write\n");
 		tcp_write_xmit(sk, tcp_current_mss(sk), tp->nonagle,
 			       0, GFP_ATOMIC);
 	}
@@ -1249,11 +1250,16 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	u64 prior_wstamp;
 	int err;
 
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "__tcp_transmit_skb \n");
+
 	BUG_ON(!skb || !tcp_skb_pcount(skb));
 	tp = tcp_sk(sk);
 	prior_wstamp = tp->tcp_wstamp_ns;
 	tp->tcp_wstamp_ns = max(tp->tcp_wstamp_ns, tp->tcp_clock_cache);
 	skb->skb_mstamp_ns = tp->tcp_wstamp_ns;
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "__tcp_transmit_skb -> clone_it %d\n", clone_it);
 	if (clone_it) {
 		TCP_SKB_CB(skb)->tx.in_flight = TCP_SKB_CB(skb)->end_seq
 			- tp->snd_una;
@@ -1275,6 +1281,9 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	}
 
 	inet = inet_sk(sk);
+	if (inet->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "__tcp_transmit_skb -> inet_sk\n");
+
 	tcb = TCP_SKB_CB(skb);
 	memset(&opts, 0, sizeof(opts));
 
@@ -1401,6 +1410,9 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 
 	tcp_add_tx_delay(skb, tp);
 
+	if (inet->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "__tcp_transmit_skb -> ip_queue_xmit\n");
+
 	err = INDIRECT_CALL_INET(icsk->icsk_af_ops->queue_xmit,
 				 inet6_csk_xmit, ip_queue_xmit,
 				 sk, skb, &inet->cork.fl);
@@ -1419,6 +1431,8 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 static int tcp_transmit_skb(struct sock *sk, struct sk_buff *skb, int clone_it,
 			    gfp_t gfp_mask)
 {
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "tcp_transmit_skb -> __tcp_transmit_skb \n");
 	return __tcp_transmit_skb(sk, skb, clone_it, gfp_mask,
 				  tcp_sk(sk)->rcv_nxt);
 }
@@ -2636,6 +2650,8 @@ static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 			sent_pkts = 1;
 		}
 	}
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "tcp_write_xmit\n");
 
 	max_segs = tcp_tso_segs(sk, mss_now);
 	while ((skb = tcp_send_head(sk))) {
@@ -2668,6 +2684,9 @@ static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 			is_rwnd_limited = true;
 			break;
 		}
+
+		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+			printk(KERN_INFO "tcp_write_xmit skb->len = %d\n", skb->len);
 
 		if (tso_segs == 1) {
 			if (unlikely(!tcp_nagle_test(tp, skb, mss_now,
@@ -2703,6 +2722,9 @@ static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 		 */
 		if (TCP_SKB_CB(skb)->end_seq == TCP_SKB_CB(skb)->seq)
 			break;
+		
+		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+			printk(KERN_INFO "tcp_write_xmit -> tcp_transmit_skb: skb->len = %d\n", skb->len);
 
 		if (unlikely(tcp_transmit_skb(sk, skb, 1, gfp)))
 			break;
@@ -2827,6 +2849,8 @@ void tcp_send_loss_probe(struct sock *sk)
 	skb = tcp_send_head(sk);
 	if (skb && tcp_snd_wnd_test(tp, skb, mss)) {
 		pcount = tp->packets_out;
+		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+			printk(KERN_INFO "tcp_send_loss_probe\n");
 		tcp_write_xmit(sk, mss, TCP_NAGLE_OFF, 2, GFP_ATOMIC);
 		if (tp->packets_out > pcount)
 			goto probe_sent;
@@ -2888,7 +2912,8 @@ void __tcp_push_pending_frames(struct sock *sk, unsigned int cur_mss,
 	 */
 	if (unlikely(sk->sk_state == TCP_CLOSE))
 		return;
-
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "__tcp_push_pending_frames -> tcp_write_xmit\n");
 	if (tcp_write_xmit(sk, cur_mss, nonagle, 0,
 			   sk_gfp_mask(sk, GFP_ATOMIC)))
 		tcp_check_probe_timer(sk);
@@ -2902,7 +2927,8 @@ void tcp_push_one(struct sock *sk, unsigned int mss_now)
 	struct sk_buff *skb = tcp_send_head(sk);
 
 	BUG_ON(!skb || skb->len < mss_now);
-
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "tcp_push_one -> tcp_write_xmit\n");
 	tcp_write_xmit(sk, mss_now, TCP_NAGLE_PUSH, 1, sk->sk_allocation);
 }
 
@@ -3457,6 +3483,8 @@ void tcp_send_fin(struct sock *sk)
 				     TCPHDR_ACK | TCPHDR_FIN);
 		tcp_queue_skb(sk, skb);
 	}
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "tcp_send_fin\n");
 	__tcp_push_pending_frames(sk, tcp_current_mss(sk), TCP_NAGLE_OFF);
 }
 
@@ -3484,6 +3512,8 @@ void tcp_send_active_reset(struct sock *sk, gfp_t priority)
 			     TCPHDR_ACK | TCPHDR_RST);
 	tcp_mstamp_refresh(tcp_sk(sk));
 	/* Send it off. */
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "tcp_send_active_reset -> tcp_transmit_skb \n");
 	if (tcp_transmit_skb(sk, skb, 0, priority))
 		NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPABORTFAILED);
 
@@ -3530,6 +3560,8 @@ int tcp_send_synack(struct sock *sk)
 		TCP_SKB_CB(skb)->tcp_flags |= TCPHDR_ACK;
 		tcp_ecn_send_synack(sk, skb);
 	}
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "tcp_send_synack -> tcp_transmit_skb \n");
 	return tcp_transmit_skb(sk, skb, 1, GFP_ATOMIC);
 }
 
@@ -3824,6 +3856,8 @@ static int tcp_send_syn_data(struct sock *sk, struct sk_buff *syn)
 	if (syn_data->len)
 		tcp_chrono_start(sk, TCP_CHRONO_BUSY);
 
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "tcp_send_syn_data -> tcp_transmit_skb \n");
 	err = tcp_transmit_skb(sk, syn_data, 1, sk->sk_allocation);
 
 	syn->skb_mstamp_ns = syn_data->skb_mstamp_ns;
@@ -3889,6 +3923,8 @@ int tcp_connect(struct sock *sk)
 	tcp_rbtree_insert(&sk->tcp_rtx_queue, buff);
 
 	/* Send off SYN; include data in Fast Open. */
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "tcp_connect -> tcp_transmit_skb \n");
 	err = tp->fastopen_req ? tcp_send_syn_data(sk, buff) :
 	      tcp_transmit_skb(sk, buff, 1, sk->sk_allocation);
 	if (err == -ECONNREFUSED)
@@ -4047,6 +4083,8 @@ static int tcp_xmit_probe_skb(struct sock *sk, int urgent, int mib)
 	 */
 	tcp_init_nondata_skb(skb, tp->snd_una - !urgent, TCPHDR_ACK);
 	NET_INC_STATS(sock_net(sk), mib);
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "tcp_xmit_probe_skb -> tcp_transmit_skb \n");
 	return tcp_transmit_skb(sk, skb, 0, (__force gfp_t)0);
 }
 
