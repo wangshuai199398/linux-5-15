@@ -1250,9 +1250,6 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	u64 prior_wstamp;
 	int err;
 
-	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s \n", __func__);
-
 	BUG_ON(!skb || !tcp_skb_pcount(skb));
 	tp = tcp_sk(sk);
 	prior_wstamp = tp->tcp_wstamp_ns;
@@ -1355,6 +1352,9 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	}
 
 	skb_shinfo(skb)->gso_type = sk->sk_gso_type;
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: sk->sk_gso_type %d\n", __func__, sk->sk_gso_type);
+
 	if (likely(!(tcb->tcp_flags & TCPHDR_SYN))) {
 		th->window      = htons(tcp_select_window(sk));
 		tcp_ecn_send(sk, skb, th, tcp_header_size);
@@ -1397,10 +1397,16 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 			      tcp_skb_pcount(skb));
 
 	tp->segs_out += tcp_skb_pcount(skb);
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: tp->segs_out %d tcp_skb_pcount(skb) %d\n", __func__, tp->segs_out, tcp_skb_pcount(skb));
+
 	skb_set_hash_from_sk(skb, sk);
 	/* OK, its time to fill skb_shinfo(skb)->gso_{segs|size} */
 	skb_shinfo(skb)->gso_segs = tcp_skb_pcount(skb);
 	skb_shinfo(skb)->gso_size = tcp_skb_mss(skb);
+
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: skb_shinfo(skb)->gso_segs %d skb_shinfo(skb)->gso_size %d\n", __func__, skb_shinfo(skb)->gso_segs, skb_shinfo(skb)->gso_size);
 
 	/* Leave earliest departure time in skb->tstamp (skb->skb_mstamp_ns) */
 

@@ -702,7 +702,7 @@ INDIRECT_CALLABLE_DECLARE(int inet6_sendmsg(struct socket *, struct msghdr *,
 static inline int sock_sendmsg_nosec(struct socket *sock, struct msghdr *msg)
 {
 	if (inet_sk(sock->sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: -> sock->ops->sendmsg \n", __func__);
+		printk(KERN_INFO "%s: ->sock->ops->sendmsg \n", __func__);
 
 	int ret = INDIRECT_CALL_INET(sock->ops->sendmsg, inet6_sendmsg,
 				     inet_sendmsg, sock, msg,
@@ -717,7 +717,7 @@ static int __sock_sendmsg(struct socket *sock, struct msghdr *msg)
 					  msg_data_left(msg));
 
 	if (inet_sk(sock->sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: -> sock_sendmsg_nosec \n", __func__);
+		printk(KERN_INFO "%s: ->sock_sendmsg_nosec \n", __func__);
 
 	return err ?: sock_sendmsg_nosec(sock, msg);
 }

@@ -1386,7 +1386,7 @@ new_segment:
 			}
 
 			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-				printk(KERN_INFO "%s: merge %d, copy %d pfrag->size %hu pfrag->offset %hu\n", __func__, merge, copy, pfrag->size, pfrag->offset);
+				printk(KERN_INFO "%s: merge %d, copy %d pfrag->size %hu pfrag->offset %hu i %d\n", __func__, merge, copy, pfrag->size, pfrag->offset, i);
 			copy = min_t(int, copy, pfrag->size - pfrag->offset);
 
 			if (!sk_wmem_schedule(sk, copy))
@@ -1507,7 +1507,7 @@ int tcp_sendmsg(struct sock *sk, struct msghdr *msg, size_t size)
 
 	lock_sock(sk);
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: -> tcp_sendmsg_locked \n", __func__);
+		printk(KERN_INFO "%s: ->tcp_sendmsg_locked \n", __func__);
 
 	ret = tcp_sendmsg_locked(sk, msg, size);
 	release_sock(sk);
