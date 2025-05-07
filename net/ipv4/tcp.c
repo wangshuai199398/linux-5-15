@@ -1219,16 +1219,21 @@ static int tcp_sendmsg_fastopen(struct sock *sk, struct msghdr *msg,
 static void print_msg_iter(struct iov_iter *iter)
 {
 	int i;
-
-	//!iov_iter_is_kvec(iter) && !iov_iter_is_bvec(iter)
+	const struct iovec *iov;
 	if (!iter_is_iovec(iter)) {
 		printk(KERN_INFO "Unsupported iter type\n");
 		return;
 	}
-    const struct iovec *iov = iter->iov;
-	printk(KERN_INFO "iter->nr_segs %lu\n", iter->nr_segs);
+    iov = iter->iov;
+	printk(KERN_INFO "iov_iter: nr_segs=%lu\n", iter->nr_segs);
     for (i = 0; i < iter->nr_segs; i++) {
-		printk(KERN_INFO "vec: %zu, %*ph\n", iov[i].iov_len, (int)iov[i].iov_len, iov[i].iov_base);
+		size_t len = min((size_t)37, iov[i].iov_len);
+		char buf[37];
+		if (copy_from_user(buf, iov[i].iov_base, len)) {
+			printk(KERN_INFO "Failed to copy from user at segment %d\n", i);
+			continue;
+		}
+		printk(KERN_INFO "vec[%d]: %zu, data: %*ph\n", i, iov[i].iov_len, (int)len, buf);
     }
 	printk(KERN_INFO "vec end\n");
 	return;
