@@ -1219,19 +1219,20 @@ static int tcp_sendmsg_fastopen(struct sock *sk, struct msghdr *msg,
 static void print_msg_iter(struct iov_iter *iter)
 {
 	int i;
-	if (!iov_iter_is_kvec(iter) && !iov_iter_is_bvec(iter) && !iter_is_iovec(iter)) {
+	//!iov_iter_is_kvec(iter) && !iov_iter_is_bvec(iter)
+	if (!iter_is_iovec(iter)) {
 		printk(KERN_INFO "Unsupported iter type\n");
 		return;
 	}
-	for (i = 0; i < iter->nr_segs; i++) {
-        struct kvec *kvec = (struct kvec *)iter->kvec;
-        void *base = kvec[i].iov_base;
-        size_t len = kvec[i].iov_len;
-        size_t to_print = min(len, (size_t)32);
-
-        printk(KERN_INFO "kvec[%d]: base=%px, len=%zu\n", i, base, len);
-        printk(KERN_INFO "kvec[%d] data (first %zu bytes): %*phN\n", i, to_print, (int)to_print, base);
+	if (iter->type & ITER_IOVEC) {
+        const struct iovec *iov = iter->iov;
+		printk(KERN_INFO "iter->nr_segs %lu\n", iter->nr_segs);
+        for (i = 0; i < iter->nr_segs; i++) {
+            pr_info("  iov[%d]: base=%p, len=%zu\n",
+                    i, iov[i].iov_base, iov[i].iov_len);
+        }
     }
+	return;
 }
 
 static void print_page_fragment_data(struct page *page, size_t offset, size_t len)
@@ -1356,7 +1357,7 @@ restart:
 	//将用户空间的数据复制到内核空间中的skb结构中，并将其挂到TCP的发送队列中，等待协议栈后续处理
 	while (msg_data_left(msg)) {
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s: iov_iter_count(&msg->msg_iter)->count %zu\n", __func__, iov_iter_count(&msg->msg_iter));
+			printk(KERN_INFO "%s: iov_iter_count(&msg->msg_iter) %zu\n", __func__, iov_iter_count(&msg->msg_iter));
 
 		int copy = 0;
 		//尝试复用发送队列中的最后一个 skb，如果还有空间可用（即 skb->len < size_goal），就继续往这个skb塞数据
@@ -1434,7 +1435,7 @@ new_segment:
 				goto wait_for_space;
 
 			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
-				printk(KERN_INFO "iov_iter type=%d, count=%zu, kvec/iov offset=%lu\n", msg->msg_iter.iter_type, iov_iter_count(&msg->msg_iter), msg->msg_iter.iov_offset);
+				printk(KERN_INFO "iov_iter type=%d, count=%zu, offset=%lu\n", msg->msg_iter.iter_type, iov_iter_count(&msg->msg_iter), msg->msg_iter.iov_offset);
 				print_msg_iter(&msg->msg_iter);
 			}
 
