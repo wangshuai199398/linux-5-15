@@ -1417,6 +1417,7 @@ new_segment:
 			int i = skb_shinfo(skb)->nr_frags;
 			struct page_frag *pfrag = sk_page_frag(sk);
 			//确保 socket 的页碎片缓存有足够的空闲空间可写；若当前页不可用或空间不足，则分配新页来支持高效数据发送
+			//每次只维护一个 page，并把它切成多个小片段给多个 skb 使用（这就是所谓的 页片段复用）
 			if (!sk_page_frag_refill(sk, pfrag))
 				goto wait_for_space;
 
@@ -1460,11 +1461,15 @@ new_segment:
 			if (merge) {
 				skb_frag_size_add(&skb_shinfo(skb)->frags[i - 1], copy);
 			} else {
+				//将接收到的数据页（Page）信息填充进 skb 的页片段数组中
 				skb_fill_page_desc(skb, i, pfrag->page,
 						   pfrag->offset, copy);
 				page_ref_inc(pfrag->page);
 			}
 			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
+				struct page *page = compound_head(pfrag->page);
+				if (page_is_pfmemalloc(page))
+					printk(KERN_INFO "pfmemalloc\n");
 				printk("======== begin ========\n");
 				printk(KERN_INFO "IPCB(skb)->frag_max_size %hu\n", IPCB(skb)->frag_max_size);
 				skb_dump(KERN_INFO, skb, true);
