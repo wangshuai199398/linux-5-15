@@ -1220,7 +1220,7 @@ static void print_msg_iter(struct iov_iter *iter)
 {
 	struct iovec *iov;
     size_t i, count = iter->nr_segs;
-	if (!iov_iter_is_kvec(iter) && !iov_iter_is_bvec(iter) && !iov_iter_is_iovec(iter)) {
+	if (!iov_iter_is_kvec(iter) && !iov_iter_is_bvec(iter) && !iter_is_iovec(iter)) {
 		printk(KERN_INFO "Unsupported iter type\n");
 		return;
 	}
