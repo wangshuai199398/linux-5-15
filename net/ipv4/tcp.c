@@ -1227,7 +1227,7 @@ static void print_msg_iter(struct iov_iter *iter)
     const struct iovec *iov = iter->iov;
 	printk(KERN_INFO "iter->nr_segs %lu\n", iter->nr_segs);
     for (i = 0; i < iter->nr_segs; i++) {
-        pr_info("  iov[%d]: base=%p, len=%zu\n", i, iov[i].iov_base, iov[i].iov_len);
+        printk(KERN_INFO "iov[%d]: base=%p, len=%zu\n", i, iov[i].iov_base, iov[i].iov_len);
     }
 
 	return;
