@@ -2372,7 +2372,8 @@ static int tcp_mtu_probe(struct sock *sk)
 		   tcp_snd_cwnd(tp) < 11 ||
 		   tp->rx_opt.num_sacks || tp->rx_opt.dsack))
 		return -1;
-
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: ->return -1\n", __func__);
 	/* Use binary search for probe_size between tcp_mss_base,
 	 * and current mss_clamp. if (search_high - search_low)
 	 * smaller than a threshold, backoff from probing.
@@ -2662,7 +2663,7 @@ static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 
 	max_segs = tcp_tso_segs(sk, mss_now);
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->gfp 0x%x max_segs %u\n", __func__, gfp, max_segs);
+		printk(KERN_INFO "%s: ->gfp 0x%x max_segs %u sk->sk_gso_max_segs %u\n", __func__, gfp, max_segs, sk->sk_gso_max_segs);
 
 	while ((skb = tcp_send_head(sk))) {
 		unsigned int limit;
