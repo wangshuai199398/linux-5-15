@@ -1224,14 +1224,12 @@ static void print_msg_iter(struct iov_iter *iter)
 		printk(KERN_INFO "Unsupported iter type\n");
 		return;
 	}
-	if (iter->type & ITER_IOVEC) {
-        const struct iovec *iov = iter->iov;
-		printk(KERN_INFO "iter->nr_segs %lu\n", iter->nr_segs);
-        for (i = 0; i < iter->nr_segs; i++) {
-            pr_info("  iov[%d]: base=%p, len=%zu\n",
-                    i, iov[i].iov_base, iov[i].iov_len);
-        }
+    const struct iovec *iov = iter->iov;
+	printk(KERN_INFO "iter->nr_segs %lu\n", iter->nr_segs);
+    for (i = 0; i < iter->nr_segs; i++) {
+        pr_info("  iov[%d]: base=%p, len=%zu\n", i, iov[i].iov_base, iov[i].iov_len);
     }
+
 	return;
 }
 
