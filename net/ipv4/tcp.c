@@ -1229,8 +1229,8 @@ static void print_msg_iter(struct iov_iter *iter)
         size_t len = kvec[i].iov_len;
         size_t to_print = min(len, (size_t)32);
 
-        printk(KERN_INFO "kvec[%zu]: base=%px, len=%zu\n", i, base, len);
-        printk(KERN_INFO "kvec[%zu] data (first %zu bytes): %*phN\n", i, to_print, (int)to_print, base);
+        printk(KERN_INFO "kvec[%d]: base=%px, len=%zu\n", i, base, len);
+        printk(KERN_INFO "kvec[%d] data (first %zu bytes): %*phN\n", i, to_print, (int)to_print, base);
     }
 }
 
