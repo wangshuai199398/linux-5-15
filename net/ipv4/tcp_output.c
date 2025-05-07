@@ -2651,16 +2651,19 @@ static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 	if (!push_one) {
 		/* Do MTU probing. */
 		result = tcp_mtu_probe(sk);
+		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+			printk(KERN_INFO "%s: ->tcp_mtu_probe result %d\n", __func__, result);
 		if (!result) {
 			return false;
 		} else if (result > 0) {
 			sent_pkts = 1;
 		}
 	}
-	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->\n", __func__);
 
 	max_segs = tcp_tso_segs(sk, mss_now);
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: ->gfp 0x%x max_segs %u\n", __func__, gfp, max_segs);
+
 	while ((skb = tcp_send_head(sk))) {
 		unsigned int limit;
 
@@ -2920,7 +2923,7 @@ void __tcp_push_pending_frames(struct sock *sk, unsigned int cur_mss,
 	if (unlikely(sk->sk_state == TCP_CLOSE))
 		return;
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->tcp_write_xmit\n", __func__);
+		printk(KERN_INFO "%s: ->tcp_write_xmit cur_mss %u nonagle %d\n", __func__, cur_mss, nonagle);
 	if (tcp_write_xmit(sk, cur_mss, nonagle, 0,
 			   sk_gfp_mask(sk, GFP_ATOMIC)))
 		tcp_check_probe_timer(sk);

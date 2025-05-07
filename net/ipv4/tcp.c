@@ -746,7 +746,7 @@ void tcp_push(struct sock *sk, int flags, int mss_now,
 	if (flags & MSG_MORE)
 		nonagle = TCP_NAGLE_CORK;
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: -> __tcp_push_pending_frames\n", __func__);
+		printk(KERN_INFO "%s: ->__tcp_push_pending_frames\n", __func__);
 		
 	__tcp_push_pending_frames(sk, mss_now, nonagle);
 }
