@@ -1218,7 +1218,6 @@ static int tcp_sendmsg_fastopen(struct sock *sk, struct msghdr *msg,
 
 static void print_msg_iter(struct iov_iter *iter)
 {
-	struct iovec *iov;
     size_t i, count = iter->nr_segs;
 	if (!iov_iter_is_kvec(iter) && !iov_iter_is_bvec(iter) && !iter_is_iovec(iter)) {
 		printk(KERN_INFO "Unsupported iter type\n");
@@ -1428,7 +1427,7 @@ new_segment:
 			}
 
 			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-				printk(KERN_INFO "%s: merge %d, copy %d pfrag->size %hu pfrag->offset %hu i %d skb_shinfo(skb)->nr_frags %d sk_route_caps 0x%x\n", __func__, merge, copy, pfrag->size, pfrag->offset, i, skb_shinfo(skb)->nr_frags, sk->sk_route_caps);
+				printk(KERN_INFO "%s: merge %d, copy %d pfrag->size %hu pfrag->offset %hu i %d skb_shinfo(skb)->nr_frags %d sk_route_caps %016llx\n", __func__, merge, copy, pfrag->size, pfrag->offset, i, skb_shinfo(skb)->nr_frags, sk->sk_route_caps);
 			copy = min_t(int, copy, pfrag->size - pfrag->offset);
 			//当前 socket 的写缓冲不足以承载 copy 字节的数据，跳转去等待可用内存
 			if (!sk_wmem_schedule(sk, copy))
@@ -1458,7 +1457,7 @@ new_segment:
 						   pfrag->offset, copy);
 				page_ref_inc(pfrag->page);
 			}
-			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
 				printk("======== begin ========\n");
 				printk(KERN_INFO "IPCB(skb)->frag_max_size %hu\n", IPCB(skb)->frag_max_size);
 				skb_dump(KERN_INFO, skb, true);
