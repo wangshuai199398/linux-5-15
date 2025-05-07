@@ -712,12 +712,23 @@ void tcp_push(struct sock *sk, int flags, int mss_now,
 	skb = tcp_write_queue_tail(sk);
 	if (!skb)
 		return;
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: ->write_seq %u, pushed_seq %u max_window %u\n",  __func__, tp->write_seq, tp->pushed_seq, tp->max_window);
 	if (!(flags & MSG_MORE) || forced_push(tp))
 		tcp_mark_push(tp, skb);
+
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: ->pushed_seq %u TCP_SKB_CB(skb)->tcp_flags 0x%x flags %d\n",  __func__, tp->pushed_seq, TCP_SKB_CB(skb)->tcp_flags, flags);
 
 	tcp_mark_urg(tp, flags);
 
 	if (tcp_should_autocork(sk, skb, size_goal)) {
+		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
+			printk(KERN_INFO "%s: ->tcp_should_autocork\n", __func__);
+			if (!test_bit(TSQ_THROTTLED, &sk->sk_tsq_flags)) {
+				printk(KERN_INFO "%s: ->TSQ_THROTTLED\n", __func__);
+			}
+		}
 
 		/* avoid atomic op if TSQ_THROTTLED bit is already set */
 		if (!test_bit(TSQ_THROTTLED, &sk->sk_tsq_flags)) {
@@ -736,6 +747,7 @@ void tcp_push(struct sock *sk, int flags, int mss_now,
 		nonagle = TCP_NAGLE_CORK;
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
 		printk(KERN_INFO "%s: -> __tcp_push_pending_frames\n", __func__);
+		
 	__tcp_push_pending_frames(sk, mss_now, nonagle);
 }
 
@@ -1508,7 +1520,7 @@ new_segment:
 			printk(KERN_INFO "%s: copied %d msg_data_left(msg) %lu skb->len %d size_goal %d flags 0x%x tp->repair %d\n", __func__, copied, msg_data_left(msg), skb->len, size_goal, flags, tp->repair);
 		//已经把所有数据放进队列，设置“end of record”
 		if (!msg_data_left(msg)) {
-			if (unlikely(flags & MSG_EOR))
+			if (unlikely(flags & MSG_EOR))//0x80
 				TCP_SKB_CB(skb)->eor = 1;
 			goto out;
 		}
