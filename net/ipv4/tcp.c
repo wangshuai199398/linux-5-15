@@ -1219,8 +1219,7 @@ static int tcp_sendmsg_fastopen(struct sock *sk, struct msghdr *msg,
 static void print_msg_iter(struct iov_iter *iter)
 {
 	int i;
-	int j;
-	unsigned char *data;
+
 	//!iov_iter_is_kvec(iter) && !iov_iter_is_bvec(iter)
 	if (!iter_is_iovec(iter)) {
 		printk(KERN_INFO "Unsupported iter type\n");
@@ -1229,10 +1228,7 @@ static void print_msg_iter(struct iov_iter *iter)
     const struct iovec *iov = iter->iov;
 	printk(KERN_INFO "iter->nr_segs %lu\n", iter->nr_segs);
     for (i = 0; i < iter->nr_segs; i++) {
-		data = (unsigned char *)iov[i].iov_base;
-		for (j = 0; j < iov[i].iov_len; j++) {
-        	printk(KERN_INFO "%02x \n", data[i]);
-		}
+		printk(KERN_INFO "vec: %zu, %*ph\n", iov[i].iov_len, (int)iov[i].iov_len, iov[i].iov_base);
     }
 	printk(KERN_INFO "vec end\n");
 	return;
@@ -1244,7 +1240,7 @@ static void print_page_fragment_data(struct page *page, size_t offset, size_t le
     void *data = addr + offset;
     size_t to_print = len;
 
-    printk(KERN_INFO "Page data (offset %zu, len %zu): %*phN\n",
+    printk(KERN_INFO "Page data (offset %zu, len %zu): %*ph\n",
            offset, to_print, (int)to_print, data);
 
     kunmap_local(addr);
