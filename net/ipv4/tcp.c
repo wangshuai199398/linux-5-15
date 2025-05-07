@@ -647,7 +647,7 @@ int tcp_ioctl(struct sock *sk, int cmd, unsigned long arg)
 	return put_user(answ, (int __user *)arg);
 }
 EXPORT_SYMBOL(tcp_ioctl);
-
+//告诉接收端“立即将数据推送到应用层”，而不是等缓冲区填满再处理
 void tcp_mark_push(struct tcp_sock *tp, struct sk_buff *skb)
 {
 	TCP_SKB_CB(skb)->tcp_flags |= TCPHDR_PSH;
@@ -715,13 +715,13 @@ void tcp_push(struct sock *sk, int flags, int mss_now,
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
 		printk(KERN_INFO "%s: ->write_seq %u, pushed_seq %u max_window %u\n",  __func__, tp->write_seq, tp->pushed_seq, tp->max_window);
 	if (!(flags & MSG_MORE) || forced_push(tp))
-		tcp_mark_push(tp, skb);
+		tcp_mark_push(tp, skb);//置位0x08
 
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
 		printk(KERN_INFO "%s: ->pushed_seq %u TCP_SKB_CB(skb)->tcp_flags 0x%x flags %d\n",  __func__, tp->pushed_seq, TCP_SKB_CB(skb)->tcp_flags, flags);
 
 	tcp_mark_urg(tp, flags);
-
+	//判断是否应该自动延迟发送小的数据包（即“自动塞子”机制），以提高网络传输效率
 	if (tcp_should_autocork(sk, skb, size_goal)) {
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
 			printk(KERN_INFO "%s: ->tcp_should_autocork\n", __func__);
