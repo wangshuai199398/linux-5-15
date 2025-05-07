@@ -1218,6 +1218,7 @@ static int tcp_sendmsg_fastopen(struct sock *sk, struct msghdr *msg,
 
 static void print_msg_iter(struct iov_iter *iter)
 {
+	int i;
 	if (!iov_iter_is_kvec(iter) && !iov_iter_is_bvec(iter) && !iter_is_iovec(iter)) {
 		printk(KERN_INFO "Unsupported iter type\n");
 		return;
