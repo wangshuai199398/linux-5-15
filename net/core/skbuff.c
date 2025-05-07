@@ -842,32 +842,33 @@ void skb_dump(const char *level, const struct sk_buff *skb, bool full_pkt)
 
 	if (full_pkt && headroom)
 		print_hex_dump(level, "skb headroom: ", DUMP_PREFIX_OFFSET,
-			       16, 1, skb->head, headroom, false);
+			       32, 1, skb->head, headroom, false);
 
 	seg_len = min_t(int, skb_headlen(skb), len);
 	if (seg_len)
 		print_hex_dump(level, "skb linear:   ", DUMP_PREFIX_OFFSET,
-			       16, 1, skb->data, seg_len, false);
+			       32, 1, skb->data, seg_len, false);
 	len -= seg_len;
 
 	if (full_pkt && tailroom)
 		print_hex_dump(level, "skb tailroom: ", DUMP_PREFIX_OFFSET,
-			       16, 1, skb_tail_pointer(skb), tailroom, false);
+			       32, 1, skb_tail_pointer(skb), tailroom, false);
 
 	for (i = 0; len && i < skb_shinfo(skb)->nr_frags; i++) {
 		skb_frag_t *frag = &skb_shinfo(skb)->frags[i];
 		u32 p_off, p_len, copied;
 		struct page *p;
 		u8 *vaddr;
-
+		printk("nr_frags num: %d\n", i);
 		skb_frag_foreach_page(frag, skb_frag_off(frag),
 				      skb_frag_size(frag), p, p_off, p_len,
 				      copied) {
 			seg_len = min_t(int, p_len, len);
 			vaddr = kmap_atomic(p);
+			printk("skb_frag_foreach_page\n");
 			print_hex_dump(level, "skb frag:     ",
 				       DUMP_PREFIX_OFFSET,
-				       16, 1, vaddr + p_off, seg_len, false);
+				       32, 1, vaddr + p_off, seg_len, false);
 			kunmap_atomic(vaddr);
 			len -= seg_len;
 			if (!len)
