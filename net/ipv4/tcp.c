@@ -1216,6 +1216,37 @@ static int tcp_sendmsg_fastopen(struct sock *sk, struct msghdr *msg,
 	return err;
 }
 
+static void print_msg_iter(struct iov_iter *iter)
+{
+	struct iovec *iov;
+    size_t i, count = iter->nr_segs;
+	if (!iov_iter_is_kvec(msg->msg_iter) && !iov_iter_is_bvec(msg->msg_iter) && !iov_iter_is_iovec(msg->msg_iter)) {
+		printk(KERN_INFO "Unsupported iter type\n");
+		return;
+	}
+	for (i = 0; i < iter->nr_segs; i++) {
+        struct kvec *kvec = (struct kvec *)iter->kvec;
+        void *base = kvec[i].iov_base;
+        size_t len = kvec[i].iov_len;
+        size_t to_print = min(len, (size_t)32);
+
+        printk(KERN_INFO "kvec[%zu]: base=%px, len=%zu\n", i, base, len);
+        printk(KERN_INFO "kvec[%zu] data (first %zu bytes): %*phN\n", i, to_print, (int)to_print, base);
+    }
+}
+
+static void print_page_fragment_data(struct page *page, size_t offset, size_t len)
+{
+    void *addr = kmap_local_page(page);
+    void *data = addr + offset;
+    size_t to_print = min(len, (size_t)32);
+
+    printk(KERN_INFO "Page data (offset %zu, len %zu): %*phN\n",
+           offset, to_print, (int)to_print, data);
+
+    kunmap_local(addr);
+}
+
 int tcp_sendmsg_locked(struct sock *sk, struct msghdr *msg, size_t size)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
@@ -1260,7 +1291,7 @@ int tcp_sendmsg_locked(struct sock *sk, struct msghdr *msg, size_t size)
 	timeo = sock_sndtimeo(sk, flags & MSG_DONTWAIT);
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
 		printk(KERN_INFO "%s: timeo %ld tp->app_limited %u\n", __func__, timeo, tp->app_limited);
-
+	//检测当前 TCP 连接是否受到应用层限制
 	tcp_rate_check_app_limited(sk);  /* is sending application-limited? */
 
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
@@ -1323,35 +1354,37 @@ restart:
 	err = -EPIPE;
 	if (sk->sk_err || (sk->sk_shutdown & SEND_SHUTDOWN))
 		goto do_error;
-
+	//将用户空间的数据复制到内核空间中的skb结构中，并将其挂到TCP的发送队列中，等待协议栈后续处理
 	while (msg_data_left(msg)) {
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
 			printk(KERN_INFO "%s: iov_iter_count(&msg->msg_iter)->count %zu\n", __func__, iov_iter_count(&msg->msg_iter));
 
 		int copy = 0;
-
+		//尝试复用发送队列中的最后一个 skb，如果还有空间可用（即 skb->len < size_goal），就继续往这个skb塞数据
 		skb = tcp_write_queue_tail(sk);
 		if (skb) {
 			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
 				printk(KERN_INFO "%s: skb skb->len %d size_goal %d\n", __func__, skb->len, size_goal);
 			copy = size_goal - skb->len;
 		}
-
+		//不能复用旧的skb，创建新的skb，如果最后一个 skb 已满，或不能合并数据（不能 collapse）
 		if (copy <= 0 || !tcp_skb_can_collapse_to(skb)) {
 			bool first_skb;
 
 new_segment:
+			//如果没有发送缓存空间，就等（阻塞）
 			if (!sk_stream_memory_free(sk))
 				goto wait_for_space;
-
+			//如果连续写了 16 次 skb，就处理 socket backlog 队列中尚未执行的回调（如接收 ACK、数据包等），清理backlog 来防止网络拥塞
 			if (unlikely(process_backlog >= 16)) {
 				process_backlog = 0;
 				if (sk_flush_backlog(sk))
 					goto restart;
 			}
+			//写队列(应用层刚写入、还没发送出去的数据)和重传队列(已发送但丢失、等待重传的数据)是否为空
 			first_skb = tcp_rtx_and_write_queues_empty(sk);
 			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-				printk(KERN_INFO "%s: sk_stream_alloc_skb sk->sk_allocation 0x%x\n", __func__, sk->sk_allocation);
+				printk(KERN_INFO "%s: sk_stream_alloc_skb sk->sk_allocation 0x%x first_skb %d\n", __func__, sk->sk_allocation, first_skb);
 			skb = sk_stream_alloc_skb(sk, 0, sk->sk_allocation,
 						  first_skb);
 			if (!skb)
@@ -1359,7 +1392,7 @@ new_segment:
 
 			process_backlog++;
 			skb->ip_summed = CHECKSUM_PARTIAL;
-
+			//把新创建的 skb 添加到 TCP 的 write queue 中
 			tcp_skb_entail(sk, skb);
 			copy = size_goal;
 
@@ -1374,17 +1407,19 @@ new_segment:
 		/* Try to append data to the end of skb. */
 		if (copy > msg_data_left(msg))
 			copy = msg_data_left(msg);
-
+		//zeor-copy
 		if (!zc) {
 			bool merge = true;
 			int i = skb_shinfo(skb)->nr_frags;
 			struct page_frag *pfrag = sk_page_frag(sk);
-
+			//确保 socket 的页碎片缓存有足够的空闲空间可写；若当前页不可用或空间不足，则分配新页来支持高效数据发送
 			if (!sk_page_frag_refill(sk, pfrag))
 				goto wait_for_space;
 
 			if (!skb_can_coalesce(skb, i, pfrag->page,
 					      pfrag->offset)) {
+				if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+					printk(KERN_INFO "%s: i %d sysctl_max_skb_frags %d\n", __func__, i, READ_ONCE(sysctl_max_skb_frags));
 				if (i >= READ_ONCE(sysctl_max_skb_frags)) {
 					tcp_mark_push(tp, skb);
 					goto new_segment;
@@ -1393,18 +1428,27 @@ new_segment:
 			}
 
 			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-				printk(KERN_INFO "%s: merge %d, copy %d pfrag->size %hu pfrag->offset %hu i %d\n", __func__, merge, copy, pfrag->size, pfrag->offset, i);
+				printk(KERN_INFO "%s: merge %d, copy %d pfrag->size %hu pfrag->offset %hu i %d skb_shinfo(skb)->nr_frags %d sk_route_caps 0x%x\n", __func__, merge, copy, pfrag->size, pfrag->offset, i, skb_shinfo(skb)->nr_frags, sk->sk_route_caps);
 			copy = min_t(int, copy, pfrag->size - pfrag->offset);
-
+			//当前 socket 的写缓冲不足以承载 copy 字节的数据，跳转去等待可用内存
 			if (!sk_wmem_schedule(sk, copy))
 				goto wait_for_space;
 
+			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
+				printk(KERN_INFO "iov_iter type=%d, count=%zu, kvec/iov offset=%lu\n", msg->msg_iter.type, iov_iter_count(&msg->msg_iter), msg->msg_iter.iov_offset);
+				print_msg_iter(&msg->msg_iter);
+			}
+
+			//把应用层的数据 copy 到内核页里（page_frag）。根据是否可 merge，用不同方式更新 skb 的 frag 描述
 			err = skb_copy_to_page_nocache(sk, &msg->msg_iter, skb,
 						       pfrag->page,
 						       pfrag->offset,
 						       copy);
 			if (err)
 				goto do_error;
+
+			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+				print_page_fragment_data(pfrag->page, pfrag->offset, copy);
 
 			/* Update the skb. */
 			if (merge) {
@@ -1413,6 +1457,11 @@ new_segment:
 				skb_fill_page_desc(skb, i, pfrag->page,
 						   pfrag->offset, copy);
 				page_ref_inc(pfrag->page);
+			}
+			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+				printk("======== begin ========\n");
+				printk(KERN_INFO "IPCB(skb)->frag_max_size %hu\n", IPCB(skb)->frag_max_size);
+				skb_dump(KERN_INFO, skb, true);
 			}
 			pfrag->offset += copy;
 		} else {
@@ -1435,7 +1484,7 @@ new_segment:
 			TCP_SKB_CB(skb)->tcp_flags &= ~TCPHDR_PSH; // 0x08
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
 			printk(KERN_INFO "%s: copied %d TCP_SKB_CB(skb)->tcp_flags 0x%x copy %d\n", __func__, copied, TCP_SKB_CB(skb)->tcp_flags, copy);
-
+		//更新当前写序列号和 skb 的 TCP 序列信息
 		WRITE_ONCE(tp->write_seq, tp->write_seq + copy);
 		TCP_SKB_CB(skb)->end_seq += copy;
 		tcp_skb_pcount_set(skb, 0);
@@ -1443,6 +1492,7 @@ new_segment:
 		copied += copy;
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
 			printk(KERN_INFO "%s: copied %d msg_data_left(msg) %lu skb->len %d size_goal %d flags 0x%x tp->repair %d\n", __func__, copied, msg_data_left(msg), skb->len, size_goal, flags, tp->repair);
+		//已经把所有数据放进队列，设置“end of record”
 		if (!msg_data_left(msg)) {
 			if (unlikely(flags & MSG_EOR))
 				TCP_SKB_CB(skb)->eor = 1;
@@ -1463,7 +1513,7 @@ new_segment:
 			tcp_push_one(sk, mss_now);
 		}
 		continue;
-
+// 如果缓冲区满了，就设置 SOCK_NOSPACE，并阻塞等待发送空间变得可用
 wait_for_space:
 		set_bit(SOCK_NOSPACE, &sk->sk_socket->flags);
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
