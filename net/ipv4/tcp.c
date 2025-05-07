@@ -1220,7 +1220,7 @@ static void print_msg_iter(struct iov_iter *iter)
 {
 	struct iovec *iov;
     size_t i, count = iter->nr_segs;
-	if (!iov_iter_is_kvec(msg->msg_iter) && !iov_iter_is_bvec(msg->msg_iter) && !iov_iter_is_iovec(msg->msg_iter)) {
+	if (!iov_iter_is_kvec(iter) && !iov_iter_is_bvec(iter) && !iov_iter_is_iovec(iter)) {
 		printk(KERN_INFO "Unsupported iter type\n");
 		return;
 	}
@@ -1435,7 +1435,7 @@ new_segment:
 				goto wait_for_space;
 
 			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
-				printk(KERN_INFO "iov_iter type=%d, count=%zu, kvec/iov offset=%lu\n", msg->msg_iter.type, iov_iter_count(&msg->msg_iter), msg->msg_iter.iov_offset);
+				printk(KERN_INFO "iov_iter type=%d, count=%zu, kvec/iov offset=%lu\n", msg->msg_iter.iter_type, iov_iter_count(&msg->msg_iter), msg->msg_iter.iov_offset);
 				print_msg_iter(&msg->msg_iter);
 			}
 
