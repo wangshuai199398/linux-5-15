@@ -1494,10 +1494,13 @@ new_segment:
 		if (!copied)
 			TCP_SKB_CB(skb)->tcp_flags &= ~TCPHDR_PSH; // 0x08
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s: copied %d TCP_SKB_CB(skb)->tcp_flags 0x%x copy %d\n", __func__, copied, TCP_SKB_CB(skb)->tcp_flags, copy);
+			printk(KERN_INFO "%s: copied %d TCP_SKB_CB(skb)->tcp_flags 0x%x copy %d tp->write_seq %u skb->end_seq %u\n", __func__, copied, TCP_SKB_CB(skb)->tcp_flags, copy, tp->write_seq, TCP_SKB_CB(skb)->end_seq);
 		//更新当前写序列号和 skb 的 TCP 序列信息
 		WRITE_ONCE(tp->write_seq, tp->write_seq + copy);
 		TCP_SKB_CB(skb)->end_seq += copy;
+		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+			printk(KERN_INFO "%s: tp->write_seq %u skb->end_seq %u\n", __func__, tp->write_seq, TCP_SKB_CB(skb)->end_seq);
+
 		tcp_skb_pcount_set(skb, 0);
 
 		copied += copy;
