@@ -1440,10 +1440,12 @@ new_segment:
 
 			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
 				printk(KERN_INFO "iov_iter type=%d, count=%zu, offset=%lu\n", msg->msg_iter.iter_type, iov_iter_count(&msg->msg_iter), msg->msg_iter.iov_offset);
+				if (sk->sk_route_caps & NETIF_F_NOCACHE_COPY)
+					printk(KERN_INFO "NETIF_F_NOCACHE_COPY\n");
 				print_msg_iter(&msg->msg_iter);
 			}
 
-			//把应用层的数据 copy 到内核页里（page_frag）。根据是否可 merge，用不同方式更新 skb 的 frag 描述
+			// 拷贝: 把应用层的数据 copy 到内核页里（page_frag）根据是否可merge，用不同方式更新skb的frag描述
 			err = skb_copy_to_page_nocache(sk, &msg->msg_iter, skb,
 						       pfrag->page,
 						       pfrag->offset,
