@@ -2279,6 +2279,7 @@ EXPORT_SYMBOL_GPL(dev_nit_active);
 /*
  *	Support routine. Sends outgoing frames to any network
  *	taps currently in use.
+ *  数据包发送过程中通知监听器tcpdump
  */
 
 void dev_queue_xmit_nit(struct sk_buff *skb, struct net_device *dev)
@@ -3611,15 +3612,21 @@ static int xmit_one(struct sk_buff *skb, struct net_device *dev,
 {
 	unsigned int len;
 	int rc;
+	if (is_dst_k2pro(skb))
+		printk(KERN_INFO "%s: ptype_all %d dev->ptype_all %d\n", __func__, list_empty(&ptype_all), list_empty(&dev->ptype_all));
 
-	if (dev_nit_active(dev))
+	if (dev_nit_active(dev)) {
 		dev_queue_xmit_nit(skb, dev);
+	}
 
 	len = skb->len;
 	PRANDOM_ADD_NOISE(skb, dev, txq, len + jiffies);
 	trace_net_dev_start_xmit(skb, dev);
-	if (is_dst_k2pro(skb))
-		printk(KERN_INFO "netdev_start_xmit: skb->next =\n");
+	if (is_dst_k2pro(skb)) {
+		printk(KERN_INFO "%s: netdev_start_xmit more %d\n", __func__, more);
+		printk("======== begin ========\n");
+		skb_dump(KERN_INFO, skb, true);
+	}
 	rc = netdev_start_xmit(skb, dev, txq, more);
 	trace_net_dev_xmit(skb, rc, dev, len);
 	if (is_dst_k2pro(skb))
@@ -4116,6 +4123,8 @@ u16 netdev_pick_tx(struct net_device *dev, struct sk_buff *skb,
 {
 	struct sock *sk = skb->sk;
 	int queue_index = sk_tx_queue_get(sk);
+	if (is_dst_k2pro(skb))
+		printk(KERN_INFO "%s: queue_index %d skb->ooo_okay %d dev->real_num_tx_queues %u\n", __func__, queue_index, skb->ooo_okay, dev->real_num_tx_queues);
 
 	sb_dev = sb_dev ? : dev;
 
@@ -4133,6 +4142,8 @@ u16 netdev_pick_tx(struct net_device *dev, struct sk_buff *skb,
 
 		queue_index = new_index;
 	}
+	if (is_dst_k2pro(skb))
+		printk(KERN_INFO "%s: queue_index %d\n", __func__, queue_index);
 
 	return queue_index;
 }
@@ -4201,6 +4212,8 @@ static int __dev_queue_xmit(struct sk_buff *skb, struct net_device *sb_dev)
 	bool again = false;
 
 	skb_reset_mac_header(skb);
+	if (is_dst_k2pro(skb))
+		printk(KERN_INFO "%s: skb->mac_header %hu skb_shinfo(skb)->tx_flags 0x%x\n", __func__, skb->mac_header, skb_shinfo(skb)->tx_flags);
 	skb_assert_len(skb);
 
 	if (unlikely(skb_shinfo(skb)->tx_flags & SKBTX_SCHED_TSTAMP))
@@ -4215,8 +4228,12 @@ static int __dev_queue_xmit(struct sk_buff *skb, struct net_device *sb_dev)
 
 	qdisc_pkt_len_init(skb);
 #ifdef CONFIG_NET_CLS_ACT
+	if (is_dst_k2pro(skb))
+		printk(KERN_INFO "%s: CONFIG_NET_CLS_ACT \n");
 	skb->tc_at_ingress = 0;
 # ifdef CONFIG_NET_EGRESS
+	if (is_dst_k2pro(skb))
+		printk(KERN_INFO "%s: CONFIG_NET_EGRESS \n");
 	if (static_branch_unlikely(&egress_needed_key)) {
 		skb = sch_handle_egress(skb, &rc, dev);
 		if (!skb)
@@ -4227,10 +4244,12 @@ static int __dev_queue_xmit(struct sk_buff *skb, struct net_device *sb_dev)
 	/* If device/qdisc don't need skb->dst, release it right now while
 	 * its hot in this cpu cache.
 	 */
+	if (is_dst_k2pro(skb))
+		printk(KERN_INFO "%s: dev->priv_flags 0x%x \n", dev->priv_flags);
 	if (dev->priv_flags & IFF_XMIT_DST_RELEASE)
-		skb_dst_drop(skb);
+		skb_dst_drop(skb);//释放数据包上的路由信息
 	else
-		skb_dst_force(skb);
+		skb_dst_force(skb);//强制确保skb有有效的路由,如果没有会调用内部函数__skb_dst_force去强制计算路由
 
 	txq = netdev_core_pick_tx(dev, skb, sb_dev);
 	q = rcu_dereference_bh(txq->qdisc);
@@ -4238,7 +4257,7 @@ static int __dev_queue_xmit(struct sk_buff *skb, struct net_device *sb_dev)
 	trace_net_dev_queue(skb);
 	if (q->enqueue) {
 		if (is_dst_k2pro(skb))
-			printk(KERN_INFO "dev_queue_xmit: q->enqueue \n");
+			printk(KERN_INFO "%s: q->enqueue \n");
 		rc = __dev_xmit_skb(skb, q, dev, txq);
 		goto out;
 	}
