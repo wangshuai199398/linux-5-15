@@ -1300,9 +1300,9 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		if (tcp_skb_pcount(skb) > 1)
 			tcb->tcp_flags |= TCPHDR_PSH;
 	}
-	if (inet->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->inet_sk tcp_options_size 0x%x tcb->tcp_flags 0x%x\n", __func__, tcp_options_size, tcb->tcp_flags);
 	tcp_header_size = tcp_options_size + sizeof(struct tcphdr);
+	if (inet->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: ->inet_sk tcp_header_size %u tcp_options_size %u tcb->tcp_flags 0x%x\n", __func__, tcp_header_size, tcp_options_size, tcb->tcp_flags);
 
 	/* if no packet is in qdisc/device queue, then allow XPS to select
 	 * another queue. We can be called from tcp_tsq_handler()
