@@ -541,13 +541,21 @@ packet_routed:
 
 	/* OK, we know where to send it, allocate and build IP header. */
 	skb_push(skb, sizeof(struct iphdr) + (inet_opt ? inet_opt->opt.optlen : 0));
+	if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: ->ip_local_out sizeof(struct iphdr) %d inet_opt %d inet_opt->opt.optlen %u\n", __func__, sizeof(struct iphdr), inet_opt, inet_opt->opt.optlen);
+
 	skb_reset_network_header(skb);
+	if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: ->skb->network_header %hu\n", __func__, skb->network_header);
+
 	iph = ip_hdr(skb);
 	*((__be16 *)iph) = htons((4 << 12) | (5 << 8) | (tos & 0xff));
 	if (ip_dont_fragment(sk, &rt->dst) && !skb->ignore_df)
 		iph->frag_off = htons(IP_DF);
 	else
 		iph->frag_off = 0;
+	if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: ->iph->frag_off %hu\n", __func__, iph->frag_off);
 	iph->ttl      = ip_select_ttl(inet, &rt->dst);
 	iph->protocol = sk->sk_protocol;
 	ip_copy_addrs(iph, fl4);
@@ -558,7 +566,7 @@ packet_routed:
 		iph->ihl += inet_opt->opt.optlen >> 2;
 		ip_options_build(skb, &inet_opt->opt, inet->inet_daddr, rt, 0);
 	}
-
+	//设置 IP 标识符（identification 字段）
 	ip_select_ident_segs(net, skb, sk,
 			     skb_shinfo(skb)->gso_segs ?: 1);
 
@@ -566,8 +574,15 @@ packet_routed:
 	skb->priority = sk->sk_priority;
 	skb->mark = sk->sk_mark;
 
-	if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->ip_local_out\n", __func__);
+	if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a) {
+		if (sk && inet_sk(sk)->inet_daddr) {
+			printk(KERN_INFO "%s: ->sk && inet_sk(sk)->inet_daddr\n", __func__);
+		}
+		if ((iph->frag_off & htons(IP_DF)) && !skb->ignore_df) {
+			printk(KERN_INFO "%s: ->iph->frag_off & htons(IP_DF)) ignore_df\n", __func__);
+		}
+		printk(KERN_INFO "%s: ->ip_local_out skb->priority %u skb->mark %u\n", __func__, skb->priority, skb->mark);
+	}
 
 	res = ip_local_out(net, sk, skb);
 	rcu_read_unlock();
