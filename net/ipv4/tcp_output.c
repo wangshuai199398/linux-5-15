@@ -1256,7 +1256,7 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	tp->tcp_wstamp_ns = max(tp->tcp_wstamp_ns, tp->tcp_clock_cache);
 	skb->skb_mstamp_ns = tp->tcp_wstamp_ns;
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->clone_it %d\n", __func__, clone_it);
+		printk(KERN_INFO "%s: ->clone_it prior_wstamp %llu tp->tcp_wstamp_ns %llu skb->skb_mstamp_ns %llu\n", __func__, clone_it, prior_wstamp, tp->tcp_wstamp_ns, skb->skb_mstamp_ns);
 	if (clone_it) {
 		TCP_SKB_CB(skb)->tx.in_flight = TCP_SKB_CB(skb)->end_seq
 			- tp->snd_una;
@@ -1279,7 +1279,7 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 
 	inet = inet_sk(sk);
 	if (inet->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->inet_sk\n", __func__);
+		printk(KERN_INFO "%s: ->inet_sk tcb->tcp_flags 0x%x\n", __func__, tcb->tcp_flags);
 
 	tcb = TCP_SKB_CB(skb);
 	memset(&opts, 0, sizeof(opts));
@@ -1300,6 +1300,8 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		if (tcp_skb_pcount(skb) > 1)
 			tcb->tcp_flags |= TCPHDR_PSH;
 	}
+	if (inet->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: ->inet_sk tcp_options_size 0x%x tcb->tcp_flags 0x%x\n", __func__, tcp_options_size, tcb->tcp_flags);
 	tcp_header_size = tcp_options_size + sizeof(struct tcphdr);
 
 	/* if no packet is in qdisc/device queue, then allow XPS to select
@@ -1560,7 +1562,8 @@ int tcp_fragment(struct sock *sk, enum tcp_queue tcp_queue,
 	long limit;
 	int nlen;
 	u8 flags;
-
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: ->skb->len %d len %u\n", __func__, skb->len, len);
 	if (WARN_ON(len > skb->len))
 		return -EINVAL;
 
@@ -2136,6 +2139,8 @@ static bool tcp_snd_wnd_test(const struct tcp_sock *tp,
  * in order to speed up the splitting operation.  In particular, we
  * know that all the data is in scatter-gather pages, and that the
  * packet has never been sent out before (and thus is not cloned).
+ * tso_fragment 专门用于处理支持TSO的网卡，它用于将一个大的TCP数据包分割成多个小段以适应网络传输，并且与TSO相关的功能（如校验和、时间戳、TCP 标志等）会进行额外处理
+ * tcp_fragment 通用的 TCP 数据包分段函数，处理所有类型的分段情况，主要用于不使用 TSO 或者在 TSO 失败的情况下分段
  */
 static int tso_fragment(struct sock *sk, struct sk_buff *skb, unsigned int len,
 			unsigned int mss_now, gfp_t gfp)
@@ -2145,13 +2150,17 @@ static int tso_fragment(struct sock *sk, struct sk_buff *skb, unsigned int len,
 	u8 flags;
 
 	/* All of a TSO frame must be composed of paged data.  */
+	//如果 skb->len 不等于 skb->data_len，说明数据包已经不再是完全页数据，需要使用普通的tcp_fragment进行处理，而不是TSO分片。此时返回
 	if (skb->len != skb->data_len)
 		return tcp_fragment(sk, TCP_FRAG_IN_WRITE_QUEUE,
 				    skb, len, mss_now, gfp);
 
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: ->skb->len %d skb->data_len %u\n", __func__, skb->len, skb->data_len);
 	buff = sk_stream_alloc_skb(sk, 0, gfp, true);
 	if (unlikely(!buff))
 		return -ENOMEM;
+	//复制原始 skb 中的数据（包括加密和 MPTCP 扩展）到新的 buff 中
 	skb_copy_decrypted(buff, skb);
 	mptcp_skb_ext_copy(buff, skb);
 
@@ -2161,29 +2170,36 @@ static int tso_fragment(struct sock *sk, struct sk_buff *skb, unsigned int len,
 	skb->truesize -= nlen;
 
 	/* Correct the sequence numbers. */
+	//为新的 buff 数据包设置正确的序列号。buff 的序列号是原始数据包的序列号加上已经发送的数据长度 len
 	TCP_SKB_CB(buff)->seq = TCP_SKB_CB(skb)->seq + len;
 	TCP_SKB_CB(buff)->end_seq = TCP_SKB_CB(skb)->end_seq;
 	TCP_SKB_CB(skb)->end_seq = TCP_SKB_CB(buff)->seq;
 
 	/* PSH and FIN should only be set in the second packet. */
+	//FIN 和 PSH 标志位应该只在第二个数据包中设置。这里通过调整 skb 和 buff 的 TCP 标志位，确保只有第二个包带有 FIN 或 PSH
 	flags = TCP_SKB_CB(skb)->tcp_flags;
 	TCP_SKB_CB(skb)->tcp_flags = flags & ~(TCPHDR_FIN | TCPHDR_PSH);
 	TCP_SKB_CB(buff)->tcp_flags = flags;
 
 	/* This packet was never sent out yet, so no SACK bits. */
+	//确保 buff 数据包在分片后没有被标记为 SACK（Selective Acknowledgment）数据包
 	TCP_SKB_CB(buff)->sacked = 0;
-
+	//标记数据包已完成（End of Record），将 skb 和 buff 标记为一个完整的分片链条
 	tcp_skb_fragment_eor(skb, buff);
-
+	//设置 buff 的 IP 校验和为部分校验。因为每个分片都需要单独进行校验，所以需要设置为部分校验
 	buff->ip_summed = CHECKSUM_PARTIAL;
+	//将原始的 skb 数据包和新的 buff 数据包分开
 	skb_split(skb, buff, len);
+	//添加时间戳，记录数据包的发送时间
 	tcp_fragment_tstamp(skb, buff);
 
 	/* Fix up tso_factor for both original and new SKB.  */
+	//设置原始 skb 和分片 buff 的 TSO 片段数。mss_now 表示每个分片的大小
 	tcp_set_skb_tso_segs(skb, mss_now);
 	tcp_set_skb_tso_segs(buff, mss_now);
 
 	/* Link BUFF into the send queue. */
+	//释放 buff 的头部引用，并将其插入到 TCP 发送队列中，确保它可以正确地发送
 	__skb_header_release(buff);
 	tcp_insert_write_queue_after(skb, buff, sk, TCP_FRAG_IN_WRITE_QUEUE);
 
@@ -2495,13 +2511,21 @@ static bool tcp_pacing_check(struct sock *sk)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 
-	if (!tcp_needs_internal_pacing(sk))
+	if (!tcp_needs_internal_pacing(sk)) {
+		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+			printk(KERN_INFO "%s: ->!tcp_needs_internal_pacing\n", __func__);
 		return false;
+	}
 
-	if (tp->tcp_wstamp_ns <= tp->tcp_clock_cache)
+	if (tp->tcp_wstamp_ns <= tp->tcp_clock_cache) {
+		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+			printk(KERN_INFO "%s: ->tp->tcp_wstamp_ns %llu tp->tcp_clock_cache %llu\n", __func__, tp->tcp_wstamp_ns, tp->tcp_clock_cache);
 		return false;
+	}
 
 	if (!hrtimer_is_queued(&tp->pacing_timer)) {
+		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+			printk(KERN_INFO "%s: ->!hrtimer_is_queued\n", __func__);
 		hrtimer_start(&tp->pacing_timer,
 			      ns_to_ktime(tp->tcp_wstamp_ns),
 			      HRTIMER_MODE_ABS_PINNED_SOFT);
@@ -2664,7 +2688,7 @@ static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 	max_segs = tcp_tso_segs(sk, mss_now);
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
 		printk(KERN_INFO "%s: ->gfp 0x%x max_segs %u sk->sk_gso_max_segs %u\n", __func__, gfp, max_segs, sk->sk_gso_max_segs);
-
+	//TCP 发送队列中的第一个尚未完全发送的报文段
 	while ((skb = tcp_send_head(sk))) {
 		unsigned int limit;
 
@@ -2679,10 +2703,16 @@ static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 		if (tcp_pacing_check(sk))
 			break;
 
+		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+			printk(KERN_INFO "%s: tcp_skb_pcount(skb) %d\n", __func__, tcp_skb_pcount(skb));
+
 		tso_segs = tcp_init_tso_segs(skb, mss_now);
 		BUG_ON(!tso_segs);
-
+		//拥塞窗口：当前发送的包数量小于拥塞窗口允许的最大值，就可以发送新数据，否则不能发送，需要等待ACK回来释放窗口
 		cwnd_quota = tcp_cwnd_test(tp, skb);
+		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+			printk(KERN_INFO "%s: cwnd_quota tcp_packets_in_flight: %u tcp_snd_cwnd: %u\n", __func__, cwnd_quota, tcp_packets_in_flight(tp), tcp_snd_cwnd(tp));
+
 		if (!cwnd_quota) {
 			if (push_one == 2)
 				/* Force out a loss probe pkt. */
@@ -2690,21 +2720,27 @@ static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 			else
 				break;
 		}
-
+		//检查发送数据是否受到接收窗口的限制
+		//接收方 snd_wnd 告诉发送方“我还能接多少”
+		//发送方 cwnd    根据拥塞算法控制“你最多发这么多”
+		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+			printk(KERN_INFO "%s: TCP_SKB_CB(skb)->end_seq %u TCP_SKB_CB(skb)->seq %u tcp_wnd_end(tp) %u\n", __func__, TCP_SKB_CB(skb)->end_seq, TCP_SKB_CB(skb)->seq, tcp_wnd_end(tp));
 		if (unlikely(!tcp_snd_wnd_test(tp, skb, mss_now))) {
 			is_rwnd_limited = true;
 			break;
 		}
 
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s: -> skb->len = %d tso_segs %u\n", __func__, skb->len, tso_segs);
+			printk(KERN_INFO "%s: ->skb->len = %d tso_segs %u tp->snd_una %u tp->snd_up %u\n", __func__, skb->len, tso_segs, tp->snd_una, tp->snd_up);
 
 		if (tso_segs == 1) {
+			//决定当前 TCP 包是否受 Nagle 算法限制，是否应该延迟发送以合并更大的包
 			if (unlikely(!tcp_nagle_test(tp, skb, mss_now,
 						     (tcp_skb_is_last(sk, skb) ?
 						      nonagle : TCP_NAGLE_PUSH))))
 				break;
 		} else {
+			//现在是否要暂时推迟（defer）发送一个大的 TCP 数据包？
 			if (!push_one &&
 			    tcp_tso_should_defer(sk, skb, &is_cwnd_limited,
 						 &is_rwnd_limited, max_segs))
@@ -2712,17 +2748,24 @@ static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 		}
 
 		limit = mss_now;
-		if (tso_segs > 1 && !tcp_urg_mode(tp))
+		//判断当前发送端是否处于“紧急模式（URG mode）”
+		if (tso_segs > 1 && !tcp_urg_mode(tp)) {
+			//计算 TCP 在发送数据时，是否应该把一个大包 在某个字节位置“切成两段” 
 			limit = tcp_mss_split_point(sk, skb, mss_now,
 						    min_t(unsigned int,
 							  cwnd_quota,
 							  max_segs),
 						    nonagle);
+			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+				printk(KERN_INFO "%s: ->limit %u\n", __func__, limit);
+		}
 
+		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+			printk(KERN_INFO "%s: ->skb->len %d limit %u\n", __func__, skb->len, limit);
 		if (skb->len > limit &&
 		    unlikely(tso_fragment(sk, skb, limit, mss_now, gfp)))
 			break;
-
+		//检查TCP发送队列是否满足一定的条件（比如是否过小或拥塞），以决定是否需要采取某些拥塞控制或流量控制措施
 		if (tcp_small_queue_check(sk, skb, 0))
 			break;
 
@@ -2735,7 +2778,7 @@ static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 			break;
 		
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s ->tcp_transmit_skb: skb->len = %d\n", __func__, skb->len);
+			printk(KERN_INFO "%s ->tcp_transmit_skb: skb->len = %d TCP_SKB_CB(skb)->end_seq %u TCP_SKB_CB(skb)->seq %u\n", __func__, skb->len, TCP_SKB_CB(skb)->end_seq, TCP_SKB_CB(skb)->seq);
 
 		if (unlikely(tcp_transmit_skb(sk, skb, 1, gfp)))
 			break;
@@ -2744,8 +2787,9 @@ repair:
 		/* Advance the send_head.  This one is sent out.
 		 * This call will increment packets_out.
 		 */
+		//处理与数据发送相关的后续事件，例如更新 TCP 状态、调整拥塞控制、执行流量控制等操作
 		tcp_event_new_data_sent(sk, skb);
-
+		//基于网络延迟（RTT）和数据包确认的信息，动态调整 TCP 发送窗口，从而优化网络传输效率
 		tcp_minshall_update(tp, mss_now, skb);
 		sent_pkts += tcp_skb_pcount(skb);
 
@@ -2754,19 +2798,25 @@ repair:
 	}
 
 	if (is_rwnd_limited)
-		tcp_chrono_start(sk, TCP_CHRONO_RWND_LIMITED);
+		tcp_chrono_start(sk, TCP_CHRONO_RWND_LIMITED);//标记TCP连接当前进入了某个特定的“阶段”（如拥塞、阻塞等），并开始对这个阶段进行计时
 	else
-		tcp_chrono_stop(sk, TCP_CHRONO_RWND_LIMITED);
+		tcp_chrono_stop(sk, TCP_CHRONO_RWND_LIMITED);//停止计时某个TCP阶段
 
 	is_cwnd_limited |= (tcp_packets_in_flight(tp) >= tcp_snd_cwnd(tp));
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s ->is_rwnd_limited %d sent_pkts %u is_cwnd_limited %d\n", __func__, is_rwnd_limited, sent_pkts, is_cwnd_limited);
+
 	if (likely(sent_pkts || is_cwnd_limited))
 		tcp_cwnd_validate(sk, is_cwnd_limited);
 
 	if (likely(sent_pkts)) {
+		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+			printk(KERN_INFO "%s ->tcp_in_cwnd_reduction(sk) tp->prr_out %u\n", __func__, tcp_in_cwnd_reduction(sk), tp->prr_out);
 		if (tcp_in_cwnd_reduction(sk))
 			tp->prr_out += sent_pkts;
 
 		/* Send one loss probe per tail loss episode. */
+		//发送一个探测包（loss probe），用于检测对方是否已经收到尾部（Tail）数据但未确认，从而尽早发现丢包并触发重传
 		if (push_one != 2)
 			tcp_schedule_loss_probe(sk, false);
 		return false;
@@ -2784,6 +2834,8 @@ bool tcp_schedule_loss_probe(struct sock *sk, bool advancing_rto)
 	/* Don't do any loss probe on a Fast Open connection before 3WHS
 	 * finishes.
 	 */
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s ->rcu_access_pointer(tp->fastopen_rsk) %d\n", __func__, rcu_access_pointer(tp->fastopen_rsk));
 	if (rcu_access_pointer(tp->fastopen_rsk))
 		return false;
 
@@ -2796,7 +2848,8 @@ bool tcp_schedule_loss_probe(struct sock *sk, bool advancing_rto)
 	    (icsk->icsk_ca_state != TCP_CA_Open &&
 	     icsk->icsk_ca_state != TCP_CA_CWR))
 		return false;
-
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s ->tp->srtt_us %d\n", __func__, tp->srtt_us);
 	/* Probe timeout is 2*rtt. Add minimum RTO to account
 	 * for delayed ack when there's one outstanding packet. If no RTT
 	 * sample is available then probe after TCP_TIMEOUT_INIT.
