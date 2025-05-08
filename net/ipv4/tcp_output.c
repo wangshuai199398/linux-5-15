@@ -1302,7 +1302,7 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	}
 	tcp_header_size = tcp_options_size + sizeof(struct tcphdr);
 	if (inet->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->inet_sk tcp_header_size %u tcp_options_size %u tcb->tcp_flags 0x%x\n", __func__, tcp_header_size, tcp_options_size, tcb->tcp_flags);
+		printk(KERN_INFO "%s: ->inet_sk tcp_header_size %u tcp_options_size %u tcb->tcp_flags 0x%x sk_wmem_alloc_get(sk) %d\n", __func__, tcp_header_size, tcp_options_size, tcb->tcp_flags, sk_wmem_alloc_get(sk));
 
 	/* if no packet is in qdisc/device queue, then allow XPS to select
 	 * another queue. We can be called from tcp_tsq_handler()
@@ -1310,6 +1310,7 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	 *
 	 * TODO: Ideally, in-flight pure ACK packets should not matter here.
 	 * One way to get this would be to set skb->truesize = 2 on them.
+	 * 控制是否允许乱序发送（out-of-order），以便让XPS（eXpress Packet Scheduling）/多队列调度器更好地选择合适的队列
 	 */
 	skb->ooo_okay = sk_wmem_alloc_get(sk) < SKB_TRUESIZE(1);
 
@@ -1319,15 +1320,23 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	 * Packets not looped back do not care about pfmemalloc.
 	 */
 	skb->pfmemalloc = 0;
-
+	//把 skb->data 指针往回移动 len 字节，相当于在 skb 的头部插入数据空间，并将 skb->len 增加对应长度
 	skb_push(skb, tcp_header_size);
+	//记录 传输层头部相对于 skb->head 的偏移量
 	skb_reset_transport_header(skb);
+
+	if (inet->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: ->skb->transport_header %hu skb->data %p skb->head %p skb_is_tcp_pure_ack(skb) %d\n", __func__, skb->transport_header, skb->data, skb->head, skb_is_tcp_pure_ack(skb));
 
 	skb_orphan(skb);
 	skb->sk = sk;
+	//判断 skb 是否是 TCP ACK 包。纯 ACK 包通常不携带数据，只用于确认已接收到的数据。
+	//如果是纯 ACK，使用 __sock_wfree 作为析构函数，它会释放 socket 的相关资源；
+	//否则，使用 tcp_wfree，这是一个专门用于 TCP 包的资源释放函数。
 	skb->destructor = skb_is_tcp_pure_ack(skb) ? __sock_wfree : tcp_wfree;
+	//将skb的大小添加到socket的内存使用计数中
 	refcount_add(skb->truesize, &sk->sk_wmem_alloc);
-
+	//设置 skb 的目标（dst）确认标志位
 	skb_set_dst_pending_confirm(skb, READ_ONCE(sk->sk_dst_pending_confirm));
 
 	/* Build TCP header and checksum it. */
@@ -1343,6 +1352,7 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	th->urg_ptr		= 0;
 
 	/* The urg_mode check is necessary during a below snd_una win probe */
+	//判断 TCP 连接当前是否处于“紧急数据（URG）模式” 的内联函数
 	if (unlikely(tcp_urg_mode(tp) && before(tcb->seq, tp->snd_up))) {
 		if (before(tp->snd_up, tcb->seq + 0x10000)) {
 			th->urg_ptr = htons(tp->snd_up - tcb->seq);
@@ -1354,8 +1364,6 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	}
 
 	skb_shinfo(skb)->gso_type = sk->sk_gso_type;
-	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: sk->sk_gso_type %d\n", __func__, sk->sk_gso_type);
 
 	if (likely(!(tcb->tcp_flags & TCPHDR_SYN))) {
 		th->window      = htons(tcp_select_window(sk));
@@ -1367,6 +1375,12 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		th->window	= htons(min(tp->rcv_wnd, 65535U));
 	}
 
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
+		printk(KERN_INFO "%s: ->tcb->seq 0x%x tp->snd_up 0x%x th->urg %hu\n", __func__, tcb->seq, tp->snd_up, th->urg);
+		printk(KERN_INFO "%s: ->th->source %d th->dest %d th->seq 0x%x th->ack_seq 0x%x tp->rcv_wnd 0x%x\n", __func__, th->source, th->dest, th->seq, th->ack_seq, tp->rcv_wnd);
+		printk(KERN_INFO "%s: sk->sk_gso_type %d tp->rcv_wnd CONFIG_TCP_MD5SIG %d md5 %d\n", __func__, sk->sk_gso_type, th->window, CONFIG_TCP_MD5SIG, md5);	
+	}
+	//将 TCP 选项写入到 TCP 首部中
 	tcp_options_write((__be32 *)(th + 1), tp, &opts);
 
 #ifdef CONFIG_TCP_MD5SIG
@@ -1381,10 +1395,18 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	/* BPF prog is the last one writing header option */
 	bpf_skops_write_hdr_opt(sk, skb, NULL, NULL, 0, &opts);
 
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
+		printk(KERN_INFO "%s: ->th->check 0x%x skb->csum_start 0x%x skb->csum_offset 0x%x\n", __func__, th->check, skb->csum_start, skb->csum_offset);
+	}
 	INDIRECT_CALL_INET(icsk->icsk_af_ops->send_check,
 			   tcp_v6_send_check, tcp_v4_send_check,
 			   sk, skb);
-
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
+		printk(KERN_INFO "%s: ->th->check 0x%x skb->csum_start 0x%x skb->csum_offset 0x%x\n", __func__, th->check, skb->csum_start, skb->csum_offset);
+		printk(KERN_INFO "%s: ->skb->len %u tcp_header_size %u tp->data_segs_out %u tp->bytes_sent %llu\n", __func__, skb->len, tcp_header_size, tp->data_segs_out, tp->bytes_sent);
+		printk(KERN_INFO "%s: ->tp->lsndtime %u inet_csk(sk)->icsk_ack.pingpong 0x%x\n", __func__, tp->lsndtime, inet_csk(sk)->icsk_ack.pingpong);
+	}
+	//更新TCP状态机中与ACK发送有关的状态变量，比如统计信息、拥塞控制、RTT 测量等
 	if (likely(tcb->tcp_flags & TCPHDR_ACK))
 		tcp_event_ack_sent(sk, rcv_nxt);
 
@@ -1394,6 +1416,11 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		tp->bytes_sent += skb->len - tcp_header_size;
 	}
 
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
+		printk(KERN_INFO "%s: ->tp->lsndtime %u inet_csk(sk)->icsk_ack.pingpong 0x%x\n", __func__, tp->lsndtime, inet_csk(sk)->icsk_ack.pingpong);
+		printk(KERN_INFO "%s: ->tcb->end_seq %u tp->snd_nxt %u tcb->seq %u\n", __func__, tcb->end_seq, tp->snd_nxt, tcb->seq);
+	}
+
 	if (after(tcb->end_seq, tp->snd_nxt) || tcb->seq == tcb->end_seq)
 		TCP_ADD_STATS(sock_net(sk), TCP_MIB_OUTSEGS,
 			      tcp_skb_pcount(skb));
@@ -1401,26 +1428,28 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		printk(KERN_INFO "%s: tp->segs_out %d tcp_skb_pcount(skb) %d\n", __func__, tp->segs_out, tcp_skb_pcount(skb));
 	tp->segs_out += tcp_skb_pcount(skb);
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: tp->segs_out %d tcp_skb_pcount(skb) %d\n", __func__, tp->segs_out, tcp_skb_pcount(skb));
+		printk(KERN_INFO "%s: tp->segs_out %d tcp_skb_pcount(skb) %d skb->l4_hash %u skb->hash %u\n", __func__, tp->segs_out, tcp_skb_pcount(skb), skb->l4_hash, skb->hash);
 
 	skb_set_hash_from_sk(skb, sk);
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: skb->l4_hash %u skb->hash %u\n", __func__, skb->l4_hash, skb->hash);
 	/* OK, its time to fill skb_shinfo(skb)->gso_{segs|size} */
 	skb_shinfo(skb)->gso_segs = tcp_skb_pcount(skb);
 	skb_shinfo(skb)->gso_size = tcp_skb_mss(skb);
 
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: skb_shinfo(skb)->gso_segs %d skb_shinfo(skb)->gso_size %d\n", __func__, skb_shinfo(skb)->gso_segs, skb_shinfo(skb)->gso_size);
+		printk(KERN_INFO "%s: skb_shinfo(skb)->gso_segs %d skb_shinfo(skb)->gso_size %d skb->skb_mstamp_ns %llu\n", __func__, skb_shinfo(skb)->gso_segs, skb_shinfo(skb)->gso_size, skb->skb_mstamp_ns);
 
 	/* Leave earliest departure time in skb->tstamp (skb->skb_mstamp_ns) */
 
 	/* Cleanup our debris for IP stacks */
 	memset(skb->cb, 0, max(sizeof(struct inet_skb_parm),
 			       sizeof(struct inet6_skb_parm)));
-
+	//发送 TCP 数据包前添加延迟，一般用于支持 TCP pacing（TCP 节奏控制）或某些带宽控制、拥塞避免策略，如BBR
 	tcp_add_tx_delay(skb, tp);
 
 	if (inet->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->ip_queue_xmit\n", __func__);
+		printk(KERN_INFO "%s: ->ip_queue_xmit skb->skb_mstamp_ns %llu\n", __func__, skb->skb_mstamp_ns);
 
 	err = INDIRECT_CALL_INET(icsk->icsk_af_ops->queue_xmit,
 				 inet6_csk_xmit, ip_queue_xmit,
@@ -1431,6 +1460,14 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		err = net_xmit_eval(err);
 	}
 	if (!err && oskb) {
+		if (inet->cork.fl.u.ip4.daddr == 0xa4dc77a) {
+			if (sk->sk_pacing_status != SK_PACING_NONE) {
+				printk(KERN_INFO "%s: ->sk->sk_pacing_status != SK_PACING_NONE\n", __func__);
+			}
+			if (!tp->packets_out) {
+				printk(KERN_INFO "%s: ->!tp->packets_out\n", __func__);
+			}
+		}
 		tcp_update_skb_after_send(sk, oskb, prior_wstamp);
 		tcp_rate_skb_sent(sk, oskb);
 	}

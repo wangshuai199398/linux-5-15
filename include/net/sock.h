@@ -2241,6 +2241,7 @@ static inline int skb_copy_to_page_nocache(struct sock *sk, struct iov_iter *fro
  * @sk: socket
  *
  * Return: sk_wmem_alloc minus initial offset of one
+ * 这个函数返回当前 socket（sk）上分配出去但还没释放的写内存总量，也就是 “发送队列中正在排队的数据”总大小
  */
 static inline int sk_wmem_alloc_get(const struct sock *sk)
 {
