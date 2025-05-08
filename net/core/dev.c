@@ -3613,7 +3613,7 @@ static int xmit_one(struct sk_buff *skb, struct net_device *dev,
 	unsigned int len;
 	int rc;
 	if (is_dst_k2pro(skb))
-		printk(KERN_INFO "%s: ptype_all %d dev->ptype_all %d\n", __func__, list_empty(&ptype_all), list_empty(&dev->ptype_all));
+		netdev_info(dev, "%s: ptype_all %d dev->ptype_all %d\n", __func__, list_empty(&ptype_all), list_empty(&dev->ptype_all));
 
 	if (dev_nit_active(dev)) {
 		dev_queue_xmit_nit(skb, dev);
@@ -3623,14 +3623,14 @@ static int xmit_one(struct sk_buff *skb, struct net_device *dev,
 	PRANDOM_ADD_NOISE(skb, dev, txq, len + jiffies);
 	trace_net_dev_start_xmit(skb, dev);
 	if (is_dst_k2pro(skb)) {
-		printk(KERN_INFO "%s: netdev_start_xmit more %d\n", __func__, more);
+		netdev_info(dev, "%s: netdev_start_xmit more %d\n", __func__, more);
 		printk("======== begin ========\n");
 		skb_dump(KERN_INFO, skb, true);
 	}
 	rc = netdev_start_xmit(skb, dev, txq, more);
 	trace_net_dev_xmit(skb, rc, dev, len);
 	if (is_dst_k2pro(skb))
-		printk(KERN_INFO "********* kernel tx end ********* \n\n");
+		netdev_info(dev, "********* kernel tx end ********* \n\n");
 	return rc;
 }
 
@@ -3645,7 +3645,7 @@ struct sk_buff *dev_hard_start_xmit(struct sk_buff *first, struct net_device *de
 
 		skb_mark_not_on_list(skb);
 		if (is_dst_k2pro(skb))
-			printk(KERN_INFO "dev_hard_start_xmit: skb->next =\n");
+			netdev_info(dev, "dev_hard_start_xmit: skb->next =\n");
 		rc = xmit_one(skb, dev, txq, next != NULL);
 		if (unlikely(!dev_xmit_complete(rc))) {
 			skb->next = next;
