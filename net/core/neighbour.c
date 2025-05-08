@@ -1499,13 +1499,15 @@ int neigh_resolve_output(struct neighbour *neigh, struct sk_buff *skb)
 		do {
 			__skb_pull(skb, skb_network_offset(skb));
 			seq = read_seqbegin(&neigh->ha_lock);
+			if (is_dst_k2pro(skb))
+				printk(KERN_ERR "%s: -> dev_hard_header\n", __func__);
 			err = dev_hard_header(skb, dev, ntohs(skb->protocol),
 					      neigh->ha, NULL, skb->len);
 		} while (read_seqretry(&neigh->ha_lock, seq));
 
 		if (err >= 0) {
 			if (is_dst_k2pro(skb))
-				printk(KERN_ERR "neigh_resolve_output -> dev_queue_xmit\n");
+				printk(KERN_ERR "%s: -> dev_queue_xmit\n", __func__);
 			rc = dev_queue_xmit(skb);
 		} 
 		else

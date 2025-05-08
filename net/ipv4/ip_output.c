@@ -457,7 +457,7 @@ int ip_output(struct net *net, struct sock *sk, struct sk_buff *skb)
 	skb->protocol = htons(ETH_P_IP);
 
 	if (is_dst_k2pro(skb))
-		printk(KERN_INFO "%s: ->ip_finish_output\n", __func__);
+		printk(KERN_INFO "%s: ->ip_finish_output skb->protocol 0x%x\n", __func__, skb->protocol);
 
 	return NF_HOOK_COND(NFPROTO_IPV4, NF_INET_POST_ROUTING,
 			    net, sk, skb, indev, dev,
