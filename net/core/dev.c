@@ -4246,7 +4246,7 @@ static int __dev_queue_xmit(struct sk_buff *skb, struct net_device *sb_dev)
 	 */
 	if (is_dst_k2pro(skb)) {
 		if (dev->priv_flags & IFF_XMIT_DST_RELEASE) {
-			printk(KERN_INFO "%s: dev->priv_flags 0x%x \n", dev->priv_flags);
+			printk(KERN_INFO "%s: dev->priv_flags\n");
 		}
 	}
 		
