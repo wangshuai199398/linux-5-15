@@ -317,7 +317,7 @@ static int __ip_finish_output(struct net *net, struct sock *sk, struct sk_buff *
 	mtu = ip_skb_dst_mtu(sk, skb);
 
 	if (is_dst_k2pro(skb)) {
-		dump_stack();
+		//dump_stack();
 		printk("======== begin ========\n");
 		printk(KERN_INFO "IPCB(skb)->frag_max_size %hu\n", IPCB(skb)->frag_max_size);
 		skb_dump(KERN_INFO, skb, true);
