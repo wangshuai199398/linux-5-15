@@ -5015,6 +5015,7 @@ static inline netdev_tx_t __netdev_start_xmit(const struct net_device_ops *ops,
 					      struct sk_buff *skb, struct net_device *dev,
 					      bool more)
 {
+	//设置当前 CPU 的 softnet_data 结构中的 xmit.more 字段,表示“是否还有更多包要发送”
 	__this_cpu_write(softnet_data.xmit.more, more);
 	return ops->ndo_start_xmit(skb, dev);
 }

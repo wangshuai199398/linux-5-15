@@ -1256,7 +1256,7 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	tp->tcp_wstamp_ns = max(tp->tcp_wstamp_ns, tp->tcp_clock_cache);
 	skb->skb_mstamp_ns = tp->tcp_wstamp_ns;
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->clone_it prior_wstamp %llu tp->tcp_wstamp_ns %llu skb->skb_mstamp_ns %llu\n", __func__, clone_it, prior_wstamp, tp->tcp_wstamp_ns, skb->skb_mstamp_ns);
+		printk(KERN_INFO "%s: ->clone_it %d prior_wstamp %llu tp->tcp_wstamp_ns %llu skb->skb_mstamp_ns %llu\n", __func__, clone_it, prior_wstamp, tp->tcp_wstamp_ns, skb->skb_mstamp_ns);
 	if (clone_it) {
 		TCP_SKB_CB(skb)->tx.in_flight = TCP_SKB_CB(skb)->end_seq
 			- tp->snd_una;
