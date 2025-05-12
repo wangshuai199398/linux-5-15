@@ -4263,7 +4263,7 @@ static int __dev_queue_xmit(struct sk_buff *skb, struct net_device *sb_dev)
 	trace_net_dev_queue(skb);
 	if (q->enqueue) {
 		if (is_dst_k2pro(skb))
-			printk(KERN_INFO "%s: q->enqueue \n");
+			printk(KERN_INFO "%s: q->enqueue \n", __func__);
 		rc = __dev_xmit_skb(skb, q, dev, txq);
 		goto out;
 	}
