@@ -4231,11 +4231,11 @@ static int __dev_queue_xmit(struct sk_buff *skb, struct net_device *sb_dev)
 	qdisc_pkt_len_init(skb);
 #ifdef CONFIG_NET_CLS_ACT
 	if (is_dst_k2pro(skb))
-		printk(KERN_INFO "%s: CONFIG_NET_CLS_ACT \n");
+		printk(KERN_INFO "%s: CONFIG_NET_CLS_ACT \n", __func__);
 	skb->tc_at_ingress = 0;
 # ifdef CONFIG_NET_EGRESS
 	if (is_dst_k2pro(skb))
-		printk(KERN_INFO "%s: CONFIG_NET_EGRESS \n");
+		printk(KERN_INFO "%s: CONFIG_NET_EGRESS \n", __func__);
 	if (static_branch_unlikely(&egress_needed_key)) {
 		skb = sch_handle_egress(skb, &rc, dev);
 		if (!skb)
@@ -4248,7 +4248,7 @@ static int __dev_queue_xmit(struct sk_buff *skb, struct net_device *sb_dev)
 	 */
 	if (is_dst_k2pro(skb)) {
 		if (dev->priv_flags & IFF_XMIT_DST_RELEASE) {
-			printk(KERN_INFO "%s: dev->priv_flags\n");
+			printk(KERN_INFO "%s: dev->priv_flags\n", __func__);
 		}
 	}
 		
