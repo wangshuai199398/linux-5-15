@@ -1283,7 +1283,7 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	memset(&opts, 0, sizeof(opts));
 
 	if (inet->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->inet_sk tcb->tcp_flags 0x%x\n", __func__, tcb->tcp_flags);
+		printk(KERN_INFO "%s: ->inet_sk tcb->tcp_flags 0x%x\n", __func__, tcb->tcp_flags;)
 	if (unlikely(tcb->tcp_flags & TCPHDR_SYN)) {
 		tcp_options_size = tcp_syn_options(sk, skb, &opts, &md5);
 	} else {

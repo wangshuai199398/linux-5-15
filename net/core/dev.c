@@ -4244,8 +4244,12 @@ static int __dev_queue_xmit(struct sk_buff *skb, struct net_device *sb_dev)
 	/* If device/qdisc don't need skb->dst, release it right now while
 	 * its hot in this cpu cache.
 	 */
-	if (is_dst_k2pro(skb))
-		printk(KERN_INFO "%s: dev->priv_flags 0x%x \n", dev->priv_flags);
+	if (is_dst_k2pro(skb)) {
+		if (dev->priv_flags & IFF_XMIT_DST_RELEASE) {
+			printk(KERN_INFO "%s: dev->priv_flags 0x%x \n", dev->priv_flags);
+		}
+	}
+		
 	if (dev->priv_flags & IFF_XMIT_DST_RELEASE)
 		skb_dst_drop(skb);//释放数据包上的路由信息
 	else
