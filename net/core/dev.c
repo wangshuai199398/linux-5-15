@@ -4124,7 +4124,7 @@ u16 netdev_pick_tx(struct net_device *dev, struct sk_buff *skb,
 	struct sock *sk = skb->sk;
 	int queue_index = sk_tx_queue_get(sk);
 	if (is_dst_k2pro(skb)) {
-		printk(KERN_INFO "%s: queue_index %d skb->ooo_okay %d dev->real_num_tx_queues\n", __func__, queue_index, skb->ooo_okay);
+		printk(KERN_INFO "%s: queue_index %d skb->ooo_okay  dev->real_num_tx_queues\n", __func__, queue_index);
 	}
 	//printk(KERN_INFO "%s: queue_index %d skb->ooo_okay %d dev->real_num_tx_queues %u\n", __func__, queue_index, skb->ooo_okay, dev->real_num_tx_queues);
 
