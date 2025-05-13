@@ -543,7 +543,7 @@ packet_routed:
 	/* OK, we know where to send it, allocate and build IP header. */
 	skb_push(skb, sizeof(struct iphdr) + (inet_opt ? inet_opt->opt.optlen : 0));
 	if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->ip_local_out sizeof(struct iphdr) %d inet_opt %d inet_opt->opt.optlen %u\n", __func__, sizeof(struct iphdr), inet_opt, inet_opt->opt.optlen);
+		printk(KERN_INFO "%s: ->ip_local_out sizeof(struct iphdr) %d inet_opt->opt.optlen %u\n", __func__, sizeof(struct iphdr), (inet_opt ? inet_opt->opt.optlen : 0));
 
 	skb_reset_network_header(skb);
 	if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
