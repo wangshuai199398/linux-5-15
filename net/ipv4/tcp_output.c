@@ -2748,7 +2748,7 @@ static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 		//拥塞窗口：当前发送的包数量小于拥塞窗口允许的最大值，就可以发送新数据，否则不能发送，需要等待ACK回来释放窗口
 		cwnd_quota = tcp_cwnd_test(tp, skb);
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s: cwnd_quota tcp_packets_in_flight: %u tcp_snd_cwnd: %u\n", __func__, cwnd_quota, tcp_packets_in_flight(tp), tcp_snd_cwnd(tp));
+			printk(KERN_INFO "%s: cwnd_quota %d tcp_packets_in_flight: %u tcp_snd_cwnd: %u\n", __func__, cwnd_quota, tcp_packets_in_flight(tp), tcp_snd_cwnd(tp));
 
 		if (!cwnd_quota) {
 			if (push_one == 2)
@@ -2848,7 +2848,7 @@ repair:
 
 	if (likely(sent_pkts)) {
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s ->tcp_in_cwnd_reduction(sk) tp->prr_out %u\n", __func__, tcp_in_cwnd_reduction(sk), tp->prr_out);
+			printk(KERN_INFO "%s ->tcp_in_cwnd_reduction(sk) %d tp->prr_out %u\n", __func__, tcp_in_cwnd_reduction(sk), tp->prr_out);
 		if (tcp_in_cwnd_reduction(sk))
 			tp->prr_out += sent_pkts;
 
