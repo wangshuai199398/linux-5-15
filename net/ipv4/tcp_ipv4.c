@@ -248,7 +248,10 @@ int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 		return err;
 	}
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
-		printk(KERN_INFO "%s: usin->sin_addr.s_addr 0x%x inet_opt->opt.faddr 0x%x\n", __func__, usin->sin_addr.s_addr, inet_opt->opt.faddr);
+		printk(KERN_INFO "%s: usin->sin_addr.s_addr 0x%x \n", __func__, usin->sin_addr.s_addr);
+		if (inet_opt && inet_opt->opt.srr) {
+			printk(KERN_INFO "%s: inet_opt->opt.faddr 0x%x\n", __func__, inet_opt->opt.faddr);
+		}
 		printk(KERN_INFO "%s: nexthop 0x%x inet->inet_sport 0x%x usin->sin_port 0x%x\n", __func__, nexthop, inet->inet_sport, usin->sin_port);
 	}
 
