@@ -303,12 +303,13 @@ int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 	 * complete initialization after this.
 	 */
 	tcp_set_state(sk, TCP_SYN_SENT);
+	//随机生成一个原端口号
 	err = inet_hash_connect(tcp_death_row, sk);
 	if (err)
 		goto failure;
-
+	//获取随机hash值sk->sk_txhash
 	sk_set_txhash(sk);
-
+	//当四元组中的源端口（sport）或目的端口（dport）变化时，重新查找路由表
 	rt = ip_route_newports(fl4, rt, orig_sport, orig_dport,
 			       inet->inet_sport, inet->inet_dport, sk);
 	if (IS_ERR(rt)) {

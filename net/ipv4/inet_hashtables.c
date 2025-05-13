@@ -695,6 +695,7 @@ EXPORT_SYMBOL_GPL(inet_unhash);
 #define INET_TABLE_PERTURB_SIZE (1 << CONFIG_INET_TABLE_PERTURB_ORDER)
 static u32 *table_perturb;
 
+//TCP/UDP 在 connect() 时自动分配本地端口 并将 socket 插入 hash 表的核心实现，确保四元组唯一性
 int __inet_hash_connect(struct inet_timewait_death_row *death_row,
 		struct sock *sk, u64 port_offset,
 		int (*check_established)(struct inet_timewait_death_row *,
@@ -710,7 +711,7 @@ int __inet_hash_connect(struct inet_timewait_death_row *death_row,
 	int ret, i, low, high;
 	int l3mdev;
 	u32 index;
-
+	//如果已经有本地端口（bind过），直接检查四元组是否冲突
 	if (port) {
 		local_bh_disable();
 		ret = check_established(death_row, sk, port, NULL);
@@ -719,7 +720,7 @@ int __inet_hash_connect(struct inet_timewait_death_row *death_row,
 	}
 
 	l3mdev = inet_sk_bound_l3mdev(sk);
-
+	//获取动态端口范围
 	inet_get_local_port_range(net, &low, &high);
 	high++; /* [32768, 60999] -> [32768, 61000[ */
 	remaining = high - low;
@@ -740,10 +741,13 @@ int __inet_hash_connect(struct inet_timewait_death_row *death_row,
 other_parity_scan:
 	port = low + offset;
 	for (i = 0; i < remaining; i += 2, port += 2) {
+		//端口越界则回卷
 		if (unlikely(port >= high))
 			port -= remaining;
+		//跳过保留端口
 		if (inet_is_local_reserved_port(net, port))
 			continue;
+		//找到对应的 hash bucket
 		head = &hinfo->bhash[inet_bhashfn(net, port,
 						  hinfo->bhash_size)];
 		spin_lock_bh(&head->lock);
@@ -751,6 +755,7 @@ other_parity_scan:
 		/* Does not bother with rcv_saddr checks, because
 		 * the established check is already unique enough.
 		 */
+		//遍历 bind bucket，看是否有冲突
 		inet_bind_bucket_for_each(tb, &head->chain) {
 			if (net_eq(ib_net(tb), net) && tb->l3mdev == l3mdev &&
 			    tb->port == port) {
@@ -758,13 +763,14 @@ other_parity_scan:
 				    tb->fastreuseport >= 0)
 					goto next_port;
 				WARN_ON(hlist_empty(&tb->owners));
+				// 详细检查四元组是否冲突
 				if (!check_established(death_row, sk,
 						       port, &tw))
 					goto ok;
 				goto next_port;
 			}
 		}
-
+		//没有找到冲突，创建新的 bind_bucket
 		tb = inet_bind_bucket_create(hinfo->bind_bucket_cachep,
 					     net, head, port, l3mdev);
 		if (!tb) {
@@ -791,10 +797,12 @@ ok:
 	 * on low contention the randomness is maximal and on high contention
 	 * it may be inexistent.
 	 */
+	//更新 table_perturb 让下次分配也有扰动
 	i = max_t(int, i, (prandom_u32() & 7) * 2);
 	WRITE_ONCE(table_perturb[index], READ_ONCE(table_perturb[index]) + i + 2);
 
 	/* Head lock still held and bh's disabled */
+	//完成绑定（inet_bind_hash）、写入本地端口号、插入 established 哈希表
 	inet_bind_hash(sk, tb, port);
 	if (sk_unhashed(sk)) {
 		inet_sk(sk)->inet_sport = htons(port);
@@ -811,12 +819,15 @@ ok:
 
 /*
  * Bind a port for a connect operation and hash it.
+ * 为socket分配本地端口（如果还没有），并将其插入到 established 哈希表中，确保四元组唯一性（本地IP:端口+远端IP:端口）
+ * __inet_check_established是established表冲突检测用的回调
  */
 int inet_hash_connect(struct inet_timewait_death_row *death_row,
 		      struct sock *sk)
 {
+	//用于在端口选择时加入随机偏移，增强安全性（防止端口猜测攻击）
 	u64 port_offset = 0;
-
+	//inet_num是socket已绑定的本地端口,如果为0，表示还没有绑定端口,然后根据socket信息返回一个偏移量，用于扰动起始端口号
 	if (!inet_sk(sk)->inet_num)
 		port_offset = inet_sk_port_offset(sk);
 	return __inet_hash_connect(death_row, sk, port_offset,
