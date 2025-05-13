@@ -905,7 +905,7 @@ EXPORT_SYMBOL(security_binder_set_context_mgr);
 int security_binder_transaction(const struct cred *from,
 				const struct cred *to)
 {
-	int from_display = lsm_cred_display(from);
+	int from_display = lsm_cred_display((struct cred *)from);
 	int to_display = lsm_cred_display(to);
 
 	/*
