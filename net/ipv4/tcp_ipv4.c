@@ -228,7 +228,7 @@ int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 	nexthop = daddr = usin->sin_addr.s_addr;
 	inet_opt = rcu_dereference_protected(inet->inet_opt,
 					     lockdep_sock_is_held(sk));
-	//启用了源路由(srr)时，会把源路由指定的faddr作为“下一跳”地址
+	//启用了源路由(srr)时，会把源路由指定的faddr作为下一跳地址
 	if (inet_opt && inet_opt->opt.srr) {
 		if (!daddr)
 			return -EINVAL;
@@ -237,7 +237,11 @@ int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 
 	orig_sport = inet->inet_sport;
 	orig_dport = usin->sin_port;
+	//此时有了目的ip和目的端口，接下来要做的是查找路由
 	fl4 = &inet->cork.fl.u.ip4;
+	if (usin->sin_addr.s_addr == 0xa4dc77a) {
+		printk(KERN_INFO "%s: inet->inet_saddr %x0x sk_bound_dev_if %d", __func__, inet->inet_saddr, sk->sk_bound_dev_if);
+	}
 	rt = ip_route_connect(fl4, nexthop, inet->inet_saddr,
 			      RT_CONN_FLAGS(sk), sk->sk_bound_dev_if,
 			      IPPROTO_TCP,
@@ -249,13 +253,13 @@ int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 		return err;
 	}
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
-		printk(KERN_INFO "%s: usin->sin_addr.s_addr 0x%x \n", __func__, usin->sin_addr.s_addr);
+		printk(KERN_INFO "%s: inet->inet_saddr 0x%x, usin->sin_addr.s_addr 0x%x \n", __func__, inet->inet_saddr, usin->sin_addr.s_addr);
 		if (inet_opt && inet_opt->opt.srr) {
 			printk(KERN_INFO "%s: inet_opt->opt.faddr 0x%x\n", __func__, inet_opt->opt.faddr);
 		}
 		printk(KERN_INFO "%s: nexthop 0x%x inet->inet_sport 0x%x usin->sin_port %hu\n", __func__, nexthop, inet->inet_sport, ntohs(usin->sin_port));
 	}
-
+	//检查到路由是广播/多播类型时，就认为网络不可达，返回错误，TCP不能连接广播地址或多播地址
 	if (rt->rt_flags & (RTCF_MULTICAST | RTCF_BROADCAST)) {
 		ip_rt_put(rt);
 		return -ENETUNREACH;
@@ -266,6 +270,9 @@ int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 
 	if (!inet->inet_saddr)
 		inet->inet_saddr = fl4->saddr;
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
+		printk(KERN_INFO "%s: inet->inet_saddr 0x%x ts_recent_stamp %d inet_daddr 0x%x\n", __func__, ntohl(inet->inet_saddr), tp->rx_opt.ts_recent_stamp, ntohl(inet->inet_daddr));
+	}
 	sk_rcv_saddr_set(sk, inet->inet_saddr);
 
 	if (tp->rx_opt.ts_recent_stamp && inet->inet_daddr != daddr) {
@@ -280,6 +287,11 @@ int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 	sk_daddr_set(sk, daddr);
 
 	inet_csk(sk)->icsk_ext_hdr_len = 0;
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
+		if (inet_opt) {
+			printk(KERN_INFO "%s: inet_opt->opt.optlen %u\n", __func__, inet_opt->opt.optlen);
+		}
+	}
 	if (inet_opt)
 		inet_csk(sk)->icsk_ext_hdr_len = inet_opt->opt.optlen;
 

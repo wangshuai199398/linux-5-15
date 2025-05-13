@@ -2874,6 +2874,7 @@ struct dst_entry *ipv4_blackhole_route(struct net *net, struct dst_entry *dst_or
 	return rt ? &rt->dst : ERR_PTR(-ENOMEM);
 }
 
+//根据 flowi4 描述的流量信息（源IP、目的IP、协议、端口等），查找并返回对应的路由表项（rtable）
 struct rtable *ip_route_output_flow(struct net *net, struct flowi4 *flp4,
 				    const struct sock *sk)
 {
@@ -2884,6 +2885,7 @@ struct rtable *ip_route_output_flow(struct net *net, struct flowi4 *flp4,
 
 	if (flp4->flowi4_proto) {
 		flp4->flowi4_oif = rt->dst.dev->ifindex;
+		//如果开启了IPSec/XFRM transform（加密、认证、隧道），会进一步调用xfrm相关的路由变换
 		rt = (struct rtable *)xfrm_lookup_route(net, &rt->dst,
 							flowi4_to_flowi(flp4),
 							sk, 0);

@@ -61,6 +61,7 @@ union flowi_uli {
 	} mht;
 };
 
+//用于描述流信息（目的IP、源IP、TOS、协议、端口等）
 struct flowi4 {
 	struct flowi_common	__fl_common;
 #define flowi4_oif		__fl_common.flowic_oif

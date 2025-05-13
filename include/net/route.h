@@ -303,6 +303,9 @@ static inline void ip_route_connect_init(struct flowi4 *fl4, __be32 dst, __be32 
 			   sk->sk_uid);
 }
 
+//TOS（Type of Service，服务类型）/DSCP字段
+//oif Outgoing Interface，如果非0，表示指定了出口设备（如 sk_bound_dev_if）
+//protocol 协议类型tcp/udp/icmp等
 static inline struct rtable *ip_route_connect(struct flowi4 *fl4,
 					      __be32 dst, __be32 src, u32 tos,
 					      int oif, u8 protocol,
@@ -311,18 +314,23 @@ static inline struct rtable *ip_route_connect(struct flowi4 *fl4,
 {
 	struct net *net = sock_net(sk);
 	struct rtable *rt;
-
+	//初始化fl4
 	ip_route_connect_init(fl4, dst, src, tos, oif, protocol,
 			      sport, dport, sk);
 
 	if (!dst || !src) {
+		//查一次路由，获取默认的源地址、出口接口
 		rt = __ip_route_output_key(net, fl4);
 		if (IS_ERR(rt))
 			return rt;
+		//释放掉引用
 		ip_rt_put(rt);
+		//更新fl4
 		flowi4_update_output(fl4, oif, tos, fl4->daddr, fl4->saddr);
 	}
+	//安全子系统（如 SELinux）对这次流量做一次安全策略分类（检查 socket 能否访问这个 flow）
 	security_sk_classify_flow(sk, flowi4_to_flowi_common(fl4));
+	//再次执行正式的路由查找，返回最终的路由缓存项
 	return ip_route_output_flow(net, fl4, sk);
 }
 
