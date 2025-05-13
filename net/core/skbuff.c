@@ -5697,7 +5697,7 @@ static inline bool skb_gso_size_check(const struct sk_buff *skb,
  */
 bool skb_gso_validate_network_len(const struct sk_buff *skb, unsigned int mtu)
 {
-	if (is_dst_k2pro(skb))
+	if (is_dst_k2pro((struct sk_buff *)skb))
 		printk(KERN_INFO "skb_gso_validate_network_len: skb_gso_network_seglen = %u transport_seglen= %u tcp header %d\n", skb_gso_network_seglen(skb), skb_gso_transport_seglen(skb), tcp_hdrlen(skb));
 	return skb_gso_size_check(skb, skb_gso_network_seglen(skb), mtu);
 }
@@ -6663,7 +6663,8 @@ int is_dst_k2pro(struct sk_buff *skb)
 {
 	if (skb == NULL)
 		return 0;
-	struct iphdr *iph = ip_hdr(skb);
+	struct iphdr *iph;
+	iph = ip_hdr(skb);
 	__be32 specific_ip;
 
 	//printk(KERN_INFO "dip 0x%x sip 0x%x\n", ntohl(iph->daddr), ntohl(iph->saddr));

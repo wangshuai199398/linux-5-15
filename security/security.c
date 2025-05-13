@@ -906,7 +906,7 @@ int security_binder_transaction(const struct cred *from,
 				const struct cred *to)
 {
 	int from_display = lsm_cred_display((struct cred *)from);
-	int to_display = lsm_cred_display(to);
+	int to_display = lsm_cred_display((struct cred *)to);
 
 	/*
 	 * If the display is LSMBLOB_INVALID the first module that has
