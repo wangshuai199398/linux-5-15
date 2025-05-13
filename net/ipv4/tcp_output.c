@@ -316,16 +316,19 @@ static void tcp_ecn_send_synack(struct sock *sk, struct sk_buff *skb)
 }
 
 /* Packet ECN state for a SYN.  */
+//在 SYN 包中协商 ECN（Explicit Congestion Notification，显式拥塞通知）。
+//在 主动连接发起（三次握手 SYN 报文）时，如果系统和对端都支持 ECN，那么可以通过该函数在 SYN 报文里设置 TCP ECN 相关的标志位
 static void tcp_ecn_send_syn(struct sock *sk, struct sk_buff *skb)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 	bool bpf_needs_ecn = tcp_bpf_ca_needs_ecn(sk);
+	//全局开关 sysctl_tcp_ecn == 1（默认 ECN）,拥塞控制算法（tcp_ca）要求必须开启 ECN,BPF congestion control 是否要求 ECN
 	bool use_ecn = READ_ONCE(sock_net(sk)->ipv4.sysctl_tcp_ecn) == 1 ||
 		tcp_ca_needs_ecn(sk) || bpf_needs_ecn;
-
+	//如果以上都没要求启用 ECN，就去检查路由特性（dst_entry）
 	if (!use_ecn) {
 		const struct dst_entry *dst = __sk_dst_get(sk);
-
+		//RTAX_FEATURE_ECN：表示这条路由的下一跳支持 ECN,如果支持，则也启用 ECN
 		if (dst && dst_feature(dst, RTAX_FEATURE_ECN))
 			use_ecn = true;
 	}
@@ -333,8 +336,11 @@ static void tcp_ecn_send_syn(struct sock *sk, struct sk_buff *skb)
 	tp->ecn_flags = 0;
 
 	if (use_ecn) {
+		//设置 TCP 头部 ECE/CWR 位 （表示“我支持 ECN”）
 		TCP_SKB_CB(skb)->tcp_flags |= TCPHDR_ECE | TCPHDR_CWR;
+		//设置本地状态 tp->ecn_flags = TCP_ECN_OK
 		tp->ecn_flags = TCP_ECN_OK;
+		//如果算法或者 BPF 明确要求,调用 INET_ECN_xmit(sk)，进一步设置 IP 头部的 ECN field
 		if (tcp_ca_needs_ecn(sk) || bpf_needs_ecn)
 			INET_ECN_xmit(sk);
 	}
@@ -3891,10 +3897,13 @@ static void tcp_connect_queue_skb(struct sock *sk, struct sk_buff *skb)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 	struct tcp_skb_cb *tcb = TCP_SKB_CB(skb);
-
+	//更新该 skb 的 结束序列号 end_seq
 	tcb->end_seq += skb->len;
+	//释放 skb 头部空间的元信息，确保接下来构建的header不会被覆盖,把skb header的metadata变为纯payload状态，供后续协议栈组装
 	__skb_header_release(skb);
+	//增加socket的写队列内存记账,这个计数会影响拥塞控制、socket 写 buffer 限制
 	sk_wmem_queued_add(sk, skb->truesize);
+	//给 socket 申请（charge）内存资源,防止 socket 使用超出限制的 buffer,这步可能触发流控（低内存时可能阻塞/丢包）
 	sk_mem_charge(sk, skb->truesize);
 	WRITE_ONCE(tp->write_seq, tcb->end_seq);
 	tp->packets_out += tcp_skb_pcount(skb);
@@ -4023,6 +4032,7 @@ int tcp_connect(struct sock *sk)
 		return -ENOBUFS;
 
 	tcp_init_nondata_skb(buff, tp->write_seq++, TCPHDR_SYN);
+	//更新时间戳（mstamp） 的函数，主要用于 TCP 的 RTT 测量、拥塞控制等时序相关的操作
 	tcp_mstamp_refresh(tp);
 	tp->retrans_stamp = tcp_time_stamp(tp);
 	tcp_connect_queue_skb(sk, buff);
@@ -4031,7 +4041,7 @@ int tcp_connect(struct sock *sk)
 
 	/* Send off SYN; include data in Fast Open. */
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->tcp_transmit_skb\n", __func__);
+		printk(KERN_INFO "%s: ->tcp_transmit_skb tp->fastopen_req %d\n", __func__, tp->fastopen_req);
 	err = tp->fastopen_req ? tcp_send_syn_data(sk, buff) :
 	      tcp_transmit_skb(sk, buff, 1, sk->sk_allocation);
 	if (err == -ECONNREFUSED)

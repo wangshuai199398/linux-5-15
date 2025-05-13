@@ -5215,6 +5215,8 @@ static struct sk_buff *tcp_collapse_one(struct sock *sk, struct sk_buff *skb,
 }
 
 /* Insert skb into rb tree, ordered by TCP_SKB_CB(skb)->seq */
+//将 TCP 段（sk_buff）插入到 rbtree 红黑树中的函数，主要用于 乱序数据包重排序
+//把这些乱序的 TCP 段插入 rbtree 里，以便后续重组成连续的数据流
 void tcp_rbtree_insert(struct rb_root *root, struct sk_buff *skb)
 {
 	struct rb_node **p = &root->rb_node;
