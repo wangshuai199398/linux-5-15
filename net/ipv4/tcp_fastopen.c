@@ -447,6 +447,10 @@ bool tcp_fastopen_cookie_check(struct sock *sk, u16 *mss,
  * 2. we have a valid cookie
  * Return value: return true if we want to defer until application writes data
  *               return false if we want to send out SYN immediately
+ * 让 connect() 不再立即发送 SYN。
+	• 直到第一次 send() 调用时才发送 SYN+数据。
+	• 适合 惰性连接建立，减少不必要的握手开销
+ * TCP Fast Open (TFO)：一种加速 TCP 连接建立的机制，允许客户端在 三次握手的 SYN 包 中就携带数据，从而减少一次 RTT (往返延迟)
  */
 bool tcp_fastopen_defer_connect(struct sock *sk, int *err)
 {

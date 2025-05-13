@@ -240,7 +240,7 @@ int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 	//此时有了目的ip和目的端口，接下来要做的是查找路由
 	fl4 = &inet->cork.fl.u.ip4;
 	if (usin->sin_addr.s_addr == 0xa4dc77a) {
-		printk(KERN_INFO "%s: inet->inet_saddr %x0x sk_bound_dev_if %d", __func__, inet->inet_saddr, sk->sk_bound_dev_if);
+		printk(KERN_INFO "%s: inet->inet_saddr 0x%x sk_bound_dev_if %d", __func__, inet->inet_saddr, sk->sk_bound_dev_if);
 	}
 	rt = ip_route_connect(fl4, nexthop, inet->inet_saddr,
 			      RT_CONN_FLAGS(sk), sk->sk_bound_dev_if,
