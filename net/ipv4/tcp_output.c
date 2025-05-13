@@ -1390,7 +1390,7 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
 		printk(KERN_INFO "%s: ->tcb->seq 0x%x tp->snd_up 0x%x th->urg %hu\n", __func__, tcb->seq, tp->snd_up, th->urg);
-		printk(KERN_INFO "%s: ->th->source %d th->dest %d th->seq 0x%x th->ack_seq 0x%x tp->rcv_wnd 0x%x\n", __func__, th->source, th->dest, th->seq, th->ack_seq, tp->rcv_wnd);
+		printk(KERN_INFO "%s: ->th->source %hu th->dest %hu th->seq 0x%x th->ack_seq 0x%x tp->rcv_wnd 0x%x\n", __func__, ntohs(th->source), ntohs(th->dest), th->seq, th->ack_seq, tp->rcv_wnd);
 		printk(KERN_INFO "%s: sk->sk_gso_type %d tp->rcv_wnd %hu CONFIG_TCP_MD5SIG %d md5 %p\n", __func__, sk->sk_gso_type, th->window, CONFIG_TCP_MD5SIG, md5);	
 	}
 	//将 TCP 选项写入到 TCP 首部中
