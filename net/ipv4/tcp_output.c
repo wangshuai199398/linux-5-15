@@ -4025,7 +4025,7 @@ int tcp_connect(struct sock *sk)
 
 	/* Send off SYN; include data in Fast Open. */
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "tcp_connect -> tcp_transmit_skb \n");
+		printk(KERN_INFO "%s: ->tcp_transmit_skb\n", __func__);
 	err = tp->fastopen_req ? tcp_send_syn_data(sk, buff) :
 	      tcp_transmit_skb(sk, buff, 1, sk->sk_allocation);
 	if (err == -ECONNREFUSED)

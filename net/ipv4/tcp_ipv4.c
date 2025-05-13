@@ -219,8 +219,6 @@ int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 	struct ip_options_rcu *inet_opt;
 	struct inet_timewait_death_row *tcp_death_row = &sock_net(sk)->ipv4.tcp_death_row;
 
-	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "tcp_v4_connect  \n");
 	if (addr_len < sizeof(struct sockaddr_in))
 		return -EINVAL;
 
@@ -272,6 +270,9 @@ int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 
 	inet->inet_dport = usin->sin_port;
 	sk_daddr_set(sk, daddr);
+
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: \n", __func__);
 
 	inet_csk(sk)->icsk_ext_hdr_len = 0;
 	if (inet_opt)
