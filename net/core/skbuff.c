@@ -6661,11 +6661,12 @@ EXPORT_SYMBOL(__skb_ext_put);
 
 int is_dst_k2pro(struct sk_buff *skb)
 {
+	struct iphdr *iph;
+	__be32 specific_ip;
+
 	if (skb == NULL)
 		return 0;
-	struct iphdr *iph;
 	iph = ip_hdr(skb);
-	__be32 specific_ip;
 
 	//printk(KERN_INFO "dip 0x%x sip 0x%x\n", ntohl(iph->daddr), ntohl(iph->saddr));
 	//printk(KERN_INFO "daddr %pI4\n", &iph->daddr);
