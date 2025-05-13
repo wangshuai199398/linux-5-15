@@ -342,7 +342,7 @@ int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 	if (err)
 		goto failure;
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
-		printk(KERN_INFO "%s: tp->write_seq %u tp->tsoffset %u\n", __func__, tp->write_seq, tp->tsoffset);
+		printk(KERN_INFO "%s: tp->write_seq 0x%x tp->tsoffset %u\n", __func__, tp->write_seq, tp->tsoffset);
 	}
 	err = tcp_connect(sk);
 
