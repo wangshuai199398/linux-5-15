@@ -1431,7 +1431,7 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
 		printk(KERN_INFO "%s: ->tp->lsndtime %u inet_csk(sk)->icsk_ack.pingpong 0x%x\n", __func__, tp->lsndtime, inet_csk(sk)->icsk_ack.pingpong);
-		printk(KERN_INFO "%s: ->tcb->end_seq %u tp->snd_nxt %u tcb->seq %u\n", __func__, tcb->end_seq, tp->snd_nxt, tcb->seq);
+		printk(KERN_INFO "%s: ->tcb->end_seq 0x%x tp->snd_nxt 0x%x tcb->seq 0x%x\n", __func__, tcb->end_seq, tp->snd_nxt, tcb->seq);
 	}
 
 	if (after(tcb->end_seq, tp->snd_nxt) || tcb->seq == tcb->end_seq)
