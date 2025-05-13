@@ -247,6 +247,10 @@ int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 			IP_INC_STATS(sock_net(sk), IPSTATS_MIB_OUTNOROUTES);
 		return err;
 	}
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
+		printk(KERN_INFO "%s: usin->sin_addr.s_addr 0x%x inet_opt->opt.faddr 0x%x\n", __func__, usin->sin_addr.s_addr, inet_opt->opt.faddr);
+		printk(KERN_INFO "%s: nexthop 0x%x inet->inet_sport 0x%x usin->sin_port 0x%x\n", __func__, nexthop, inet->inet_sport, usin->sin_port);
+	}
 
 	if (rt->rt_flags & (RTCF_MULTICAST | RTCF_BROADCAST)) {
 		ip_rt_put(rt);
@@ -270,9 +274,6 @@ int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 
 	inet->inet_dport = usin->sin_port;
 	sk_daddr_set(sk, daddr);
-
-	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: \n", __func__);
 
 	inet_csk(sk)->icsk_ext_hdr_len = 0;
 	if (inet_opt)
