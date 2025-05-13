@@ -1445,7 +1445,8 @@ new_segment:
 			}
 
 			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-				printk(KERN_INFO "%s: merge %d, copy %d pfrag->size %hu pfrag->offset %hu i %d skb_shinfo(skb)->nr_frags %d sk_route_caps %016llx\n", __func__, merge, copy, pfrag->size, pfrag->offset, i, skb_shinfo(skb)->nr_frags, sk->sk_route_caps);
+				printk(KERN_INFO "%s: merge %d, copy %d pfrag->size %hu pfrag->offset %hu i %d skb_shinfo(skb)->nr_frags %d sk_route_caps 0x%016llx\n", __func__,
+												merge, copy, pfrag->size, pfrag->offset, i, skb_shinfo(skb)->nr_frags, sk->sk_route_caps);
 			copy = min_t(int, copy, pfrag->size - pfrag->offset);
 			//当前 socket 的写缓冲不足以承载 copy 字节的数据，跳转去等待可用内存
 			if (!sk_wmem_schedule(sk, copy))
@@ -1482,7 +1483,7 @@ new_segment:
 				struct page *page = compound_head(pfrag->page);
 				if (page_is_pfmemalloc(page))
 					printk(KERN_INFO "pfmemalloc\n");
-				printk("======== begin ========\n");
+				printk(KERN_INFO "======== begin ========\n");
 				printk(KERN_INFO "IPCB(skb)->frag_max_size %hu\n", IPCB(skb)->frag_max_size);
 				skb_dump(KERN_INFO, skb, true);
 			}
@@ -1506,7 +1507,8 @@ new_segment:
 		if (!copied)
 			TCP_SKB_CB(skb)->tcp_flags &= ~TCPHDR_PSH; // 0x08
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s: copied %d TCP_SKB_CB(skb)->tcp_flags 0x%x copy %d tp->write_seq %u skb->end_seq %u\n", __func__, copied, TCP_SKB_CB(skb)->tcp_flags, copy, tp->write_seq, TCP_SKB_CB(skb)->end_seq);
+			printk(KERN_INFO "%s: copied %d TCP_SKB_CB(skb)->tcp_flags 0x%x copy %d tp->write_seq %u skb->end_seq %u\n", __func__,
+										copied, TCP_SKB_CB(skb)->tcp_flags, copy, tp->write_seq, TCP_SKB_CB(skb)->end_seq);
 		//更新当前写序列号和 skb 的 TCP 序列信息
 		WRITE_ONCE(tp->write_seq, tp->write_seq + copy);
 		TCP_SKB_CB(skb)->end_seq += copy;
@@ -1517,7 +1519,8 @@ new_segment:
 
 		copied += copy;
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s: copied %d msg_data_left(msg) %lu skb->len %d size_goal %d flags 0x%x tp->repair %d\n", __func__, copied, msg_data_left(msg), skb->len, size_goal, flags, tp->repair);
+			printk(KERN_INFO "%s: copied %d msg_data_left(msg) %lu skb->len %d size_goal %d flags 0x%x tp->repair %d\n", __func__,
+									copied, msg_data_left(msg), skb->len, size_goal, flags, tp->repair);
 		//已经把所有数据放进队列，设置“end of record”
 		if (!msg_data_left(msg)) {
 			if (unlikely(flags & MSG_EOR))//0x80

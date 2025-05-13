@@ -3624,7 +3624,7 @@ static int xmit_one(struct sk_buff *skb, struct net_device *dev,
 	trace_net_dev_start_xmit(skb, dev);
 	if (is_dst_k2pro(skb)) {
 		netdev_info(dev, "%s: netdev_start_xmit more %d\n", __func__, more);
-		printk("======== begin ========\n");
+		printk(KERN_INFO "%s: ======== begin ========\n", __func__);
 		skb_dump(KERN_INFO, skb, true);
 	}
 	rc = netdev_start_xmit(skb, dev, txq, more);
