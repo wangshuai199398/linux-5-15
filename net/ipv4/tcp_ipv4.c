@@ -224,10 +224,11 @@ int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 
 	if (usin->sin_family != AF_INET)
 		return -EAFNOSUPPORT;
-
+	//目的ip
 	nexthop = daddr = usin->sin_addr.s_addr;
 	inet_opt = rcu_dereference_protected(inet->inet_opt,
 					     lockdep_sock_is_held(sk));
+	//启用了源路由(srr)时，会把源路由指定的faddr作为“下一跳”地址
 	if (inet_opt && inet_opt->opt.srr) {
 		if (!daddr)
 			return -EINVAL;
@@ -252,7 +253,7 @@ int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 		if (inet_opt && inet_opt->opt.srr) {
 			printk(KERN_INFO "%s: inet_opt->opt.faddr 0x%x\n", __func__, inet_opt->opt.faddr);
 		}
-		printk(KERN_INFO "%s: nexthop 0x%x inet->inet_sport 0x%x usin->sin_port 0x%x\n", __func__, nexthop, inet->inet_sport, usin->sin_port);
+		printk(KERN_INFO "%s: nexthop 0x%x inet->inet_sport 0x%x usin->sin_port %hu\n", __func__, nexthop, inet->inet_sport, ntohs(usin->sin_port));
 	}
 
 	if (rt->rt_flags & (RTCF_MULTICAST | RTCF_BROADCAST)) {
