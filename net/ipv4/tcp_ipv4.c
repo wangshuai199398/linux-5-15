@@ -324,6 +324,7 @@ int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 
 	if (likely(!tp->repair)) {
 		if (!tp->write_seq)
+			//生成一个新的 初始发送序列号 ISN
 			WRITE_ONCE(tp->write_seq,
 				   secure_tcp_seq(inet->inet_saddr,
 						  inet->inet_daddr,
