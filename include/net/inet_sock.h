@@ -128,6 +128,7 @@ static inline int inet_request_bound_dev_if(const struct sock *sk,
 	return bound_dev_if;
 }
 
+//判断 socket 是否绑定了 VRF/Overlay 等 L3 设备，用于路由隔离、端口绑定冲突检查时做范围限定
 static inline int inet_sk_bound_l3mdev(const struct sock *sk)
 {
 #ifdef CONFIG_NET_L3_MASTER_DEV

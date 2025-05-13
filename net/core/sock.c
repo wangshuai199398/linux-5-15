@@ -2189,21 +2189,28 @@ EXPORT_SYMBOL_GPL(sk_free_unlock_clone);
 void sk_setup_caps(struct sock *sk, struct dst_entry *dst)
 {
 	u32 max_segs = 1;
-
+	//sock能力是网卡能力叠加指定的能力
 	sk->sk_route_caps = dst->dev->features | sk->sk_route_forced_caps;
+	//如果设备支持 GSO，额外允许 软件实现的 GSO，兼容一些硬件不支持所有类型分片的场景
 	if (sk->sk_route_caps & NETIF_F_GSO)
 		sk->sk_route_caps |= NETIF_F_GSO_SOFTWARE;
+	//剔除上层代码动态禁用的某些offload功能
 	sk->sk_route_caps &= ~sk->sk_route_nocaps;
 	if (sk_can_gso(sk)) {
 		if (dst->header_len && !xfrm_dst_offload_ok(dst)) {
+			//判断 xfrm（IPSec 等加密）是否允许 offload，如果不行，直接把所有 GSO 能力关闭
+			//如果 dst->header_len 不为 0，表明有额外的封装（如隧道、加密头）
 			sk->sk_route_caps &= ~NETIF_F_GSO_MASK;
 		} else {
+			//启用 Scatter-Gather（分散-聚集 IO）和硬件校验和 offload
+			//设置 socket 的最大 GSO 尺寸和分段数（由设备能力决定）
 			sk->sk_route_caps |= NETIF_F_SG | NETIF_F_HW_CSUM;
 			sk->sk_gso_max_size = dst->dev->gso_max_size;
 			max_segs = max_t(u32, dst->dev->gso_max_segs, 1);
 		}
 	}
 	sk->sk_gso_max_segs = max_segs;
+	//把路由缓存（dst_entry）绑定到 socket，后续发送时直接用这个路由，不用再查表
 	sk_dst_set(sk, dst);
 }
 EXPORT_SYMBOL_GPL(sk_setup_caps);
