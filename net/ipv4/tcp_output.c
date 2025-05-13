@@ -4040,8 +4040,14 @@ int tcp_connect(struct sock *sk)
 	tcp_rbtree_insert(&sk->tcp_rtx_queue, buff);
 
 	/* Send off SYN; include data in Fast Open. */
-	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->tcp_transmit_skb tp->fastopen_req %d\n", __func__, tp->fastopen_req);
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
+		if (tp->fastopen_req) {
+			printk(KERN_INFO "%s: ->tcp_send_syn_data\n", __func__);
+		} else {
+			printk(KERN_INFO "%s: ->tcp_transmit_skb\n", __func__);
+		}
+	}
+
 	err = tp->fastopen_req ? tcp_send_syn_data(sk, buff) :
 	      tcp_transmit_skb(sk, buff, 1, sk->sk_allocation);
 	if (err == -ECONNREFUSED)
