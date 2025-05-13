@@ -2902,7 +2902,7 @@ static inline int __skb_grow(struct sk_buff *skb, unsigned int len)
  *	If a buffer currently has an owner then we call the owner's
  *	destructor function and make the @skb unowned. The buffer continues
  *	to exist but is no longer charged to its former owner.
- *	解绑 skb 和其原 socket, 释放 socket 引用，避免资源泄漏,
+ *	解绑skb和其原 socket, 释放 socket 引用，避免资源泄漏,
  */
 static inline void skb_orphan(struct sk_buff *skb)
 {

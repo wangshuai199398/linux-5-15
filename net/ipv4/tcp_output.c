@@ -763,6 +763,7 @@ static void mptcp_set_option_cond(const struct request_sock *req,
 
 /* Compute TCP options for SYN packets. This is not the final
  * network wire format yet.
+ * 构造 TCP SYN 包选项（TCP Options），比如 MSS、时间戳、窗口缩放、SACK、Fast Open、MD5 等
  */
 static unsigned int tcp_syn_options(struct sock *sk, struct sk_buff *skb,
 				struct tcp_out_options *opts,
@@ -793,26 +794,29 @@ static unsigned int tcp_syn_options(struct sock *sk, struct sk_buff *skb,
 	 * should, and thus we won't abide by the delayed ACK rules correctly.
 	 * SACKs don't matter, we never delay an ACK when we have any of those
 	 * going out.  */
+	//MSS 一定会发送, 这表示告诉对方自己能接收的最大 TCP 段
 	opts->mss = tcp_advertise_mss(sk);
 	remaining -= TCPOLEN_MSS_ALIGNED;
-
+	//	如果启用了时间戳，则添加 TSval、TSecr
 	if (likely(READ_ONCE(sock_net(sk)->ipv4.sysctl_tcp_timestamps) && !*md5)) {
 		opts->options |= OPTION_TS;
 		opts->tsval = tcp_skb_timestamp(skb) + tp->tsoffset;
 		opts->tsecr = tp->rx_opt.ts_recent;
 		remaining -= TCPOLEN_TSTAMP_ALIGNED;
 	}
+	//如果开启窗口缩放，设置 OPTION_WSCALE
 	if (likely(READ_ONCE(sock_net(sk)->ipv4.sysctl_tcp_window_scaling))) {
 		opts->ws = tp->rx_opt.rcv_wscale;
 		opts->options |= OPTION_WSCALE;
 		remaining -= TCPOLEN_WSCALE_ALIGNED;
 	}
+	//SACK（选择性确认）选项,开启 SACK 支持时发送 SACK-Permitted 选项,如果没有时间戳才需要额外占用 2 字节（因为 TS 和 SACK 可以共享选项空间）
 	if (likely(READ_ONCE(sock_net(sk)->ipv4.sysctl_tcp_sack))) {
 		opts->options |= OPTION_SACK_ADVERTISE;
 		if (unlikely(!(OPTION_TS & opts->options)))
 			remaining -= TCPOLEN_SACKPERM_ALIGNED;
 	}
-
+	//Fast Open（TFO Cookie）选项,如果 TCP Fast Open 启用，且有Cookie，则添加Fast Open选项。选项长度根据 Cookie 大小对齐（4 字节对齐）
 	if (fastopen && fastopen->cookie.len >= 0) {
 		u32 need = fastopen->cookie.len;
 
@@ -827,9 +831,9 @@ static unsigned int tcp_syn_options(struct sock *sk, struct sk_buff *skb,
 			tp->syn_fastopen_exp = fastopen->cookie.exp ? 1 : 0;
 		}
 	}
-
+	//IBM SMC (Shared Memory Communications)特殊选项，优化高带宽低延迟的 TCP 场景
 	smc_set_option(tp, opts, &remaining);
-
+	//Multipath TCP (MPTCP) 选项,如果是 MPTCP 连接，添加对应的 MPTCP 选项
 	if (sk_is_mptcp(sk)) {
 		unsigned int size;
 
@@ -840,9 +844,9 @@ static unsigned int tcp_syn_options(struct sock *sk, struct sk_buff *skb,
 			}
 		}
 	}
-
+	//eBPF 插入自定义的 TCP Option
 	bpf_skops_hdr_opt_len(sk, skb, NULL, NULL, 0, opts, &remaining);
-
+	//返回实际使用的 TCP 选项空间字节数
 	return MAX_TCP_OPTION_SPACE - remaining;
 }
 
@@ -1330,9 +1334,9 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	 * Packets not looped back do not care about pfmemalloc.
 	 */
 	skb->pfmemalloc = 0;
-	//把 skb->data 指针往回移动 len 字节，相当于在 skb 的头部插入数据空间，并将 skb->len 增加对应长度
+	//把skb->data指针往回移动len字节，相当于在skb的头部插入数据空间，并将 skb->len 增加对应长度
 	skb_push(skb, tcp_header_size);
-	//记录 传输层头部相对于 skb->head 的偏移量
+	//记录传输层头部相对于 skb->head 的偏移量
 	skb_reset_transport_header(skb);
 
 	if (inet->cork.fl.u.ip4.daddr == 0xa4dc77a)
@@ -1340,20 +1344,19 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 
 	skb_orphan(skb);
 	skb->sk = sk;
-	//判断 skb 是否是 TCP ACK 包。纯 ACK 包通常不携带数据，只用于确认已接收到的数据。
-	//如果是纯 ACK，使用 __sock_wfree 作为析构函数，它会释放 socket 的相关资源；
-	//否则，使用 tcp_wfree，这是一个专门用于 TCP 包的资源释放函数。
+	//判断skb是否是TCP ACK包。纯ACK包通常不携带数据，只用于确认已接收到的数据。
+	//如果是纯ACK，使用 __sock_wfree作为析构函数，它会释放socket的相关资源,否则使用 tcp_wfree，这是一个专门用于TCP包的资源释放函数
 	skb->destructor = skb_is_tcp_pure_ack(skb) ? __sock_wfree : tcp_wfree;
 	//将skb的大小添加到socket的内存使用计数中
 	refcount_add(skb->truesize, &sk->sk_wmem_alloc);
-	//设置 skb 的目标（dst）确认标志位
+	//设置标志，是否需要确认路由
 	skb_set_dst_pending_confirm(skb, READ_ONCE(sk->sk_dst_pending_confirm));
 
 	/* Build TCP header and checksum it. */
 	th = (struct tcphdr *)skb->data;
 	th->source		= inet->inet_sport;
 	th->dest		= inet->inet_dport;
-	th->seq			= htonl(tcb->seq);
+	th->seq			= htonl(tcb->seq);//SYN、FIN在tcp_init_nondata_skb，发送数据tcp_init_nondata_skb中设置
 	th->ack_seq		= htonl(rcv_nxt);
 	*(((__be16 *)th) + 6)	= htons(((tcp_header_size >> 2) << 12) |
 					tcb->tcp_flags);
@@ -1362,7 +1365,7 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	th->urg_ptr		= 0;
 
 	/* The urg_mode check is necessary during a below snd_una win probe */
-	//判断 TCP 连接当前是否处于“紧急数据（URG）模式” 的内联函数
+	//判断TCP连接当前是否处于紧急数据（URG）模式
 	if (unlikely(tcp_urg_mode(tp) && before(tcb->seq, tp->snd_up))) {
 		if (before(tp->snd_up, tcb->seq + 0x10000)) {
 			th->urg_ptr = htons(tp->snd_up - tcb->seq);
@@ -4041,6 +4044,7 @@ int tcp_connect(struct sock *sk)
 
 	/* Send off SYN; include data in Fast Open. */
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
+		printk(KERN_INFO "%s: ->tp->write_seq 0x%x\n", __func__, tp->write_seq);
 		if (tp->fastopen_req) {
 			printk(KERN_INFO "%s: ->tcp_send_syn_data\n", __func__);
 		} else {
@@ -4055,6 +4059,7 @@ int tcp_connect(struct sock *sk)
 
 	/* We change tp->snd_nxt after the tcp_transmit_skb() call
 	 * in order to make this packet get counted in tcpOutSegs.
+	 * 在调用 tcp_transmit_skb() 之后才修改 tp->snd_nxt，这样可以确保这个数据包会被统计到 tcpOutSegs 计数器中
 	 */
 	WRITE_ONCE(tp->snd_nxt, tp->write_seq);
 	tp->pushed_seq = tp->write_seq;
