@@ -388,16 +388,20 @@ static void tcp_ecn_send(struct sock *sk, struct sk_buff *skb,
  */
 static void tcp_init_nondata_skb(struct sk_buff *skb, u32 seq, u8 flags)
 {
+	//设定该 SKB 需要做 TCP 校验和 offload
 	skb->ip_summed = CHECKSUM_PARTIAL;
-
+	//设置该 TCP 包的 flags（如 SYN、FIN、ACK、RST 等）
 	TCP_SKB_CB(skb)->tcp_flags = flags;
+	//初始化 sacked 字段（用于 SACK、重传判断, 表示此 skb 还没有被 SACK（Selective Acknowledgment）确认过
 	TCP_SKB_CB(skb)->sacked = 0;
-
+	//用于 GSO时，表示该 skb 是几个逻辑 TCP 包的合成
 	tcp_skb_pcount_set(skb, 1);
-
+	//设置 TCP sequence number（起始序列号）
 	TCP_SKB_CB(skb)->seq = seq;
+	//TCP SYN 和 FIN 标志会消耗 1 个序列号（即使没有数据,所以需要把 end_seq 指针往后加1,例如 SYN 报文发送时，end_seq = seq + 1
 	if (flags & (TCPHDR_SYN | TCPHDR_FIN))
 		seq++;
+	//设置 TCP 报文的 end_seq（结束序列号）,表示该 skb 涉及的序列号范围：[seq, end_seq),主要用于 ACK、重传等判断
 	TCP_SKB_CB(skb)->end_seq = seq;
 }
 
@@ -3805,6 +3809,7 @@ static void tcp_ca_dst_init(struct sock *sk, const struct dst_entry *dst)
 }
 
 /* Do all connect socket setups that can be done AF independent. */
+// 初始化与地址族无关的通用参数，发送窗口、接收窗口、MSS、拥塞控制等参数进行初始化
 static void tcp_connect_init(struct sock *sk)
 {
 	const struct dst_entry *dst = __sk_dst_get(sk);
@@ -3815,10 +3820,11 @@ static void tcp_connect_init(struct sock *sk)
 	/* We'll fix this up when we get a response from the other end.
 	 * See tcp_input.c:tcp_rcv_state_process case TCP_SYN_SENT.
 	 */
+	// TCP 头部长度，默认是 20 字节 + 12
 	tp->tcp_header_len = sizeof(struct tcphdr);
 	if (READ_ONCE(sock_net(sk)->ipv4.sysctl_tcp_timestamps))
 		tp->tcp_header_len += TCPOLEN_TSTAMP_ALIGNED;
-
+	//MD5 签名功能，一般用于 BGP、MPLS、专线等高安全需求场景（例如保护 BGP session）
 #ifdef CONFIG_TCP_MD5SIG
 	if (tp->af_specific->md5_lookup(sk, sk))
 		tp->tcp_header_len += TCPOLEN_MD5SIG_ALIGNED;

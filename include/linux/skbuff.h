@@ -218,6 +218,7 @@
  */
 
 /* Don't change this without changing skb_csum_unnecessary! */
+// CHECKSUM_PARTIAL 表示硬件完成部分校验和（通常用于 TSO/GSO 场景）
 #define CHECKSUM_NONE		0
 #define CHECKSUM_UNNECESSARY	1
 #define CHECKSUM_COMPLETE	2
