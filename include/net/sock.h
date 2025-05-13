@@ -1954,6 +1954,7 @@ static inline void sk_tx_queue_set(struct sock *sk, int tx_queue)
 
 #define NO_QUEUE_MAPPING	USHRT_MAX
 
+//清除 socket 发送队列缓存（如多队列信息）
 static inline void sk_tx_queue_clear(struct sock *sk)
 {
 	/* Paired with READ_ONCE() in sk_tx_queue_get() and
@@ -2123,13 +2124,16 @@ __sk_dst_set(struct sock *sk, struct dst_entry *dst)
 	dst_release(old_dst);
 }
 
+//将新的 dst_entry 绑定到 socket，同时释放旧的
 static inline void
 sk_dst_set(struct sock *sk, struct dst_entry *dst)
 {
 	struct dst_entry *old_dst;
 
 	sk_tx_queue_clear(sk);
+	// 清除路由确认标志位,表示 socket 不再需要路由确认
 	WRITE_ONCE(sk->sk_dst_pending_confirm, 0);
+	//使用 xchg （原子交换） 将新的 dst 替换进 sk->sk_dst_cache
 	old_dst = xchg((__force struct dst_entry **)&sk->sk_dst_cache, dst);
 	dst_release(old_dst);
 }
