@@ -561,6 +561,7 @@ packet_routed:
 		printk(KERN_INFO "%s: ->iph->frag_off %hu\n", __func__, iph->frag_off);
 	iph->ttl      = ip_select_ttl(inet, &rt->dst);
 	iph->protocol = sk->sk_protocol;
+	//设置网络层ip地址
 	ip_copy_addrs(iph, fl4);
 
 	/* Transport layer set skb->h.foo itself. */
