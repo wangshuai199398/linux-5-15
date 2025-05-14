@@ -328,7 +328,6 @@ static int __ip_finish_output(struct net *net, struct sock *sk, struct sk_buff *
 			printk(KERN_INFO "%s: ->ip_finish_output_gso skb->len %d mtu %d\n", __func__, skb->len, mtu);
 		return ip_finish_output_gso(net, sk, skb, mtu);
 	}
-		
 
 	if (skb->len > mtu || IPCB(skb)->frag_max_size)
 		return ip_fragment(net, sk, skb, mtu, ip_finish_output2);
