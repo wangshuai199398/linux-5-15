@@ -3712,13 +3712,13 @@ static struct sk_buff *validate_xmit_skb(struct sk_buff *skb, struct net_device 
 		goto out_null;
 
 	if (is_dst_k2pro(skb))
-		printk(KERN_INFO "validate_xmit_skb -> netif_needs_gso? \n");
+		printk(KERN_INFO "%s: validate_xmit_skb -> netif_needs_gso? \n", __func__);
 
 	if (netif_needs_gso(skb, features)) {
 		struct sk_buff *segs;
 
 		if (is_dst_k2pro(skb))
-			printk(KERN_INFO "validate_xmit_skb: skb_gso_segment \n");
+			printk(KERN_INFO "%s: validate_xmit_skb: skb_gso_segment \n", __func__);
 
 		segs = skb_gso_segment(skb, features);
 		if (IS_ERR(segs)) {
