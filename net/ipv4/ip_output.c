@@ -537,6 +537,7 @@ int __ip_queue_xmit(struct sock *sk, struct sk_buff *skb, struct flowi *fl,
 	skb_dst_set_noref(skb, &rt->dst);
 
 packet_routed:
+	//指向IP层的socket选项 && IP首部的Strict Source Routing选项,表示socket使用了严格源路由（Strict Source Routing）&& 表示这个路由项是否需要通过网关转发,如果是0表示目标直连,如果是1表示目标需要通过网关转发
 	if (inet_opt && inet_opt->opt.is_strictroute && rt->rt_uses_gateway)
 		goto no_route;
 
