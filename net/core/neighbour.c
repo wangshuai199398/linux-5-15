@@ -1015,11 +1015,12 @@ static void neigh_probe(struct neighbour *neigh)
 	/* keep skb alive even if arp_queue overflows */
 	if (skb)
 		skb = skb_clone(skb, GFP_ATOMIC);
-	/*
+
 	const struct iphdr *iph = (const struct iphdr *)skb_network_header(skb);//skb->head + skb->network_header
-	if (iph && skb->len > skb->network_header - skb->head + sizeof(struct iphdr) && iph->daddr == 0x0a4dc77a) {
-    	printk(KERN_INFO "%s: ->neigh->ops->solicit\n", __func__);
-	}*/
+	//if (iph && skb->len > skb->network_header - skb_headroom(skb) + sizeof(struct iphdr) && iph->daddr == 0x0a4dc77a) {
+	if (iph && skb->len >= skb_network_offset(skb) + sizeof(struct iphdr) && iph->daddr == 0x0a4dc77a) {
+		printk(KERN_INFO "%s: ->neigh->ops->solicit\n", __func__);
+	}
 
 	write_unlock(&neigh->lock);
 	if (neigh->ops->solicit)
