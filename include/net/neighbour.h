@@ -437,6 +437,8 @@ static inline int neigh_event_send(struct neighbour *neigh, struct sk_buff *skb)
 	
 	if (READ_ONCE(neigh->used) != now)
 		WRITE_ONCE(neigh->used, now);
+	//const struct iphdr *iph = (const struct iphdr *)skb_network_header(skb);
+	//if (iph && skb->len >= skb_network_header_len + sizeof(struct iphdr) && iph->daddr == 0x0a4dc77a)
 	if (skb_network_header(skb) && ((const struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
 		printk(KERN_INFO "%s: ->neigh->nud_state 0x%x\n", __func__, neigh->nud_state);
 	if (!(neigh->nud_state & (NUD_CONNECTED|NUD_DELAY|NUD_PROBE)))
