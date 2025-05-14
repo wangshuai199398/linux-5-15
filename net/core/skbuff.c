@@ -794,6 +794,8 @@ EXPORT_SYMBOL(kfree_skb_list);
  *
  * Dumps whole packets if full_pkt, only headers otherwise.
  * 
+ * 按照小端打印出来，即使ip是大端的变量，但是打印出来还是小端的，因为这个机器是小端的
+ * 
  * mac     6B	    6B       2B
  *      源mac地址 目的mac地址 协议类型
  *  
@@ -6673,19 +6675,38 @@ EXPORT_SYMBOL(__skb_ext_put);
 
 int is_dst_k2pro(struct sk_buff *skb)
 {
+	struct ethhdr *eth;
 	struct iphdr *iph;
-	__be32 specific_ip;
+	struct arphdr *arph;
+	unsigned char *arp_ptr;
+	__be32 dst_ip;
 
+	__be16 proto;
+	__be32 specific_ip;
 	if (skb == NULL)
 		return 0;
-	iph = ip_hdr(skb);
 
-	//printk(KERN_INFO "dip 0x%x sip 0x%x\n", ntohl(iph->daddr), ntohl(iph->saddr));
-	//printk(KERN_INFO "daddr %pI4\n", &iph->daddr);
+	eth = eth_hdr(skb);
 	specific_ip = in_aton("122.199.77.10");
-	if (iph != NULL && iph->daddr == specific_ip) {
-		return 1;
+	if (ntohs(eth->h_proto) == ETH_P_IP) {
+		iph = ip_hdr(skb);
+		//printk(KERN_INFO "dip 0x%x sip 0x%x\n", ntohl(iph->daddr), ntohl(iph->saddr));
+		//printk(KERN_INFO "daddr %pI4\n", &iph->daddr);
+		if (iph != NULL && iph->daddr == specific_ip) {
+			return 1;
+		}
+	} else if (ntohs(eth->h_proto) == ETH_P_ARP) {
+		arph = arp_hdr(skb);
+		arp_ptr = (unsigned char *)(arph + 1);
+		arp_ptr = arp_ptr + arph->ar_hln + arph->ar_pln + arph->ar_hln;
+		dst_ip = *(__be32 *)arp_ptr;
+		//这个能打印ip
+		//printk(KERN_INFO "ARP Dest IP: %pI4\n", &dst_ip);
+		if (dst_ip == specific_ip) {
+			return 1;
+		}
 	}
+
 	return 0;
 }
 

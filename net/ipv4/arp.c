@@ -296,6 +296,54 @@ static void arp_error_report(struct neighbour *neigh, struct sk_buff *skb)
 	kfree_skb(skb);
 }
 
+static void print_arp_skb(struct sk_buff *skb)
+{
+	struct ethhdr *eth;
+	struct arphdr *arp;
+	unsigned char *arp_ptr;
+    __be32 sip, tip;
+    unsigned char sha[ETH_ALEN], tha[ETH_ALEN];
+
+	if (!skb)
+		return;
+	eth = (struct ethhdr *)skb_mac_header(skb);
+	if (skb->protocol != htons(ETH_P_ARP)) {
+		printk(KERN_ERR "%s: skb->protocol != ETH_P_ARP\n", __func__);
+		return;
+	}
+
+	printk("Ethernet Header:\n");
+    printk("  Dest MAC: %pM\n", eth->h_dest);
+    printk("  Src  MAC: %pM\n", eth->h_source);
+    printk("  Proto   : 0x%04x\n", ntohs(eth->h_proto));
+	
+	//(struct arphdr *)(eth + 1);
+	arp = arp_hdr(skb);
+	printk("ARP Header:\n");
+    printk("  Hardware Type: %u\n", ntohs(arp->ar_hrd));
+    printk("  Protocol Type: 0x%04x\n", ntohs(arp->ar_pro));
+    printk("  Hardware Size: %u\n", arp->ar_hln);
+    printk("  Protocol Size: %u\n", arp->ar_pln);
+    printk("  Opcode       : %u\n", ntohs(arp->ar_op));
+
+	arp_ptr = (unsigned char *)(arp + 1);
+	memcpy(sha, arp_ptr, ETH_ALEN);
+    arp_ptr += ETH_ALEN;
+
+    memcpy(&sip, arp_ptr, 4);
+    arp_ptr += 4;
+
+    memcpy(tha, arp_ptr, ETH_ALEN);
+    arp_ptr += ETH_ALEN;
+
+    memcpy(&tip, arp_ptr, 4);
+
+    printk("Sender MAC: %pM\n", sha);
+    printk("Sender IP : %pI4\n", &sip);
+    printk("Target MAC: %pM\n", tha);
+    printk("Target IP : %pI4\n", &tip);
+}
+
 /* Create and send an arp packet. */
 static void arp_send_dst(int type, int ptype, __be32 dest_ip,
 			 struct net_device *dev, __be32 src_ip,
@@ -316,6 +364,11 @@ static void arp_send_dst(int type, int ptype, __be32 dest_ip,
 		return;
 
 	skb_dst_set(skb, dst_clone(dst));
+	if (dest_ip == 0xa4dc77a) {
+		printk(KERN_INFO "%s: ->arp_xmit\n", __func__);
+		print_arp_skb(skb);
+	}
+		
 	arp_xmit(skb);
 }
 
@@ -388,6 +441,8 @@ static void arp_solicit(struct neighbour *neigh, struct sk_buff *skb)
 
 	if (skb && !(dev->priv_flags & IFF_XMIT_DST_RELEASE))
 		dst = skb_dst(skb);
+	if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: ->arp_send_dst\n", __func__);
 	arp_send_dst(ARPOP_REQUEST, ETH_P_ARP, target, dev, saddr,
 		     dst_hw, dev->dev_addr, NULL, dst);
 }

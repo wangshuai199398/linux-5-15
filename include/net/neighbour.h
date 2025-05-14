@@ -30,6 +30,8 @@
 #include <linux/workqueue.h>
 #include <net/rtnetlink.h>
 
+#include <linux/ip.h>
+
 /*
  * NUD stands for "neighbor unreachability detection"
  */
@@ -428,13 +430,16 @@ static inline struct neighbour * neigh_clone(struct neighbour *neigh)
 
 #define neigh_hold(n)	refcount_inc(&(n)->refcnt)
 
+//在需要时触发邻居项（neighbor entry）的邻居发现/解析事件，比如发送 ARP request (IPv4) 或 Neighbor Solicitation (NDP for IPv6)
 static inline int neigh_event_send(struct neighbour *neigh, struct sk_buff *skb)
 {
 	unsigned long now = jiffies;
 	
 	if (READ_ONCE(neigh->used) != now)
 		WRITE_ONCE(neigh->used, now);
-	if (!(neigh->nud_state&(NUD_CONNECTED|NUD_DELAY|NUD_PROBE)))
+	if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: ->neigh->nud_state 0x%x\n", __func__, neigh->nud_state);
+	if (!(neigh->nud_state & (NUD_CONNECTED|NUD_DELAY|NUD_PROBE)))
 		return __neigh_event_send(neigh, skb);
 	return 0;
 }
@@ -493,6 +498,8 @@ static inline int neigh_hh_output(const struct hh_cache *hh, struct sk_buff *skb
 	return dev_queue_xmit(skb);
 }
 
+//skip_cache: 是否跳过二层链路缓存优化
+//nud_state 是邻居项的状态（比如 reachable、stale、incomplete）
 static inline int neigh_output(struct neighbour *n, struct sk_buff *skb,
 			       bool skip_cache)
 {
@@ -501,6 +508,9 @@ static inline int neigh_output(struct neighbour *n, struct sk_buff *skb,
 	/* n->nud_state and hh->hh_len could be changed under us.
 	 * neigh_hh_output() is taking care of the race later.
 	 */
+	//NUD_CONNECTED 表示邻居项当前是“连接态” (reachable)
+	//说明 hh_cache 里已经有链路层头部数据（Ethernet header 之类）
+	//条件满足直接把缓存好的二层链路头部加到skb里去发包
 	if (!skip_cache &&
 	    (READ_ONCE(n->nud_state) & NUD_CONNECTED) &&
 	    READ_ONCE(hh->hh_len))

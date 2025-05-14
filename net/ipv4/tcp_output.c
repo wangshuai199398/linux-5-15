@@ -1414,6 +1414,7 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
 		printk(KERN_INFO "%s: ->th->check 0x%x skb->csum_start 0x%x skb->csum_offset 0x%x\n", __func__, th->check, skb->csum_start, skb->csum_offset);
 	}
+	//填充check, csum_start,csum_offset就是csum联合体
 	INDIRECT_CALL_INET(icsk->icsk_af_ops->send_check,
 			   tcp_v6_send_check, tcp_v4_send_check,
 			   sk, skb);

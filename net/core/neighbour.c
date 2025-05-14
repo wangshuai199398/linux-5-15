@@ -1015,9 +1015,11 @@ static void neigh_probe(struct neighbour *neigh)
 	/* keep skb alive even if arp_queue overflows */
 	if (skb)
 		skb = skb_clone(skb, GFP_ATOMIC);
+	if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: ->neigh->ops->solicit\n", __func__);
 	write_unlock(&neigh->lock);
 	if (neigh->ops->solicit)
-		neigh->ops->solicit(neigh, skb);
+		neigh->ops->solicit(neigh, skb);//arp_solicit
 	atomic_inc(&neigh->probes);
 	consume_skb(skb);
 }
@@ -1121,26 +1123,35 @@ int __neigh_event_send(struct neighbour *neigh, struct sk_buff *skb)
 	write_lock_bh(&neigh->lock);
 
 	rc = 0;
+	//CONNECTED / DELAY / PROBE 状态：已经在处理，直接返回
 	if (neigh->nud_state & (NUD_CONNECTED | NUD_DELAY | NUD_PROBE))
 		goto out_unlock_bh;
+	//dead：邻居项无效，释放 skb，返回
 	if (neigh->dead)
 		goto out_dead;
-
+	//如果状态既不是 STALE 也不是 INCOMPLETE,需要进入 INCOMPLETE 状态开始探测
 	if (!(neigh->nud_state & (NUD_STALE | NUD_INCOMPLETE))) {
+		if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
+			printk(KERN_INFO "%s: ->immediate_probe true\n", __func__);
 		if (NEIGH_VAR(neigh->parms, MCAST_PROBES) +
 		    NEIGH_VAR(neigh->parms, APP_PROBES)) {
 			unsigned long next, now = jiffies;
-
+			//重置 probes 次数
 			atomic_set(&neigh->probes,
 				   NEIGH_VAR(neigh->parms, UCAST_PROBES));
+			//启动一个定时器（ARP/NDP 重传超时）
 			neigh_del_timer(neigh);
+			//将邻居状态置为 NUD_INCOMPLETE
 			neigh->nud_state     = NUD_INCOMPLETE;
 			neigh->updated = now;
 			next = now + max(NEIGH_VAR(neigh->parms, RETRANS_TIME),
 					 HZ/100);
 			neigh_add_timer(neigh, next);
+			//马上发第一个探测包（immediate_probe = true）
 			immediate_probe = true;
 		} else {
+			//否则，如果探测次数配置都是 0（MCAST_PROBES+APP_PROBES == 0）
+			//无法进行邻居发现，直接置为 NUD_FAILED，释放 skb
 			neigh->nud_state = NUD_FAILED;
 			neigh->updated = jiffies;
 			write_unlock_bh(&neigh->lock);
@@ -1151,18 +1162,21 @@ int __neigh_event_send(struct neighbour *neigh, struct sk_buff *skb)
 	} else if (neigh->nud_state & NUD_STALE) {
 		neigh_dbg(2, "neigh %p is delayed\n", neigh);
 		neigh_del_timer(neigh);
+		//将邻居项从 STALE 转换为 DELAY
 		neigh->nud_state = NUD_DELAY;
 		neigh->updated = jiffies;
+		//设定一个延时探测定时器
 		neigh_add_timer(neigh, jiffies +
 				NEIGH_VAR(neigh->parms, DELAY_PROBE_TIME));
 	}
-
+	//如果是 INCOMPLETE 状态，把 skb 缓存起来,将 skb 添加到邻居项的 arp_queue 中，等待地址解析后发送,如果缓存队列超长，丢弃最老的数据包
 	if (neigh->nud_state == NUD_INCOMPLETE) {
 		if (skb) {
+			// 控制缓存队列长度，防止过大
 			while (neigh->arp_queue_len_bytes + skb->truesize >
 			       NEIGH_VAR(neigh->parms, QUEUE_LEN_BYTES)) {
 				struct sk_buff *buff;
-
+				//丢弃最早缓存的数据包
 				buff = __skb_dequeue(&neigh->arp_queue);
 				if (!buff)
 					break;
@@ -1170,6 +1184,7 @@ int __neigh_event_send(struct neighbour *neigh, struct sk_buff *skb)
 				kfree_skb(buff);
 				NEIGH_CACHE_STAT_INC(neigh->tbl, unres_discards);
 			}
+			// skb 入队
 			skb_dst_force(skb);
 			__skb_queue_tail(&neigh->arp_queue, skb);
 			neigh->arp_queue_len_bytes += skb->truesize;
@@ -1177,6 +1192,7 @@ int __neigh_event_send(struct neighbour *neigh, struct sk_buff *skb)
 		rc = 1;
 	}
 out_unlock_bh:
+	//如果需要立即发探测包 (ARP/NDP)
 	if (immediate_probe)
 		neigh_probe(neigh);
 	else
@@ -1186,6 +1202,7 @@ out_unlock_bh:
 	return rc;
 
 out_dead:
+	//如果邻居死了，释放 skb,特殊情况下会放过 STALE 的 dead 状态
 	if (neigh->nud_state & NUD_STALE)
 		goto out_unlock_bh;
 	write_unlock_bh(&neigh->lock);
@@ -1492,18 +1509,21 @@ int neigh_resolve_output(struct neighbour *neigh, struct sk_buff *skb)
 		int err;
 		struct net_device *dev = neigh->dev;
 		unsigned int seq;
-
+		//判断是否需要初始化邻居项的硬件头缓存，如果设备支持硬件头部缓存，而邻居项的hh_len还没初始化，则调用初始化邻居项的硬件头缓存
 		if (dev->header_ops->cache && !READ_ONCE(neigh->hh.hh_len))
 			neigh_hh_init(neigh);
 
 		do {
+			//把skb->data指针往后移动到L3层头部（IP头）的位置
 			__skb_pull(skb, skb_network_offset(skb));
+			//开始读取邻居项（neigh->ha） 的 MAC 地址（ha字段），ha_lock 是 seqlock 锁，保证多核并发读写的安全性，seq 是序列号
 			seq = read_seqbegin(&neigh->ha_lock);
 			if (is_dst_k2pro(skb))
 				printk(KERN_ERR "%s: -> dev_hard_header\n", __func__);
+			//真正调用设备的硬件头部构造函数
 			err = dev_hard_header(skb, dev, ntohs(skb->protocol),
 					      neigh->ha, NULL, skb->len);
-		} while (read_seqretry(&neigh->ha_lock, seq));
+		} while (read_seqretry(&neigh->ha_lock, seq));//结束 seqlock 保护，如果期间ha被修改过，自动重试一遍 保障读取邻居MAC地址时的一致性
 
 		if (err >= 0) {
 			if (is_dst_k2pro(skb))

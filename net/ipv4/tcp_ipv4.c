@@ -334,7 +334,7 @@ int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 						 inet->inet_saddr,
 						 inet->inet_daddr);
 	}
-
+	//随机生成identifier
 	inet->inet_id = prandom_u32();
 
 	if (tcp_fastopen_defer_connect(sk, &err))

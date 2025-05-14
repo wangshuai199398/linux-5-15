@@ -236,7 +236,7 @@ static int ip_finish_output2(struct net *net, struct sock *sk, struct sk_buff *s
 		sock_confirm_neigh(skb, neigh);
 		/* if crossing protocols, can not use the cached header */
 		if (is_dst_k2pro(skb))
-			printk(KERN_INFO "%s: ip_finish_output2 neigh_output\n", __func__);
+			printk(KERN_INFO "%s: neigh_output\n", __func__);
 		res = neigh_output(neigh, skb, is_v6gw);
 		rcu_read_unlock_bh();
 		return res;
@@ -557,7 +557,7 @@ packet_routed:
 	else
 		iph->frag_off = 0;
 	if (fl->u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->iph->frag_off %hu\n", __func__, iph->frag_off);
+		printk(KERN_INFO "%s: ->iph->frag_off 0x%x\n", __func__, ntohs(iph->frag_off));
 	iph->ttl      = ip_select_ttl(inet, &rt->dst);
 	iph->protocol = sk->sk_protocol;
 	//设置网络层ip地址
