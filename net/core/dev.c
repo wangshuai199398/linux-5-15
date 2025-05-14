@@ -3856,11 +3856,11 @@ static inline int __dev_xmit_skb(struct sk_buff *skb, struct Qdisc *q,
 
 	if (q->flags & TCQ_F_NOLOCK) {
 		if (is_dst_k2pro(skb))
-			printk(KERN_INFO "__dev_xmit_skb TCQ_F_NOLOCK q->flags = %d\n", q->flags);
+			printk(KERN_INFO "%s: TCQ_F_NOLOCK q->flags = %d\n", __func__, q->flags);
 		if (q->flags & TCQ_F_CAN_BYPASS && nolock_qdisc_is_empty(q) &&
 		    qdisc_run_begin(q)) {
 			if (is_dst_k2pro(skb))
-				printk(KERN_INFO "__dev_xmit_skb: q->flags = %d\n", q->flags);
+				printk(KERN_INFO "%s: q->flags = %d\n", __func__, q->flags);
 			/* Retest nolock_qdisc_is_empty() within the protection
 			 * of q->seqlock to protect from racing with requeuing.
 			 */
