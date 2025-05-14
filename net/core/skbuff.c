@@ -800,7 +800,7 @@ EXPORT_SYMBOL(kfree_skb_list);
  * ip    4b    4b   1B     2B    2B    1b   1b 1b  13b    1B   1B     2B      4B   4B      160+
  *      IP版本 头长 服务类型 总长度 标识符 保留位 DF MF 分片偏移 ttl 协议号 ip头校验和 源ip  目的ip  可选字段
  * 
- * tcp   2B       2B      4B    4B    4b        6b    1b  1b  1b  1b  1b  1b  6b      2B        2B    160+
+ * tcp   2B       2B      4B    4B    4b(单位4B)  6b   1b  1b  1b  1b  1b  1b  6b      2B        2B    160+
  *      源端口号 目的端口号 序列号 确认号 TCP头部长度 保留位 URG ACK PSH RST SYN FIN 窗口大小 TCP校验和 紧急指针 选项
  * 
  * udp   2B       2B      2B    2B
