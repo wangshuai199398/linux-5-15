@@ -318,14 +318,14 @@ static int __ip_finish_output(struct net *net, struct sock *sk, struct sk_buff *
 
 	if (is_dst_k2pro(skb)) {
 		//dump_stack();
-		printk(KERN_INFO "%s: ======== begin ========\n", __func__);
+		printk(KERN_INFO " ======== begin ========\n");
 		printk(KERN_INFO "IPCB(skb)->frag_max_size %hu\n", IPCB(skb)->frag_max_size);
 		skb_dump(KERN_INFO, skb, true);
 	}
 
 	if (skb_is_gso(skb)) {
 		if (is_dst_k2pro(skb))
-			printk(KERN_INFO "__ip_finish_output -> ip_finish_output_gso skb->len %d mtu %d\n", skb->len, mtu);
+			printk(KERN_INFO "%s: ->ip_finish_output_gso skb->len %d mtu %d\n", __func__, skb->len, mtu);
 		return ip_finish_output_gso(net, sk, skb, mtu);
 	}
 		
