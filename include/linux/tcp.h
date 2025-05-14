@@ -189,7 +189,9 @@ struct tcp_sock {
 	u32	dsack_dups;	/* RFC4898 tcpEStatsStackDSACKDups
 				 * total number of DSACK blocks received
 				 */
- 	u32	snd_una;	/* First byte we want an ack for	*/
+	//已发送但尚未被确认的最小序列号 也就是下一个等待对方ACK确认的序列号 收到对方的ACK时更新 表示“确认的最前沿”发送窗口（snd_wnd）基于这个序列号滑动
+ 	u32	snd_una;	/* First byte we want an ack for */
+	//最近发送的（可能是很小的）最后一个包的结束序列号（end_seq）一般用于优化ACK延迟处理，比如只发送了很小的数据时
  	u32	snd_sml;	/* Last byte of the most recently transmitted small packet */
 	u32	rcv_tstamp;	/* timestamp of last received ACK (for keepalives) */
 	u32	lsndtime;	/* timestamp of last sent data packet (for restart window) */
@@ -272,6 +274,7 @@ struct tcp_sock {
 	u8	keepalive_probes; /* num of allowed keep alive probes	*/
 	u32	reordering;	/* Packet reordering metric.		*/
 	u32	reord_seen;	/* number of data packet reordering events */
+	//TCP 紧急指针（Urgent Pointer）的序列号 指示紧急数据的结束序列号 只有使用 TCP 的紧急数据（URG 标志）时会用到
 	u32	snd_up;		/* Urgent pointer		*/
 
 /*

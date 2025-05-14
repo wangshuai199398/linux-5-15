@@ -1316,7 +1316,8 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	}
 	tcp_header_size = tcp_options_size + sizeof(struct tcphdr);
 	if (inet->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->inet_sk tcp_header_size %u tcp_options_size %u tcb->tcp_flags 0x%x sk_wmem_alloc_get(sk) %d\n", __func__, tcp_header_size, tcp_options_size, tcb->tcp_flags, sk_wmem_alloc_get(sk));
+		printk(KERN_INFO "%s: ->inet_sk tcp_header_size %u tcp_options_size %u tcb->tcp_flags 0x%x sk_wmem_alloc_get(sk) %d\n", __func__,
+											tcp_header_size, tcp_options_size, tcb->tcp_flags, sk_wmem_alloc_get(sk));
 
 	/* if no packet is in qdisc/device queue, then allow XPS to select
 	 * another queue. We can be called from tcp_tsq_handler()
@@ -1340,7 +1341,8 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	skb_reset_transport_header(skb);
 
 	if (inet->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->skb->transport_header %hu skb->data %p skb->head %p skb_is_tcp_pure_ack(skb) %d\n", __func__, skb->transport_header, skb->data, skb->head, skb_is_tcp_pure_ack(skb));
+		printk(KERN_INFO "%s: ->skb->transport_header %hu skb->data %p skb->head %p skb_is_tcp_pure_ack(skb) %d\n", __func__,
+											skb->transport_header, skb->data, skb->head, skb_is_tcp_pure_ack(skb));
 
 	skb_orphan(skb);
 	skb->sk = sk;
@@ -1356,10 +1358,10 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	th = (struct tcphdr *)skb->data;
 	th->source		= inet->inet_sport;
 	th->dest		= inet->inet_dport;
-	th->seq			= htonl(tcb->seq);//SYN、FIN在tcp_init_nondata_skb，发送数据tcp_init_nondata_skb中设置
+	//SYN、FIN、ACK-only 包（不携带数据）在 tcp_init_nondata_skb, 发送数据在tcp_skb_entail中设置
+	th->seq			= htonl(tcb->seq);
 	th->ack_seq		= htonl(rcv_nxt);
-	*(((__be16 *)th) + 6)	= htons(((tcp_header_size >> 2) << 12) |
-					tcb->tcp_flags);
+	*(((__be16 *)th) + 6)	= htons(((tcp_header_size >> 2) << 12) | tcb->tcp_flags);
 
 	th->check		= 0;
 	th->urg_ptr		= 0;
@@ -1390,8 +1392,9 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
 		printk(KERN_INFO "%s: ->tcb->seq 0x%x tp->snd_up 0x%x th->urg %hu\n", __func__, tcb->seq, tp->snd_up, th->urg);
-		printk(KERN_INFO "%s: ->th->source %hu th->dest %hu th->seq 0x%x th->ack_seq 0x%x tp->rcv_wnd 0x%x\n", __func__, ntohs(th->source), ntohs(th->dest), th->seq, th->ack_seq, tp->rcv_wnd);
-		printk(KERN_INFO "%s: sk->sk_gso_type %d tp->rcv_wnd %hu CONFIG_TCP_MD5SIG %d md5 %p\n", __func__, sk->sk_gso_type, th->window, CONFIG_TCP_MD5SIG, md5);	
+		printk(KERN_INFO "%s: ->th->source %hu th->dest %hu th->seq 0x%x th->ack_seq 0x%x tp->rcv_wnd 0x%x\n", __func__,
+										ntohs(th->source), ntohs(th->dest), th->seq, th->ack_seq, tp->rcv_wnd);
+		printk(KERN_INFO "%s: sk->sk_gso_type %d tp->rcv_wnd 0x%x CONFIG_TCP_MD5SIG %d md5 %p\n", __func__, sk->sk_gso_type, ntohs(th->window), CONFIG_TCP_MD5SIG, md5);
 	}
 	//将 TCP 选项写入到 TCP 首部中
 	tcp_options_write((__be32 *)(th + 1), tp, &opts);
@@ -1415,7 +1418,7 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 			   tcp_v6_send_check, tcp_v4_send_check,
 			   sk, skb);
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
-		printk(KERN_INFO "%s: ->th->check 0x%x skb->csum_start 0x%x skb->csum_offset 0x%x\n", __func__, th->check, skb->csum_start, skb->csum_offset);
+		printk(KERN_INFO "%s: ->th->check 0x%x skb->csum_start 0x%x skb->csum_offset 0x%x\n", __func__, ntohs(th->check), skb->csum_start, skb->csum_offset);
 		printk(KERN_INFO "%s: ->skb->len %u tcp_header_size %u tp->data_segs_out %u tp->bytes_sent %llu\n", __func__, skb->len, tcp_header_size, tp->data_segs_out, tp->bytes_sent);
 		printk(KERN_INFO "%s: ->tp->lsndtime %u inet_csk(sk)->icsk_ack.pingpong 0x%x\n", __func__, tp->lsndtime, inet_csk(sk)->icsk_ack.pingpong);
 	}
@@ -4033,7 +4036,7 @@ int tcp_connect(struct sock *sk)
 	buff = sk_stream_alloc_skb(sk, 0, sk->sk_allocation, true);
 	if (unlikely(!buff))
 		return -ENOBUFS;
-
+	//传进去write_seq设置TCP_SKB_CB(skb)->seq，然后write_seq自增1，因为SYN 会消耗1个序列号
 	tcp_init_nondata_skb(buff, tp->write_seq++, TCPHDR_SYN);
 	//更新时间戳（mstamp） 的函数，主要用于 TCP 的 RTT 测量、拥塞控制等时序相关的操作
 	tcp_mstamp_refresh(tp);
