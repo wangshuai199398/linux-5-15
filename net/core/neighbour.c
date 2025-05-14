@@ -1015,8 +1015,8 @@ static void neigh_probe(struct neighbour *neigh)
 	/* keep skb alive even if arp_queue overflows */
 	if (skb)
 		skb = skb_clone(skb, GFP_ATOMIC);
-	if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->neigh->ops->solicit\n", __func__);
+	//if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
+	//	printk(KERN_INFO "%s: ->neigh->ops->solicit\n", __func__);
 	write_unlock(&neigh->lock);
 	if (neigh->ops->solicit)
 		neigh->ops->solicit(neigh, skb);//arp_solicit
@@ -1131,8 +1131,8 @@ int __neigh_event_send(struct neighbour *neigh, struct sk_buff *skb)
 		goto out_dead;
 	//如果状态既不是 STALE 也不是 INCOMPLETE,需要进入 INCOMPLETE 状态开始探测
 	if (!(neigh->nud_state & (NUD_STALE | NUD_INCOMPLETE))) {
-		if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s: ->immediate_probe true\n", __func__);
+		//if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
+		//	printk(KERN_INFO "%s: ->immediate_probe true\n", __func__);
 		if (NEIGH_VAR(neigh->parms, MCAST_PROBES) +
 		    NEIGH_VAR(neigh->parms, APP_PROBES)) {
 			unsigned long next, now = jiffies;

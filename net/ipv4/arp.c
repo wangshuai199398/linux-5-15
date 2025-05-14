@@ -364,10 +364,10 @@ static void arp_send_dst(int type, int ptype, __be32 dest_ip,
 		return;
 
 	skb_dst_set(skb, dst_clone(dst));
-	if (dest_ip == 0xa4dc77a) {
-		printk(KERN_INFO "%s: ->arp_xmit\n", __func__);
-		print_arp_skb(skb);
-	}
+	//if (dest_ip == 0xa4dc77a) {
+	//	printk(KERN_INFO "%s: ->arp_xmit\n", __func__);
+	//	print_arp_skb(skb);
+	//}
 		
 	arp_xmit(skb);
 }
@@ -441,8 +441,8 @@ static void arp_solicit(struct neighbour *neigh, struct sk_buff *skb)
 
 	if (skb && !(dev->priv_flags & IFF_XMIT_DST_RELEASE))
 		dst = skb_dst(skb);
-	if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->arp_send_dst\n", __func__);
+	//if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
+	//	printk(KERN_INFO "%s: ->arp_send_dst\n", __func__);
 	arp_send_dst(ARPOP_REQUEST, ETH_P_ARP, target, dev, saddr,
 		     dst_hw, dev->dev_addr, NULL, dst);
 }

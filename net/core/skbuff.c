@@ -6695,7 +6695,7 @@ int is_dst_k2pro(struct sk_buff *skb)
 		if (iph != NULL && iph->daddr == specific_ip) {
 			return 1;
 		}
-	}/*else if (ntohs(eth->h_proto) == ETH_P_ARP) {
+	} else if (ntohs(eth->h_proto) == ETH_P_ARP) {
 		arph = arp_hdr(skb);
 		arp_ptr = (unsigned char *)(arph + 1);
 		arp_ptr = arp_ptr + arph->ar_hln + arph->ar_pln + arph->ar_hln;
@@ -6705,7 +6705,7 @@ int is_dst_k2pro(struct sk_buff *skb)
 		if (dst_ip == specific_ip) {
 			return 1;
 		}
-	}*/
+	}
 
 	return 0;
 }
