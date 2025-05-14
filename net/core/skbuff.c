@@ -794,12 +794,17 @@ EXPORT_SYMBOL(kfree_skb_list);
  *
  * Dumps whole packets if full_pkt, only headers otherwise.
  * 
- * mac 
+ * mac     6B	    6B       2B
+ *      源mac地址 目的mac地址 协议类型
  *  
  * ip    4b    4b   2B     2B    2B     3b     13b    1B   1B     2B      4B   4B      160+
  *      IP版本 头长 服务类型 总长度 标识符 分片标志 分片偏移 ttl 协议号 ip头校验和 源ip  目的ip  可选字段
- * tcp 
- * udp 
+ * 
+ * tcp   2B       2B      4B    4B    4b        6b    1b  1b  1b  1b  1b  1b  6b      2B        2B    160+
+ *      源端口号 目的端口号 序列号 确认号 TCP头部长度 保留位 URG ACK PSH RST SYN FIN 窗口大小 TCP校验和 紧急指针 选项
+ * 
+ * udp   2B       2B      2B    2B
+ *     源端口号 目的端口号 UDP长度 UDP校验和
  */
 void skb_dump(const char *level, const struct sk_buff *skb, bool full_pkt)
 {
