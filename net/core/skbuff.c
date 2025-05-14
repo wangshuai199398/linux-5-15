@@ -793,6 +793,13 @@ EXPORT_SYMBOL(kfree_skb_list);
  * Must only be called from net_ratelimit()-ed paths.
  *
  * Dumps whole packets if full_pkt, only headers otherwise.
+ * 
+ * mac 
+ *  
+ * ip    4b    4b   2B     2B    2B     3b     13b    1B   1B     2B      4B   4B      160+
+ *      IP版本 头长 服务类型 总长度 标识符 分片标志 分片偏移 ttl 协议号 ip头校验和 源ip  目的ip  可选字段
+ * tcp 
+ * udp 
  */
 void skb_dump(const char *level, const struct sk_buff *skb, bool full_pkt)
 {
