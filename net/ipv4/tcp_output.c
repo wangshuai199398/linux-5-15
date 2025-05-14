@@ -1438,8 +1438,8 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	}
 
 	if (after(tcb->end_seq, tp->snd_nxt) || tcb->seq == tcb->end_seq)
-		TCP_ADD_STATS(sock_net(sk), TCP_MIB_OUTSEGS,
-			      tcp_skb_pcount(skb));
+		TCP_ADD_STATS(sock_net(sk), TCP_MIB_OUTSEGS, tcp_skb_pcount(skb));
+
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
 		printk(KERN_INFO "%s: tp->segs_out %d tcp_skb_pcount(skb) %d\n", __func__, tp->segs_out, tcp_skb_pcount(skb));
 	tp->segs_out += tcp_skb_pcount(skb);
@@ -1454,13 +1454,14 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	skb_shinfo(skb)->gso_size = tcp_skb_mss(skb);
 
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: skb_shinfo(skb)->gso_segs %d skb_shinfo(skb)->gso_size %d skb->skb_mstamp_ns %llu\n", __func__, skb_shinfo(skb)->gso_segs, skb_shinfo(skb)->gso_size, skb->skb_mstamp_ns);
+		printk(KERN_INFO "%s: skb_shinfo(skb)->gso_segs %d skb_shinfo(skb)->gso_size %d skb->skb_mstamp_ns %llu\n", __func__,
+									skb_shinfo(skb)->gso_segs, skb_shinfo(skb)->gso_size, skb->skb_mstamp_ns);
 
 	/* Leave earliest departure time in skb->tstamp (skb->skb_mstamp_ns) */
 
 	/* Cleanup our debris for IP stacks */
-	memset(skb->cb, 0, max(sizeof(struct inet_skb_parm),
-			       sizeof(struct inet6_skb_parm)));
+	memset(skb->cb, 0, max(sizeof(struct inet_skb_parm), sizeof(struct inet6_skb_parm)));
+
 	//发送 TCP 数据包前添加延迟，一般用于支持 TCP pacing（TCP 节奏控制）或某些带宽控制、拥塞避免策略，如BBR
 	tcp_add_tx_delay(skb, tp);
 
