@@ -1448,7 +1448,7 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 
 	skb_set_hash_from_sk(skb, sk);
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: skb->l4_hash %u skb->hash %u\n", __func__, skb->l4_hash, skb->hash);
+		printk(KERN_INFO "%s: skb->l4_hash %u skb->hash 0x%x\n", __func__, skb->l4_hash, skb->hash);
 	/* OK, its time to fill skb_shinfo(skb)->gso_{segs|size} */
 	skb_shinfo(skb)->gso_segs = tcp_skb_pcount(skb);
 	skb_shinfo(skb)->gso_size = tcp_skb_mss(skb);
