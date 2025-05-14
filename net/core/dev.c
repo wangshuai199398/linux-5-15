@@ -3368,7 +3368,7 @@ struct sk_buff *skb_mac_gso_segment(struct sk_buff *skb,
 	}
 	rcu_read_unlock();
 	if (is_dst_k2pro(skb))
-		printk(KERN_INFO "skb_mac_gso_segment end\n");
+		printk(KERN_INFO "%s: skb_mac_gso_segment end\n", __func__);
 	__skb_push(skb, skb->data - skb_mac_header(skb));
 
 	return segs;
@@ -3437,7 +3437,7 @@ struct sk_buff *__skb_gso_segment(struct sk_buff *skb,
 	skb_reset_mac_header(skb);
 	skb_reset_mac_len(skb);
 	if (is_dst_k2pro(skb))
-		printk(KERN_INFO "__skb_gso_segment->skb_mac_gso_segment\n");
+		printk(KERN_INFO "%s: __skb_gso_segment->skb_mac_gso_segment\n", __func__);
 	segs = skb_mac_gso_segment(skb, features);
 
 	if (segs != skb && unlikely(skb_needs_check(skb, tx_path) && !IS_ERR(segs)))
@@ -3645,7 +3645,7 @@ struct sk_buff *dev_hard_start_xmit(struct sk_buff *first, struct net_device *de
 
 		skb_mark_not_on_list(skb);
 		if (is_dst_k2pro(skb))
-			netdev_info(dev, "dev_hard_start_xmit: skb->next =\n");
+			netdev_info(dev, "%s: dev_hard_start_xmit: skb->next =\n", __func__);
 		rc = xmit_one(skb, dev, txq, next != NULL);
 		if (unlikely(!dev_xmit_complete(rc))) {
 			skb->next = next;
@@ -4299,7 +4299,7 @@ static int __dev_queue_xmit(struct sk_buff *skb, struct net_device *sb_dev)
 			if (!netif_xmit_stopped(txq)) {
 				dev_xmit_recursion_inc();
 				if (is_dst_k2pro(skb))
-					printk(KERN_INFO "dev_hard_start_xmit \n");
+					printk(KERN_INFO "%s: dev_hard_start_xmit \n", __func__);
 				skb = dev_hard_start_xmit(skb, dev, txq, &rc);
 				dev_xmit_recursion_dec();
 				if (dev_xmit_complete(rc)) {

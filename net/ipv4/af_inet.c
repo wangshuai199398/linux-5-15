@@ -1396,7 +1396,7 @@ struct sk_buff *inet_gso_segment(struct sk_buff *skb,
 			goto out;
 	}
 	if (is_dst_k2pro(skb))
-		printk(KERN_INFO "inet_gso_segment -> gso_segment\n");
+		printk(KERN_INFO "%s: inet_gso_segment -> gso_segment\n", __func__);
 	ops = rcu_dereference(inet_offloads[proto]);
 	if (likely(ops && ops->callbacks.gso_segment)) {
 		segs = ops->callbacks.gso_segment(skb, features); // tcp4_gso_segment
@@ -1412,7 +1412,7 @@ struct sk_buff *inet_gso_segment(struct sk_buff *skb,
 	skb = segs;
 	do {
 		if (is_dst_k2pro(skb))
-			printk(KERN_INFO "do inet_gso_segment \n");
+			printk(KERN_INFO "%s: do inet_gso_segment \n", __func__);
 		iph = (struct iphdr *)(skb_mac_header(skb) + nhoff);
 		if (udpfrag) {
 			iph->frag_off = htons(offset >> 3);

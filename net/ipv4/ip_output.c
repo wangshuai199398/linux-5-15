@@ -236,7 +236,7 @@ static int ip_finish_output2(struct net *net, struct sock *sk, struct sk_buff *s
 		sock_confirm_neigh(skb, neigh);
 		/* if crossing protocols, can not use the cached header */
 		if (is_dst_k2pro(skb))
-			printk(KERN_INFO "ip_finish_output2 neigh_output\n");
+			printk(KERN_INFO "%s: ip_finish_output2 neigh_output\n", __func__);
 		res = neigh_output(neigh, skb, is_v6gw);
 		rcu_read_unlock_bh();
 		return res;
@@ -260,7 +260,7 @@ static int ip_finish_output_gso(struct net *net, struct sock *sk,
 	 */
 	if (skb_gso_validate_network_len(skb, mtu)) {
 		if (is_dst_k2pro(skb))
-			printk(KERN_INFO "ip_finish_output_gso -> ip_finish_output2 \n");
+			printk(KERN_INFO "%s: ip_finish_output_gso -> ip_finish_output2 \n", __func__);
 		return ip_finish_output2(net, sk, skb);
 	}
 
@@ -280,7 +280,7 @@ static int ip_finish_output_gso(struct net *net, struct sock *sk,
 	features = netif_skb_features(skb);
 	BUILD_BUG_ON(sizeof(*IPCB(skb)) > SKB_GSO_CB_OFFSET);
 	if (is_dst_k2pro(skb))
-		printk(KERN_INFO "ip_finish_output_gso -> skb_gso_segment\n");
+		printk(KERN_INFO "%s: ip_finish_output_gso -> skb_gso_segment\n", __func__);
 	segs = skb_gso_segment(skb, features & ~NETIF_F_GSO_MASK);
 	if (IS_ERR_OR_NULL(segs)) {
 		kfree_skb(skb);
@@ -637,7 +637,7 @@ static int ip_fragment(struct net *net, struct sock *sk, struct sk_buff *skb,
 
 	if ((iph->frag_off & htons(IP_DF)) == 0) {
 		if (is_dst_k2pro(skb)) 
-			printk(KERN_INFO " ip_fragment is IP_DF \n");
+			printk(KERN_INFO "%s: ip_fragment is IP_DF \n", __func__);
 		return ip_do_fragment(net, sk, skb, output);
 	}
 
@@ -916,7 +916,7 @@ int ip_do_fragment(struct net *net, struct sock *sk, struct sk_buff *skb,
 
 			skb->tstamp = tstamp;
 			if (is_dst_k2pro(skb))
-				printk(KERN_INFO "ip_do_fragment -> output\n");
+				printk(KERN_INFO "%s: ip_do_fragment -> output\n", __func__);
 			err = output(net, sk, skb);
 
 			if (!err)
@@ -952,7 +952,7 @@ slow_path:
 	 *	Fragment the datagram.
 	 */
 	if (is_dst_k2pro(skb))
-		printk(KERN_INFO "slow_path \n");
+		printk(KERN_INFO "%s: slow_path \n", __func__);
 	ip_frag_init(skb, hlen, ll_rs, mtu, IPCB(skb)->flags & IPSKB_FRAG_PMTU,
 		     &state);
 
