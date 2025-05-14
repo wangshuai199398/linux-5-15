@@ -544,11 +544,11 @@ packet_routed:
 
 	/* OK, we know where to send it, allocate and build IP header. */
 	skb_push(skb, sizeof(struct iphdr) + (inet_opt ? inet_opt->opt.optlen : 0));
-	if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
+	if (fl->u.ip4.daddr == 0xa4dc77a)
 		printk(KERN_INFO "%s: ->ip_local_out sizeof(struct iphdr) %zu inet_opt->opt.optlen %u\n", __func__, sizeof(struct iphdr), (inet_opt ? inet_opt->opt.optlen : 0));
 
 	skb_reset_network_header(skb);
-	if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
+	if (fl->u.ip4.daddr == 0xa4dc77a)
 		printk(KERN_INFO "%s: ->skb->network_header %hu\n", __func__, skb->network_header);
 
 	iph = ip_hdr(skb);
@@ -557,7 +557,7 @@ packet_routed:
 		iph->frag_off = htons(IP_DF);
 	else
 		iph->frag_off = 0;
-	if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
+	if (fl->u.ip4.daddr == 0xa4dc77a)
 		printk(KERN_INFO "%s: ->iph->frag_off %hu\n", __func__, iph->frag_off);
 	iph->ttl      = ip_select_ttl(inet, &rt->dst);
 	iph->protocol = sk->sk_protocol;
