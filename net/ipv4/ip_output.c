@@ -101,7 +101,7 @@ int __ip_local_out(struct net *net, struct sock *sk, struct sk_buff *skb)
 	struct iphdr *iph = ip_hdr(skb);
 
 	if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->ip_local_out skb->len 0x%x\n", __func__, skb->len);
+		printk(KERN_INFO "%s: ->ip_local_out skb->len %u\n", __func__, skb->len);
 
 	iph->tot_len = htons(skb->len);
 
@@ -117,7 +117,7 @@ int __ip_local_out(struct net *net, struct sock *sk, struct sk_buff *skb)
 	skb->protocol = htons(ETH_P_IP);
 
 	if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->ip_local_out iph->tot_len 0x%x nf_hook\n", __func__, iph->tot_len);
+		printk(KERN_INFO "%s: ->ip_local_out iph->tot_len %u nf_hook\n", __func__, ntohs(iph->tot_len));
 
 	return nf_hook(NFPROTO_IPV4, NF_INET_LOCAL_OUT,
 		       net, sk, skb, NULL, skb_dst(skb)->dev,
