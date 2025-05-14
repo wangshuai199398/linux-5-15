@@ -3915,7 +3915,7 @@ no_lock_out:
 		qdisc_bstats_update(q, skb);
 
 		if (is_dst_k2pro(skb))
-			printk(KERN_INFO "lock -> sch_direct_xmit\n");
+			printk(KERN_INFO "%s: lock -> sch_direct_xmit\n", __func__);
 		if (sch_direct_xmit(skb, q, dev, txq, root_lock, true)) {
 			if (unlikely(contended)) {
 				spin_unlock(&q->busylock);
