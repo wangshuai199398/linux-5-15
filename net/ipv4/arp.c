@@ -364,10 +364,10 @@ static void arp_send_dst(int type, int ptype, __be32 dest_ip,
 		return;
 
 	skb_dst_set(skb, dst_clone(dst));
-	//if (dest_ip == 0xa4dc77a) {
-	//	printk(KERN_INFO "%s: ->arp_xmit\n", __func__);
-	//	print_arp_skb(skb);
-	//}
+	if (dest_ip == 0xa4dc77a) {
+		printk(KERN_INFO "%s: ->arp_xmit\n", __func__);
+		print_arp_skb(skb);
+	}
 		
 	arp_xmit(skb);
 }
