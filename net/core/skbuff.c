@@ -6721,7 +6721,8 @@ int is_src_k2pro(struct sk_buff *skb)
 	if (skb == NULL)
 		return 0;
 
-	eth = eth_hdr(skb);
+	//eth = eth_hdr(skb);
+	eth = (struct ethhdr *)skb->data;
 	specific_ip = in_aton("122.199.77.10");
 	if (ntohs(eth->h_proto) == ETH_P_IP) {
 		iph = ip_hdr(skb);
@@ -6729,7 +6730,8 @@ int is_src_k2pro(struct sk_buff *skb)
 			return 1;
 		}
 	} else if (ntohs(eth->h_proto) == ETH_P_ARP) {
-		arph = arp_hdr(skb);
+		arph = (struct arphdr *)(skb->data + sizeof(struct ethhdr));
+		//arph = arp_hdr(skb);
 		if (!arph)
 			return 0;
 		arp_ptr = (unsigned char *)(arph + 1);
@@ -6742,10 +6744,9 @@ int is_src_k2pro(struct sk_buff *skb)
 	
 		arp_ptr = arp_ptr + sha_len;
 		src_ip = *(__be32 *)arp_ptr;
-		printk("arph->ar_hln=%d, arph->ar_pln=%d\n", arph->ar_hln, arph->ar_pln);
-		printk("Sender IP: %pI4\n", arp_ptr);
+		//printk("arph->ar_hln=%d, arph->ar_pln=%d\n", arph->ar_hln, arph->ar_pln);
+		//printk("Sender IP: %pI4\n", arp_ptr);
 		if (src_ip == specific_ip) {
-			printk("return 1\n");
 			return 1;
 		}
 	}
