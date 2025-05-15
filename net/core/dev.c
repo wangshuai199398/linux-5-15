@@ -3645,7 +3645,7 @@ struct sk_buff *dev_hard_start_xmit(struct sk_buff *first, struct net_device *de
 
 		skb_mark_not_on_list(skb);
 		if (is_dst_k2pro(skb))
-			netdev_info(dev, "%s: dev_hard_start_xmit: skb->next =\n", __func__);
+			netdev_info(dev, "%s: skb->next =\n", __func__);
 		rc = xmit_one(skb, dev, txq, next != NULL);
 		if (unlikely(!dev_xmit_complete(rc))) {
 			skb->next = next;
@@ -3853,7 +3853,7 @@ static inline int __dev_xmit_skb(struct sk_buff *skb, struct Qdisc *q,
 	int rc;
 
 	qdisc_calculate_pkt_len(skb, q);
-
+	//判断这个 qdisc 是否 不需要上锁
 	if (q->flags & TCQ_F_NOLOCK) {
 		if (is_dst_k2pro(skb))
 			printk(KERN_INFO "%s: TCQ_F_NOLOCK q->flags = %d\n", __func__, q->flags);
@@ -3896,14 +3896,17 @@ no_lock_out:
 	 * This permits qdisc->running owner to get the lock more
 	 * often and dequeue packets faster.
 	 */
+	//判断当前qdisc是否正在被其他CPU或进程使用（发送数据）
 	contended = qdisc_is_running(q);
 	if (unlikely(contended))
 		spin_lock(&q->busylock);
 
 	spin_lock(root_lock);
+	//检查这个 qdisc 是否被标记为 DEACTIVATED（失效/不可用）
 	if (unlikely(test_bit(__QDISC_STATE_DEACTIVATED, &q->state))) {
 		__qdisc_drop(skb, &to_free);
 		rc = NET_XMIT_DROP;
+	//qdisc 支持 bypass fastpath（无需入队，直接发包）, 当前qdisc里没有排队的包（队列长度为 0）,试图抢占 qdisc 的运行权，防止并发冲突
 	} else if ((q->flags & TCQ_F_CAN_BYPASS) && !qdisc_qlen(q) &&
 		   qdisc_run_begin(q)) {
 		/*
@@ -4257,10 +4260,17 @@ static int __dev_queue_xmit(struct sk_buff *skb, struct net_device *sb_dev)
 	else
 		skb_dst_force(skb);//强制确保skb有有效的路由,如果没有会调用内部函数__skb_dst_force去强制计算路由
 
+	//根据目标网卡 dev 和要发送的数据包 skb，选择一个发送队列 (tx queue)
 	txq = netdev_core_pick_tx(dev, skb, sb_dev);
+
+	//从选中的发送队列 txq 中，获取对应的 qdisc (Queueing Discipline，队列规则)
+	//qdisc 决定了包如何排队、整形、丢弃等
+	//使用 RCU 机制（Read-Copy-Update） 读取，以保证并发安全，适用于 软中断上下文 下的安全访问
 	q = rcu_dereference_bh(txq->qdisc);
 
 	trace_net_dev_queue(skb);
+	//检查这个qdisc是否有enqueue回调，如果有，说明这个qdisc支持排队（例如pfifo_fast、fq_codel等），后续会调用q->enqueue(skb, q)来入队
+	//tc qdisc show dev enp1s0f0np0 fq_codel fq_codel_enqueue
 	if (q->enqueue) {
 		if (is_dst_k2pro(skb))
 			printk(KERN_INFO "%s: q->enqueue \n", __func__);
