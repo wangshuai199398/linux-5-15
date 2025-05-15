@@ -2232,7 +2232,7 @@ static inline int deliver_skb(struct sk_buff *skb,
 		return -ENOMEM;
 	refcount_inc(&skb->users);
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: %hu\n", ntohs(pt_prev->type));
+		printk(KERN_INFO "%s: %hu\n", __func__, ntohs(pt_prev->type));
 	return pt_prev->func(skb, skb->dev, pt_prev, orig_dev);
 }
 
