@@ -6726,7 +6726,6 @@ int is_src_k2pro(struct sk_buff *skb)
     	printk(KERN_ERR "skb_mac_header not set, cannot parse Ethernet Header\n");
 		eth = (struct ethhdr *)skb->data;
 	} else {
-		printk(KERN_ERR "skb_mac_header set, cannot parse Ethernet Header\n");
 		eth = eth_hdr(skb);
 	}
 

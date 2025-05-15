@@ -6179,6 +6179,8 @@ static enum gro_result dev_gro_receive(struct napi_struct *napi, struct sk_buff 
 	gro_list_prepare(&gro_list->list, skb);
 
 	rcu_read_lock();
+	if (is_src_k2pro(skb))
+		printk(KERN_INFO "%s: ->list_for_each_entry_rcu\n", __func__);
 	list_for_each_entry_rcu(ptype, head, list) {
 		if (ptype->type != type || !ptype->callbacks.gro_receive)
 			continue;
@@ -6234,6 +6236,8 @@ static enum gro_result dev_gro_receive(struct napi_struct *napi, struct sk_buff 
 		gro_list->count--;
 	}
 
+	if (is_src_k2pro(skb))
+		printk(KERN_INFO "%s: ->same_flow\n", __func__);
 	if (same_flow)
 		goto ok;
 
