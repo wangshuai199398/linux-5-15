@@ -1510,7 +1510,8 @@ static void neigh_hh_init(struct neighbour *n)
 int neigh_resolve_output(struct neighbour *neigh, struct sk_buff *skb)
 {
 	int rc = 0;
-
+	if (skb_network_header(skb) && ((const struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
+		printk(KERN_ERR "%s: ->neigh_event_send\n", __func__);
 	if (!neigh_event_send(neigh, skb)) {
 		int err;
 		struct net_device *dev = neigh->dev;
@@ -1524,15 +1525,16 @@ int neigh_resolve_output(struct neighbour *neigh, struct sk_buff *skb)
 			__skb_pull(skb, skb_network_offset(skb));
 			//开始读取邻居项（neigh->ha） 的 MAC 地址（ha字段），ha_lock 是 seqlock 锁，保证多核并发读写的安全性，seq 是序列号
 			seq = read_seqbegin(&neigh->ha_lock);
-			if (is_dst_k2pro(skb))
+			if (skb_network_header(skb) && ((const struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
 				printk(KERN_ERR "%s: -> dev_hard_header\n", __func__);
+				
 			//真正调用设备的硬件头部构造函数
 			err = dev_hard_header(skb, dev, ntohs(skb->protocol),
 					      neigh->ha, NULL, skb->len);
 		} while (read_seqretry(&neigh->ha_lock, seq));//结束 seqlock 保护，如果期间ha被修改过，自动重试一遍 保障读取邻居MAC地址时的一致性
 
 		if (err >= 0) {
-			if (is_dst_k2pro(skb))
+			if (skb_network_header(skb) && ((const struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
 				printk(KERN_ERR "%s: -> dev_queue_xmit\n", __func__);
 			rc = dev_queue_xmit(skb);
 		} 
