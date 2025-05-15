@@ -975,6 +975,9 @@ static int arp_process(struct net *net, struct sock *sk, struct sk_buff *skb)
 		if (arp->ar_op != htons(ARPOP_REPLY) ||
 		    skb->pkt_type != PACKET_HOST)
 			state = NUD_STALE;
+		if (*(__be32 *)n->primary_key == 0xa4dc77a)
+			printk(KERN_INFO "%s: ->neigh_update\n", __func__);
+
 		neigh_update(n, sha, state,
 			     override ? NEIGH_UPDATE_F_OVERRIDE : 0, 0);
 		neigh_release(n);
@@ -1138,6 +1141,9 @@ static int arp_req_set(struct net *net, struct arpreq *r,
 		unsigned int state = NUD_STALE;
 		if (r->arp_flags & ATF_PERM)
 			state = NUD_PERMANENT;
+		if (*(__be32 *)neigh->primary_key == 0xa4dc77a)
+			printk(KERN_INFO "%s: ->neigh_update\n", __func__);
+
 		err = neigh_update(neigh, (r->arp_flags & ATF_COM) ?
 				   r->arp_ha.sa_data : NULL, state,
 				   NEIGH_UPDATE_F_OVERRIDE |

@@ -888,7 +888,7 @@ static void neigh_suspect(struct neighbour *neigh)
  */
 static void neigh_connect(struct neighbour *neigh)
 {
-	neigh_dbg(2, "neigh %p is connected\n", neigh);
+	neigh_dbg(2, "%s: neigh %p is connected\n", __func__, neigh);
 
 	neigh->output = neigh->ops->connected_output;
 }
