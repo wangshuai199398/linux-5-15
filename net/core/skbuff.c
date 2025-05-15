@@ -6724,9 +6724,9 @@ int is_src_k2pro(struct sk_buff *skb)
 	//if (skb->protocol != htons(ETH_P_ARP))
 	if (!skb_mac_header_was_set(skb)) {
     	printk(KERN_ERR "skb_mac_header not set, cannot parse Ethernet Header\n");
-		eth = (struct ethhdr *)skb->data;
+		eth = skb_mac_header(skb);
 	} else {
-		eth = eth_hdr(skb);
+		eth = (struct ethhdr *)eth_hdr(skb);
 	}
 
 	//eth = eth_hdr(skb);
@@ -6738,8 +6738,14 @@ int is_src_k2pro(struct sk_buff *skb)
 			return 1;
 		}
 	} else if (ntohs(eth->h_proto) == ETH_P_ARP) {
-		arph = (struct arphdr *)(skb->data + sizeof(struct ethhdr));
-		//arph = arp_hdr(skb);
+		if (!skb_network_header_was_set(skb)) {
+			printk(KERN_ERR "skb_network_header not set, cannot parse Ethernet Header\n");
+			//arph = (struct arphdr *)(skb->data + sizeof(struct ethhdr));
+			arph = (struct arphdr *)skb->data;
+		} else {
+			arph = arp_hdr(skb);
+		}
+
 		if (!arph)
 			return 0;
 		arp_ptr = (unsigned char *)(arph + 1);
