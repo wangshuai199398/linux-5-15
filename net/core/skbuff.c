@@ -6738,7 +6738,7 @@ int is_src_k2pro(struct sk_buff *skb)
 			return 1;
 		}
 	} else if (ntohs(eth->h_proto) == ETH_P_ARP) {
-		if (!skb_network_header_was_set(skb)) {
+		if (skb->network_header != (typeof(skb->network_header))~0U) {
 			printk(KERN_ERR "skb_network_header not set, cannot parse Ethernet Header\n");
 			//arph = (struct arphdr *)(skb->data + sizeof(struct ethhdr));
 			arph = (struct arphdr *)skb->data;
