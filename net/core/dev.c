@@ -5592,14 +5592,12 @@ static inline void __netif_receive_skb_list_ptype(struct list_head *head,
 	if (list_empty(head))
 		return;
 	if (pt_prev->list_func != NULL) {
-		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: 0x%hu\n", __func__, ntohs(pt_prev->type));
 		INDIRECT_CALL_INET(pt_prev->list_func, ipv6_list_rcv,
 				   ip_list_rcv, head, pt_prev, orig_dev);
 	} else {
 		list_for_each_entry_safe(skb, next, head, list) {
 			if (is_src_k2pro(skb))
-				printk(KERN_INFO "%s: list_for_each_entry_safe %hu\n", __func__, ntohs(pt_prev->type));
+				printk(KERN_INFO "%s: list_for_each_entry_safe 0x%x\n", __func__, ntohs(pt_prev->type));
 			skb_list_del_init(skb);
 			pt_prev->func(skb, skb->dev, pt_prev, orig_dev);
 		}
@@ -5628,11 +5626,19 @@ static void __netif_receive_skb_list_core(struct list_head *head, bool pfmemallo
 	list_for_each_entry_safe(skb, next, head, list) {
 		struct net_device *orig_dev = skb->dev;
 		struct packet_type *pt_prev = NULL;
-
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: list_for_each_entry_safe \n", __func__);
 		skb_list_del_init(skb);
 		__netif_receive_skb_core(&skb, pfmemalloc, &pt_prev);
 		if (!pt_prev)
 			continue;
+		if (is_src_k2pro(skb)) {
+			printk(KERN_INFO "%s: list_for_each_entry_safe 0x%x\n", __func__, ntohs(pt_prev->type));
+			if (pt_curr != pt_prev || od_curr != orig_dev) {
+				printk(KERN_INFO "%s: __netif_receive_skb_list_ptype \n", __func__);
+			}
+		}
+
 		if (pt_curr != pt_prev || od_curr != orig_dev) {
 			/* dispatch old sublist */
 			__netif_receive_skb_list_ptype(&sublist, pt_curr, od_curr);
