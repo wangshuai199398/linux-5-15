@@ -48,7 +48,7 @@
 #define neigh_dbg(level, fmt, ...)		\
 do {						\
 	if (level <= NEIGH_DEBUG)		\
-		pr_debug(fmt, ##__VA_ARGS__);	\
+		pr_info(fmt, ##__VA_ARGS__);	\
 } while (0)
 
 #define PNEIGH_HASHMASK		0xF
@@ -868,6 +868,8 @@ EXPORT_SYMBOL(neigh_destroy);
    disable fast path.
 
    Called with write_locked neigh.
+   
+   认为邻居状态“可疑”  禁用 fast path，走慢路径
  */
 static void neigh_suspect(struct neighbour *neigh)
 {
@@ -880,6 +882,8 @@ static void neigh_suspect(struct neighbour *neigh)
    enable fast path.
 
    Called with write_locked neigh.
+
+   认为邻居状态“良好” 启用 fast path，走优化路径
  */
 static void neigh_connect(struct neighbour *neigh)
 {
@@ -1423,6 +1427,8 @@ static int __neigh_update(struct neighbour *neigh, const u8 *lladdr,
 				if (n2)
 					n1 = n2;
 			}
+			if (skb_network_header(skb) && ((const struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
+				printk(KERN_ERR "%s: ->n1->output\n", __func__);
 			n1->output(n1, skb);
 			if (n2)
 				neigh_release(n2);
@@ -1557,7 +1563,9 @@ int neigh_connected_output(struct neighbour *neigh, struct sk_buff *skb)
 	struct net_device *dev = neigh->dev;
 	unsigned int seq;
 	int err;
-
+	if (*(__be32 *)neigh->primary_key == 0xa4dc77a) {
+		printk(KERN_INFO "%s: \n", __func__);
+	}
 	do {
 		__skb_pull(skb, skb_network_offset(skb));
 		seq = read_seqbegin(&neigh->ha_lock);
@@ -1577,6 +1585,9 @@ EXPORT_SYMBOL(neigh_connected_output);
 
 int neigh_direct_output(struct neighbour *neigh, struct sk_buff *skb)
 {
+	if (*(__be32 *)neigh->primary_key == 0xa4dc77a) {
+		printk(KERN_INFO "%s: \n", __func__);
+	}
 	return dev_queue_xmit(skb);
 }
 EXPORT_SYMBOL(neigh_direct_output);
