@@ -5691,6 +5691,8 @@ static void __netif_receive_skb_list(struct list_head *head)
 
 			/* Handle the previous sublist */
 			list_cut_before(&sublist, head, &skb->list);
+			if (is_src_k2pro(skb))
+				printk(KERN_INFO "%s: list_for_each_entry_safe \n", __func__);
 			if (!list_empty(&sublist))
 				__netif_receive_skb_list_core(&sublist, pfmemalloc);
 			pfmemalloc = !pfmemalloc;
@@ -5774,6 +5776,8 @@ static void netif_receive_skb_list_internal(struct list_head *head)
 	list_for_each_entry_safe(skb, next, head, list) {
 		net_timestamp_check(READ_ONCE(netdev_tstamp_prequeue), skb);
 		skb_list_del_init(skb);
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: list_for_each_entry_safe \n", __func__);
 		if (!skb_defer_rx_timestamp(skb))
 			list_add_tail(&skb->list, &sublist);
 	}
