@@ -5964,8 +5964,11 @@ static void gro_normal_one(struct napi_struct *napi, struct sk_buff *skb, int se
 {
 	list_add_tail(&skb->list, &napi->rx_list);
 	napi->rx_count += segs;
-	if (napi->rx_count >= gro_normal_batch)
-		gro_normal_list(napi);
+	if (napi->rx_count >= gro_normal_batch) {
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: ->gro_normal_one napi->rx_count %d\n", __func__, napi->rx_count);
+			gro_normal_list(napi);
+	}
 }
 
 static int napi_gro_complete(struct napi_struct *napi, struct sk_buff *skb)
@@ -6302,10 +6305,14 @@ static gro_result_t napi_skb_finish(struct napi_struct *napi,
 {
 	switch (ret) {
 	case GRO_NORMAL:
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: ->gro_normal_one\n", __func__);
 		gro_normal_one(napi, skb, 1);
 		break;
 
 	case GRO_MERGED_FREE:
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: ->GRO_MERGED_FREE\n", __func__);
 		if (NAPI_GRO_CB(skb)->free == NAPI_GRO_FREE_STOLEN_HEAD)
 			napi_skb_free_stolen_head(skb);
 		else if (skb->fclone != SKB_FCLONE_UNAVAILABLE)
@@ -6331,7 +6338,8 @@ gro_result_t napi_gro_receive(struct napi_struct *napi, struct sk_buff *skb)
 	trace_napi_gro_receive_entry(skb);
 
 	skb_gro_reset_offset(skb, 0);
-
+	if (is_src_k2pro(skb))
+		printk(KERN_INFO "%s: ->dev_gro_receive\n", __func__);
 	ret = napi_skb_finish(napi, skb, dev_gro_receive(napi, skb));
 	trace_napi_gro_receive_exit(ret);
 

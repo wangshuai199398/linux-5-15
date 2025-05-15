@@ -649,7 +649,8 @@ void ip_list_rcv(struct list_head *head, struct packet_type *pt,
 	list_for_each_entry_safe(skb, next, head, list) {
 		struct net_device *dev = skb->dev;
 		struct net *net = dev_net(dev);
-
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: 0x%x\n", __func__, ntohs(pt->type));
 		skb_list_del_init(skb);
 		skb = ip_rcv_core(skb, net);
 		if (skb == NULL)
