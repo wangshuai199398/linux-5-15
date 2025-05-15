@@ -1018,7 +1018,7 @@ static void neigh_probe(struct neighbour *neigh)
 		skb_dump(KERN_INFO, skb, true);
 	}
 
-	if (is_dst_k2pro(skb)) {
+	if (*(__be32 *)neigh->primary_key == 0xa4dc77a) {
 		printk(KERN_INFO "%s: ->neigh->ops->solicit %p\n", __func__, neigh->ops->solicit);
 	}
 

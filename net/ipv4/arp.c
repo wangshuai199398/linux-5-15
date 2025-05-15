@@ -452,7 +452,7 @@ static void arp_solicit(struct neighbour *neigh, struct sk_buff *skb)
 
 	if (skb && !(dev->priv_flags & IFF_XMIT_DST_RELEASE))
 		dst = skb_dst(skb);
-	if (is_dst_k2pro(skb)) 
+	if (target == 0xa4dc77a) {
 		printk(KERN_INFO "%s: ->arp_send_dst\n", __func__);
 	arp_send_dst(ARPOP_REQUEST, ETH_P_ARP, target, dev, saddr,
 		     dst_hw, dev->dev_addr, NULL, dst);
