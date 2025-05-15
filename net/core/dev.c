@@ -6219,8 +6219,11 @@ static enum gro_result dev_gro_receive(struct napi_struct *napi, struct sk_buff 
 	}
 	rcu_read_unlock();
 
-	if (&ptype->list == head)
+	if (&ptype->list == head) {
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: ->ptype->list == head\n", __func__);
 		goto normal;
+	}
 
 	if (PTR_ERR(pp) == -EINPROGRESS) {
 		ret = GRO_CONSUMED;
