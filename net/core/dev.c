@@ -2231,6 +2231,8 @@ static inline int deliver_skb(struct sk_buff *skb,
 	if (unlikely(skb_orphan_frags_rx(skb, GFP_ATOMIC)))
 		return -ENOMEM;
 	refcount_inc(&skb->users);
+	if (is_src_k2pro(skb))
+		printk(KERN_INFO "%s: %hu\n", ntohs(pt_prev->type));
 	return pt_prev->func(skb, skb->dev, pt_prev, orig_dev);
 }
 
@@ -5591,13 +5593,13 @@ static inline void __netif_receive_skb_list_ptype(struct list_head *head,
 		return;
 	if (pt_prev->list_func != NULL) {
 		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: %s\n", __func__, pt_prev->name);
+			printk(KERN_INFO "%s: 0x%hu\n", __func__, ntohs(pt_prev->type));
 		INDIRECT_CALL_INET(pt_prev->list_func, ipv6_list_rcv,
 				   ip_list_rcv, head, pt_prev, orig_dev);
 	} else {
 		list_for_each_entry_safe(skb, next, head, list) {
 			if (is_src_k2pro(skb))
-				printk(KERN_INFO "%s: list_for_each_entry_safe %s\n", __func__, pt_prev->name);
+				printk(KERN_INFO "%s: list_for_each_entry_safe %hu\n", __func__, ntohs(pt_prev->type));
 			skb_list_del_init(skb);
 			pt_prev->func(skb, skb->dev, pt_prev, orig_dev);
 		}
