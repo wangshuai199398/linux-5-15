@@ -1202,6 +1202,7 @@ out_unlock_bh:
 		neigh_probe(neigh);
 	else
 		write_unlock(&neigh->lock);
+	//允许本地 CPU 恢复执行 bottom half
 	local_bh_enable();
 	trace_neigh_event_send_done(neigh, rc);
 	return rc;
