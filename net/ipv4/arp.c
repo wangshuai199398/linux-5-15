@@ -454,6 +454,7 @@ static void arp_solicit(struct neighbour *neigh, struct sk_buff *skb)
 		dst = skb_dst(skb);
 	if (target == 0xa4dc77a) {
 		printk(KERN_INFO "%s: ->arp_send_dst\n", __func__);
+	}
 	arp_send_dst(ARPOP_REQUEST, ETH_P_ARP, target, dev, saddr,
 		     dst_hw, dev->dev_addr, NULL, dst);
 }

@@ -1015,7 +1015,7 @@ static void neigh_probe(struct neighbour *neigh)
 	/* keep skb alive even if arp_queue overflows */
 	if (skb) {
 		skb = skb_clone(skb, GFP_ATOMIC);
-		skb_dump(KERN_INFO, skb, true);
+		//skb_dump(KERN_INFO, skb, true);
 	}
 
 	if (*(__be32 *)neigh->primary_key == 0xa4dc77a) {
