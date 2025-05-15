@@ -306,10 +306,16 @@ static void print_arp_skb(struct sk_buff *skb)
 
 	if (!skb)
 		return;
-	eth = (struct ethhdr *)skb_mac_header(skb);
+
 	if (skb->protocol != htons(ETH_P_ARP)) {
 		printk(KERN_ERR "%s: skb->protocol != ETH_P_ARP\n", __func__);
 		return;
+	}
+	if (!skb_mac_header_was_set(skb)) {
+    	printk(KERN_ERR "skb_mac_header not set, cannot parse Ethernet Header\n");
+		eth = (struct ethhdr *)skb->data;
+	} else {
+		eth = eth_hdr(skb);
 	}
 
 	printk("Ethernet Header:\n");
@@ -320,10 +326,15 @@ static void print_arp_skb(struct sk_buff *skb)
 	//(struct arphdr *)(eth + 1);
 	arp = arp_hdr(skb);
 	printk("ARP Header:\n");
+	//1表示以太网
     printk("  Hardware Type: %u\n", ntohs(arp->ar_hrd));
+	//0x0800表示IP协议
     printk("  Protocol Type: 0x%04x\n", ntohs(arp->ar_pro));
+	//表示MAC地址长度是6字节
     printk("  Hardware Size: %u\n", arp->ar_hln);
+	//表示IPv4地址长度是4字节
     printk("  Protocol Size: %u\n", arp->ar_pln);
+	//表示ARP请求（1是Request，2是Reply）
     printk("  Opcode       : %u\n", ntohs(arp->ar_op));
 
 	arp_ptr = (unsigned char *)(arp + 1);
