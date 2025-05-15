@@ -5964,10 +5964,11 @@ static void gro_normal_one(struct napi_struct *napi, struct sk_buff *skb, int se
 {
 	list_add_tail(&skb->list, &napi->rx_list);
 	napi->rx_count += segs;
+	if (is_src_k2pro(skb))
+		printk(KERN_INFO "%s: ->gro_normal_one napi->rx_count %d gro_normal_batch %d\n", __func__,
+													napi->rx_count, gro_normal_batch);
 	if (napi->rx_count >= gro_normal_batch) {
-		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: ->gro_normal_one napi->rx_count %d\n", __func__, napi->rx_count);
-			gro_normal_list(napi);
+		gro_normal_list(napi);
 	}
 }
 
