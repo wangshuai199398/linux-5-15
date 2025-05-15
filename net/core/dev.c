@@ -6263,6 +6263,8 @@ ok:
 	} else if (test_bit(bucket, &napi->gro_bitmask)) {
 		__clear_bit(bucket, &napi->gro_bitmask);
 	}
+	if (is_src_k2pro(skb))
+		printk(KERN_INFO "%s: ->return ret %d\n", __func__, ret);
 
 	return ret;
 
