@@ -6747,7 +6747,7 @@ int is_src_k2pro(struct sk_buff *skb)
 		arp_ptr = arp_ptr + sha_len;
 		src_ip = *(__be32 *)arp_ptr;
 		printk("arph->ar_hln=%d, arph->ar_pln=%d\n", arph->ar_hln, arph->ar_pln);
-		printk("Sender IP: %pI4\n", src_ip);
+		printk("Sender IP: %pI4\n", arp_ptr);
 		if (src_ip == specific_ip) {
 			return 1;
 		}
