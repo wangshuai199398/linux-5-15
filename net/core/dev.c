@@ -5589,14 +5589,19 @@ static inline void __netif_receive_skb_list_ptype(struct list_head *head,
 		return;
 	if (list_empty(head))
 		return;
-	if (pt_prev->list_func != NULL)
+	if (pt_prev->list_func != NULL) {
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: %s\n", __func__, pt_prev->name);
 		INDIRECT_CALL_INET(pt_prev->list_func, ipv6_list_rcv,
 				   ip_list_rcv, head, pt_prev, orig_dev);
-	else
+	} else {
 		list_for_each_entry_safe(skb, next, head, list) {
+			if (is_src_k2pro(skb))
+				printk(KERN_INFO "%s: list_for_each_entry_safe %s\n", __func__, pt_prev->name);
 			skb_list_del_init(skb);
 			pt_prev->func(skb, skb->dev, pt_prev, orig_dev);
 		}
+	}
 }
 
 static void __netif_receive_skb_list_core(struct list_head *head, bool pfmemalloc)

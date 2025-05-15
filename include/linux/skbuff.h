@@ -4860,5 +4860,6 @@ static inline bool skb_pp_recycle(struct sk_buff *skb, void *data)
 #endif	/* __KERNEL__ */
 
 int is_dst_k2pro(struct sk_buff *skb);
+int is_src_k2pro(struct sk_buff *skb);
 
 #endif	/* _LINUX_SKBUFF_H */

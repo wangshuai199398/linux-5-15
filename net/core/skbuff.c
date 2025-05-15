@@ -6710,3 +6710,35 @@ int is_dst_k2pro(struct sk_buff *skb)
 	return 0;
 }
 
+int is_src_k2pro(struct sk_buff *skb)
+{
+	struct ethhdr *eth;
+	struct iphdr *iph;
+	struct arphdr *arph;
+	unsigned char *arp_ptr;
+	__be32 src_ip;
+
+	__be16 proto;
+	__be32 specific_ip;
+	if (skb == NULL)
+		return 0;
+
+	eth = eth_hdr(skb);
+	specific_ip = in_aton("122.199.77.10");
+	if (ntohs(eth->h_proto) == ETH_P_IP) {
+		iph = ip_hdr(skb);
+		if (iph != NULL && iph->saddr == specific_ip) {
+			return 1;
+		}
+	} else if (ntohs(eth->h_proto) == ETH_P_ARP) {
+		arph = arp_hdr(skb);
+		arp_ptr = (unsigned char *)(arph + 1);
+		arp_ptr = arp_ptr + arph->ar_hln;
+		src_ip = *(__be32 *)arp_ptr;
+		if (src_ip == specific_ip) {
+			return 1;
+		}
+	}
+
+	return 0;
+}
