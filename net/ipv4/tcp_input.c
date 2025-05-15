@@ -5966,7 +5966,8 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 				/* We know that such packets are checksummed
 				 * on entry.
 				 */
-				printk(KERN_INFO, "%s: tcp_ack\n");
+				if (is_src_k2pro(skb))
+					printk(KERN_INFO, "%s: tcp_ack\n", __func__);
 				tcp_ack(sk, skb, 0);
 				__kfree_skb(skb);
 				tcp_data_snd_check(sk);
@@ -6011,7 +6012,8 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 
 			if (TCP_SKB_CB(skb)->ack_seq != tp->snd_una) {
 				/* Well, only one small jumplet in fast path... */
-				printk(KERN_INFO, "%s: tcp_ack\n");
+				if (is_src_k2pro(skb))
+					printk(KERN_INFO, "%s: tcp_ack\n", __func__);
 				tcp_ack(sk, skb, FLAG_DATA);
 				tcp_data_snd_check(sk);
 				if (!inet_csk_ack_scheduled(sk))
@@ -6044,7 +6046,8 @@ slow_path:
 		return;
 
 step5:
-	printk(KERN_INFO, "%s: tcp_ack\n");
+	if (is_src_k2pro(skb))
+		printk(KERN_INFO, "%s: tcp_ack\n", __func__);
 	if (tcp_ack(sk, skb, FLAG_SLOWPATH | FLAG_UPDATE_TS_RECENT) < 0)
 		goto discard;
 
@@ -6290,7 +6293,8 @@ static int tcp_rcv_synsent_state_process(struct sock *sk, struct sk_buff *skb,
 
 		tcp_init_wl(tp, TCP_SKB_CB(skb)->seq);
 		tcp_try_undo_spurious_syn(sk);
-		printk(KERN_INFO, "%s: tcp_ack\n");
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO, "%s: tcp_ack\n", __func__);
 		tcp_ack(sk, skb, FLAG_SLOWPATH);
 
 		/* Ok.. it's good. Set up sequence numbers and
@@ -6563,7 +6567,8 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb)
 		return 0;
 
 	/* step 5: check the ACK field */
-	printk(KERN_INFO, "%s: tcp_ack\n");
+	if (is_src_k2pro(skb))
+		printk(KERN_INFO, "%s: tcp_ack\n", __func__);
 	acceptable = tcp_ack(sk, skb, FLAG_SLOWPATH |
 				      FLAG_UPDATE_TS_RECENT |
 				      FLAG_NO_CHALLENGE_ACK) > 0;
