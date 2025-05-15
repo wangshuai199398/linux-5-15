@@ -6720,6 +6720,8 @@ int is_src_k2pro(struct sk_buff *skb)
 
 	__be16 proto;
 	__be32 specific_ip;
+
+	int sha_len, spa_len;
 	if (skb == NULL)
 		return 0;
 
@@ -6732,9 +6734,20 @@ int is_src_k2pro(struct sk_buff *skb)
 		}
 	} else if (ntohs(eth->h_proto) == ETH_P_ARP) {
 		arph = arp_hdr(skb);
+		if (!arph)
+			return 0;
 		arp_ptr = (unsigned char *)(arph + 1);
-		arp_ptr = arp_ptr + arph->ar_hln;
+		if (!arp_ptr)
+			return 0;
+		sha_len = arph->ar_hln;//6
+		spa_len = arph->ar_pln;//4
+		if (sha_len !=6 || spa_len != 4)
+			return 0;
+	
+		arp_ptr = arp_ptr + sha_len;
 		src_ip = *(__be32 *)arp_ptr;
+		printk("arph->ar_hln=%d, arph->ar_pln=%d\n", arph->ar_hln, arph->ar_pln);
+		printk("Sender IP: %pI4\n", src_ip);
 		if (src_ip == specific_ip) {
 			return 1;
 		}
