@@ -6724,7 +6724,7 @@ int is_src_k2pro(struct sk_buff *skb)
 	//if (skb->protocol != htons(ETH_P_ARP))
 	if (!skb_mac_header_was_set(skb)) {
     	printk(KERN_ERR "skb_mac_header not set, cannot parse Ethernet Header\n");
-		eth = skb_mac_header(skb);
+		eth = (struct ethhdr *)skb_mac_header(skb);
 	} else {
 		eth = (struct ethhdr *)eth_hdr(skb);
 	}
