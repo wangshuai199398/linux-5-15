@@ -6721,8 +6721,16 @@ int is_src_k2pro(struct sk_buff *skb)
 	if (skb == NULL)
 		return 0;
 
+	//if (skb->protocol != htons(ETH_P_ARP))
+	if (!skb_mac_header_was_set(skb)) {
+    	printk(KERN_ERR "skb_mac_header not set, cannot parse Ethernet Header\n");
+		eth = (struct ethhdr *)skb->data;
+	} else {
+		eth = eth_hdr(skb);
+	}
+
 	//eth = eth_hdr(skb);
-	eth = (struct ethhdr *)skb->data;
+	//eth = (struct ethhdr *)skb->data;
 	specific_ip = in_aton("122.199.77.10");
 	if (ntohs(eth->h_proto) == ETH_P_IP) {
 		iph = ip_hdr(skb);
