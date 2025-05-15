@@ -6680,8 +6680,6 @@ int is_dst_k2pro(struct sk_buff *skb)
 	struct arphdr *arph;
 	unsigned char *arp_ptr;
 	__be32 dst_ip;
-
-	__be16 proto;
 	__be32 specific_ip;
 	if (skb == NULL)
 		return 0;
@@ -6717,8 +6715,6 @@ int is_src_k2pro(struct sk_buff *skb)
 	struct arphdr *arph;
 	unsigned char *arp_ptr;
 	__be32 src_ip;
-
-	__be16 proto;
 	__be32 specific_ip;
 
 	int sha_len, spa_len;
