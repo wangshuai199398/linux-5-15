@@ -1013,12 +1013,11 @@ static void neigh_probe(struct neighbour *neigh)
 {
 	struct sk_buff *skb = skb_peek_tail(&neigh->arp_queue);
 	/* keep skb alive even if arp_queue overflows */
-	if (skb)
+	if (skb) {
 		skb = skb_clone(skb, GFP_ATOMIC);
+		skb_dump(KERN_INFO, skb, true);
+	}
 
-	//const struct iphdr *iph = (const struct iphdr *)skb_network_header(skb);//skb->head + skb->network_header
-	//if (iph && skb->len > skb->network_header - skb_headroom(skb) + sizeof(struct iphdr) && iph->daddr == 0x0a4dc77a) {
-	//if (iph && skb->len >= skb_network_offset(skb) + sizeof(struct iphdr) && iph->daddr == 0x0a4dc77a) {
 	if (is_dst_k2pro(skb)) {
 		printk(KERN_INFO "%s: ->neigh->ops->solicit %p\n", __func__, neigh->ops->solicit);
 	}
