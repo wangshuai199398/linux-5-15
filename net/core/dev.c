@@ -5968,6 +5968,9 @@ static void gro_normal_one(struct napi_struct *napi, struct sk_buff *skb, int se
 		printk(KERN_INFO "%s: ->gro_normal_one napi->rx_count %d gro_normal_batch %d\n", __func__,
 													napi->rx_count, gro_normal_batch);
 	if (napi->rx_count >= gro_normal_batch) {
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: ->gro_normal_one napi->rx_count %d gro_normal_batch %d\n", __func__,
+													napi->rx_count, gro_normal_batch);
 		gro_normal_list(napi);
 	}
 }
@@ -6180,8 +6183,6 @@ static enum gro_result dev_gro_receive(struct napi_struct *napi, struct sk_buff 
 	gro_list_prepare(&gro_list->list, skb);
 
 	rcu_read_lock();
-	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: ->list_for_each_entry_rcu\n", __func__);
 	list_for_each_entry_rcu(ptype, head, list) {
 		if (ptype->type != type || !ptype->callbacks.gro_receive)
 			continue;
@@ -6212,7 +6213,8 @@ static enum gro_result dev_gro_receive(struct napi_struct *napi, struct sk_buff 
 			NAPI_GRO_CB(skb)->csum_cnt = 0;
 			NAPI_GRO_CB(skb)->csum_valid = 0;
 		}
-
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: ->inet_gro_receive 0x%x\n", __func__, ntohs(type));
 		pp = INDIRECT_CALL_INET(ptype->callbacks.gro_receive,
 					ipv6_gro_receive, inet_gro_receive,
 					&gro_list->list, skb);

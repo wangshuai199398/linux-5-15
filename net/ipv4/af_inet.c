@@ -1565,7 +1565,9 @@ struct sk_buff *inet_gro_receive(struct list_head *head, struct sk_buff *skb)
 	 */
 	skb_gro_pull(skb, sizeof(*iph));
 	skb_set_transport_header(skb, skb_gro_offset(skb));
-
+	if (is_src_k2pro(skb))
+		printk(KERN_INFO "%s: ->indirect_call_gro_receive 0x%x\n", __func__, ntohs(type));
+	//如果ops->callbacks.gro_receive不为空，调用它，为空调用tcp4_gro_receive, udp4_gro_receive
 	pp = indirect_call_gro_receive(tcp4_gro_receive, udp4_gro_receive,
 				       ops->callbacks.gro_receive, head, skb);
 
