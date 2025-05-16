@@ -5422,8 +5422,8 @@ skip_taps:
 			goto another_round;
 		if (!skb)
 			goto out;
-		//if (is_src_k2pro(skb))
-		//	printk(KERN_INFO "%s: ->nf_ingress \n", __func__);
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: ->nf_ingress \n", __func__);
 		if (nf_ingress(skb, &pt_prev, &ret, orig_dev) < 0)
 			goto out;
 	}
