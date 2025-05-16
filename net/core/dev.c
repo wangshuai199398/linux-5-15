@@ -5850,6 +5850,8 @@ void netif_receive_skb_list(struct list_head *head)
 		list_for_each_entry(skb, head, list)
 			trace_netif_receive_skb_list_entry(skb);
 	}
+	if (is_src_k2pro(skb))
+		printk(KERN_INFO "%s: ->netif_receive_skb_list_internal \n", __func__);
 	netif_receive_skb_list_internal(head);
 	trace_netif_receive_skb_list_exit(0);
 }
@@ -5952,6 +5954,8 @@ static void gro_normal_list(struct napi_struct *napi)
 {
 	if (!napi->rx_count)
 		return;
+	if (is_src_k2pro(skb))
+		printk(KERN_INFO "%s: ->netif_receive_skb_list_internal \n", __func__);
 	netif_receive_skb_list_internal(&napi->rx_list);
 	INIT_LIST_HEAD(&napi->rx_list);
 	napi->rx_count = 0;
