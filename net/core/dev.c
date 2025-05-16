@@ -5721,8 +5721,8 @@ static void __netif_receive_skb_list(struct list_head *head)
 	}
 	/* Handle the remaining sublist */
 	if (!list_empty(head)) {
-		//if (is_src_k2pro(skb))
-		//	printk(KERN_INFO "%s: ->__netif_receive_skb_list_core \n", __func__);
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: ->__netif_receive_skb_list_core \n", __func__);
 
 		__netif_receive_skb_list_core(head, pfmemalloc);
 	}
