@@ -2154,7 +2154,7 @@ process:
 	skb->dev = NULL;
 
 	if (sk->sk_state == TCP_LISTEN) {
-		if (is_dst_k2pro(skb)) {
+		if (is_src_k2pro(skb)) {
 			printk(KERN_INFO "%s: ->TCP_LISTEN tcp_v4_do_rcv\n", __func__);
 		}
 		ret = tcp_v4_do_rcv(sk, skb);
@@ -2169,6 +2169,9 @@ process:
 	if (!sock_owned_by_user(sk)) {
 		skb_to_free = sk->sk_rx_skb_cache;
 		sk->sk_rx_skb_cache = NULL;
+		if (is_src_k2pro(skb)) {
+			printk(KERN_INFO "%s: ->sock_owned_by_user tcp_v4_do_rcv\n", __func__);
+		}
 		ret = tcp_v4_do_rcv(sk, skb);
 	} else {
 		if (tcp_add_backlog(sk, skb))

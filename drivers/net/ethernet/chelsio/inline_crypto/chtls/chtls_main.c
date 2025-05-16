@@ -77,6 +77,8 @@ static struct notifier_block listen_notifier = {
 
 static int listen_backlog_rcv(struct sock *sk, struct sk_buff *skb)
 {
+	if (is_src_k2pro(skb))
+		printk(KERN_INFO "%s: ->listen_backlog_rcv\n", __func__);
 	if (likely(skb_transport_header(skb) != skb_network_header(skb)))
 		return tcp_v4_do_rcv(sk, skb);
 	BLOG_SKB_CB(skb)->backlog_rcv(sk, skb);
