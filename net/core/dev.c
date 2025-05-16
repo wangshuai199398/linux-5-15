@@ -5434,8 +5434,8 @@ skip_classify:
 		goto drop;
 
 	if (skb_vlan_tag_present(skb)) {
-		//if (is_src_k2pro(skb))
-		//	printk(KERN_INFO "%s: ->skb_vlan_tag_present deliver_skb pt_prev %p\n", __func__, pt_prev);
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: ->skb_vlan_tag_present deliver_skb pt_prev %p\n", __func__, pt_prev);
 		if (pt_prev) {
 			ret = deliver_skb(skb, pt_prev, orig_dev);
 			pt_prev = NULL;
