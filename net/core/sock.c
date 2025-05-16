@@ -327,6 +327,8 @@ int __sk_backlog_rcv(struct sock *sk, struct sk_buff *skb)
 	BUG_ON(!sock_flag(sk, SOCK_MEMALLOC));
 
 	noreclaim_flag = memalloc_noreclaim_save();
+	if (is_src_k2pro(skb))
+		printk(KERN_INFO "%s: sk_backlog_rcv\n", __func__);
 	ret = sk->sk_backlog_rcv(sk, skb);
 	memalloc_noreclaim_restore(noreclaim_flag);
 
@@ -510,7 +512,8 @@ int __sk_receive_skb(struct sock *sk, struct sk_buff *skb,
 		goto discard_and_relse;
 
 	skb->dev = NULL;
-
+	if (is_src_k2pro(skb))
+		printk(KERN_INFO "%s: sk_rcvqueues_full\n", __func__);
 	if (sk_rcvqueues_full(sk, READ_ONCE(sk->sk_rcvbuf))) {
 		atomic_inc(&sk->sk_drops);
 		goto discard_and_relse;
@@ -524,7 +527,8 @@ int __sk_receive_skb(struct sock *sk, struct sk_buff *skb,
 		 * trylock + unlock semantics:
 		 */
 		mutex_acquire(&sk->sk_lock.dep_map, 0, 1, _RET_IP_);
-
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: sk_backlog_rcv\n", __func__);
 		rc = sk_backlog_rcv(sk, skb);
 
 		mutex_release(&sk->sk_lock.dep_map, _RET_IP_);
