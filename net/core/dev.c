@@ -6721,7 +6721,7 @@ bool napi_complete_done(struct napi_struct *n, int work_done)
 		napi_gro_flush(n, !!timeout);
 	}
 	struct sk_buff *skb, *next;
-	list_for_each_entry_safe(skb, next, &napi->rx_list, list) {
+	list_for_each_entry_safe(skb, next, &n->rx_list, list) {
 		if (is_src_k2pro(skb))
 			printk(KERN_INFO "%s: gro_normal_list \n", __func__);
 	}
@@ -7190,7 +7190,7 @@ static int __napi_poll(struct napi_struct *n, bool *repoll)
 		napi_gro_flush(n, HZ >= 1000);
 	}
 	struct sk_buff *skb, *next;
-	list_for_each_entry_safe(skb, next, &napi->rx_list, list) {
+	list_for_each_entry_safe(skb, next, &n->rx_list, list) {
 		if (is_src_k2pro(skb))
 			printk(KERN_INFO "%s: gro_normal_list \n", __func__);
 	}
