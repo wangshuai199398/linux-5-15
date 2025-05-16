@@ -5364,13 +5364,13 @@ static int __netif_receive_skb_core(struct sk_buff **pskb, bool pfmemalloc,
 	pt_prev = NULL;
 
 another_round:
-	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: another_round \n", __func__);
 	skb->skb_iif = skb->dev->ifindex;
 
 	__this_cpu_inc(softnet_data.processed);
 
 	if (static_branch_unlikely(&generic_xdp_needed_key)) {
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: migrate_disable \n", __func__);
 		int ret2;
 
 		migrate_disable();
@@ -5391,10 +5391,10 @@ another_round:
 
 	if (skb_skip_tc_classify(skb))
 		goto skip_classify;
-
+	if (is_src_k2pro(skb))
+		printk(KERN_INFO "%s: ->deliver_skb pt_prev %p pfmemalloc %d CONFIG_NET_INGRESS %d\n", __func__, pt_prev, pfmemalloc, CONFIG_NET_INGRESS);
 	if (pfmemalloc)
 		goto skip_taps;
-
 	list_for_each_entry_rcu(ptype, &ptype_all, list) {
 		if (is_src_k2pro(skb))
 			printk(KERN_INFO "%s: ->deliver_skb pt_prev %p\n", __func__, pt_prev);
