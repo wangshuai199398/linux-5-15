@@ -5564,6 +5564,8 @@ static int __netif_receive_skb_one_core(struct sk_buff *skb, bool pfmemalloc)
 	int ret;
 
 	ret = __netif_receive_skb_core(&skb, pfmemalloc, &pt_prev);
+	if (is_src_k2pro(skb))
+		printk(KERN_INFO "%s: __netif_receive_skb_core pt_prev %p\n", __func__, pt_prev);
 	if (pt_prev)
 		ret = INDIRECT_CALL_INET(pt_prev->func, ipv6_rcv, ip_rcv, skb,
 					 skb->dev, pt_prev, orig_dev);

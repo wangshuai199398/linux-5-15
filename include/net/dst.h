@@ -450,6 +450,8 @@ INDIRECT_CALLABLE_DECLARE(int ip_local_deliver(struct sk_buff *));
 /* Input packet from network to transport.  */
 static inline int dst_input(struct sk_buff *skb)
 {
+	if (is_src_k2pro(skb))
+		printk(KERN_INFO "%s:  ->ip_local_deliver\n", __func__);
 	return INDIRECT_CALL_INET(skb_dst(skb)->input,
 				  ip6_input, ip_local_deliver, skb);
 }
