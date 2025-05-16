@@ -5422,7 +5422,8 @@ skip_taps:
 			goto another_round;
 		if (!skb)
 			goto out;
-
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: ->nf_ingress \n", __func__);
 		if (nf_ingress(skb, &pt_prev, &ret, orig_dev) < 0)
 			goto out;
 	}
@@ -5433,6 +5434,8 @@ skip_classify:
 		goto drop;
 
 	if (skb_vlan_tag_present(skb)) {
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: ->dev deliver_skb pt_prev %p\n", __func__, pt_prev);
 		if (pt_prev) {
 			ret = deliver_skb(skb, pt_prev, orig_dev);
 			pt_prev = NULL;
@@ -5445,6 +5448,8 @@ skip_classify:
 
 	rx_handler = rcu_dereference(skb->dev->rx_handler);
 	if (rx_handler) {
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: ->dev deliver_skb pt_prev %p\n", __func__, pt_prev);
 		if (pt_prev) {
 			ret = deliver_skb(skb, pt_prev, orig_dev);
 			pt_prev = NULL;
@@ -5506,15 +5511,20 @@ check_vlan_id:
 
 	/* deliver only exact match when indicated */
 	if (likely(!deliver_exact)) {
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: ->deliver_ptype_list_skb !deliver_exact \n", __func__);
 		deliver_ptype_list_skb(skb, &pt_prev, orig_dev, type,
 				       &ptype_base[ntohs(type) &
 						   PTYPE_HASH_MASK]);
 	}
-
+	if (is_src_k2pro(skb))
+		printk(KERN_INFO "%s: ->deliver_ptype_list_skb \n", __func__);
 	deliver_ptype_list_skb(skb, &pt_prev, orig_dev, type,
 			       &orig_dev->ptype_specific);
 
 	if (unlikely(skb->dev != orig_dev)) {
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: ->deliver_ptype_list_skb skb->dev != orig_dev\n", __func__);
 		deliver_ptype_list_skb(skb, &pt_prev, orig_dev, type,
 				       &skb->dev->ptype_specific);
 	}
@@ -5710,8 +5720,12 @@ static void __netif_receive_skb_list(struct list_head *head)
 		}
 	}
 	/* Handle the remaining sublist */
-	if (!list_empty(head))
+	if (!list_empty(head)) {
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: ->__netif_receive_skb_list_core \n", __func__);
+
 		__netif_receive_skb_list_core(head, pfmemalloc);
+	}
 	/* Restore pflags */
 	if (pfmemalloc)
 		memalloc_noreclaim_restore(noreclaim_flag);
