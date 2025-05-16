@@ -5843,6 +5843,7 @@ EXPORT_SYMBOL(netif_receive_skb);
 void netif_receive_skb_list(struct list_head *head)
 {
 	struct sk_buff *skb;
+	struct sk_buff *next;
 
 	if (list_empty(head))
 		return;
@@ -5850,8 +5851,10 @@ void netif_receive_skb_list(struct list_head *head)
 		list_for_each_entry(skb, head, list)
 			trace_netif_receive_skb_list_entry(skb);
 	}
-	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: ->netif_receive_skb_list_internal \n", __func__);
+	list_for_each_entry_safe(skb, next, head, list) {
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: netif_receive_skb_list_internal \n", __func__);
+	}
 	netif_receive_skb_list_internal(head);
 	trace_netif_receive_skb_list_exit(0);
 }
@@ -5952,10 +5955,15 @@ static void flush_all_backlogs(void)
 /* Pass the currently batched GRO_NORMAL SKBs up to the stack. */
 static void gro_normal_list(struct napi_struct *napi)
 {
+	struct sk_buff *skb, *next;
+	
 	if (!napi->rx_count)
 		return;
-	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: ->netif_receive_skb_list_internal \n", __func__);
+
+	list_for_each_entry_safe(skb, next, &napi->rx_list, list) {
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: netif_receive_skb_list_internal \n", __func__);
+	}
 	netif_receive_skb_list_internal(&napi->rx_list);
 	INIT_LIST_HEAD(&napi->rx_list);
 	napi->rx_count = 0;
