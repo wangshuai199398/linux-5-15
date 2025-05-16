@@ -5981,8 +5981,7 @@ static void gro_normal_one(struct napi_struct *napi, struct sk_buff *skb, int se
 													napi->rx_count, gro_normal_batch);
 	if (napi->rx_count >= gro_normal_batch) {
 		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: ->gro_normal_one napi->rx_count %d gro_normal_batch %d\n", __func__,
-													napi->rx_count, gro_normal_batch);
+			printk(KERN_INFO "%s: ->gro_normal_list\n", __func__);
 		gro_normal_list(napi);
 	}
 }
@@ -6721,7 +6720,11 @@ bool napi_complete_done(struct napi_struct *n, int work_done)
 		 */
 		napi_gro_flush(n, !!timeout);
 	}
-
+	struct sk_buff *skb, *next;
+	list_for_each_entry_safe(skb, next, &napi->rx_list, list) {
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: gro_normal_list \n", __func__);
+	}
 	gro_normal_list(n);
 
 	if (unlikely(!list_empty(&n->poll_list))) {
@@ -7186,7 +7189,11 @@ static int __napi_poll(struct napi_struct *n, bool *repoll)
 		 */
 		napi_gro_flush(n, HZ >= 1000);
 	}
-
+	struct sk_buff *skb, *next;
+	list_for_each_entry_safe(skb, next, &napi->rx_list, list) {
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: gro_normal_list \n", __func__);
+	}
 	gro_normal_list(n);
 
 	/* Some drivers may have called napi_schedule
