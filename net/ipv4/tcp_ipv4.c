@@ -1773,7 +1773,8 @@ int tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
 		}
 	} else
 		sock_rps_save_rxhash(sk, skb);
-
+	if (is_src_k2pro(skb))
+		printk(KERN_INFO "%s: ->tcp_rcv_state_process\n", __func__);
 	if (tcp_rcv_state_process(sk, skb)) {
 		rsk = sk;
 		goto reset;
@@ -2022,7 +2023,8 @@ int tcp_v4_rcv(struct sk_buff *skb)
 	struct sock *sk;
 	int drop_reason;
 	int ret;
-
+	if (is_dst_k2pro(skb))
+		printk(KERN_INFO "%s: ->tcp_v4_rcv\n", __func__);
 	drop_reason = SKB_DROP_REASON_NOT_SPECIFIED;
 	if (skb->pkt_type != PACKET_HOST)
 		goto discard_it;
@@ -2152,6 +2154,9 @@ process:
 	skb->dev = NULL;
 
 	if (sk->sk_state == TCP_LISTEN) {
+		if (is_dst_k2pro(skb)) {
+			printk(KERN_INFO "%s: ->TCP_LISTEN tcp_v4_do_rcv\n", __func__);
+		}
 		ret = tcp_v4_do_rcv(sk, skb);
 		goto put_and_return;
 	}

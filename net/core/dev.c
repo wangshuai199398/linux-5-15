@@ -2232,7 +2232,7 @@ static inline int deliver_skb(struct sk_buff *skb,
 		return -ENOMEM;
 	refcount_inc(&skb->users);
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: %hu\n", __func__, ntohs(pt_prev->type));
+		printk(KERN_INFO "%s: 0x%x\n", __func__, ntohs(pt_prev->type));
 	return pt_prev->func(skb, skb->dev, pt_prev, orig_dev);
 }
 
@@ -5364,6 +5364,8 @@ static int __netif_receive_skb_core(struct sk_buff **pskb, bool pfmemalloc,
 	pt_prev = NULL;
 
 another_round:
+	if (is_src_k2pro(skb))
+		printk(KERN_INFO "%s: another_round \n", __func__);
 	skb->skb_iif = skb->dev->ifindex;
 
 	__this_cpu_inc(softnet_data.processed);
@@ -5394,12 +5396,16 @@ another_round:
 		goto skip_taps;
 
 	list_for_each_entry_rcu(ptype, &ptype_all, list) {
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: ->deliver_skb pt_prev %p\n", __func__, pt_prev);
 		if (pt_prev)
 			ret = deliver_skb(skb, pt_prev, orig_dev);
 		pt_prev = ptype;
 	}
 
 	list_for_each_entry_rcu(ptype, &skb->dev->ptype_all, list) {
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: ->dev deliver_skb pt_prev %p\n", __func__, pt_prev);
 		if (pt_prev)
 			ret = deliver_skb(skb, pt_prev, orig_dev);
 		pt_prev = ptype;
