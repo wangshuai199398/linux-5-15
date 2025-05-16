@@ -201,6 +201,8 @@ resubmit:
 			}
 			nf_reset_ct(skb);
 		}
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: protocol 0x%x\n", __func__, protocol);
 		ret = INDIRECT_CALL_2(ipprot->handler, tcp_v4_rcv, udp_rcv,
 				      skb);
 		if (ret < 0) {
@@ -248,7 +250,8 @@ int ip_local_deliver(struct sk_buff *skb)
 		if (ip_defrag(net, skb, IP_DEFRAG_LOCAL_DELIVER))
 			return 0;
 	}
-
+	if (is_src_k2pro(skb))
+		printk(KERN_INFO "%s: ->ip_local_deliver_finish\n", __func__);
 	return NF_HOOK(NFPROTO_IPV4, NF_INET_LOCAL_IN,
 		       net, NULL, skb, skb->dev, NULL,
 		       ip_local_deliver_finish);
