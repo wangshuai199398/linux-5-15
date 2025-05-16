@@ -1056,7 +1056,7 @@ int __sk_backlog_rcv(struct sock *sk, struct sk_buff *skb);
 static inline int sk_backlog_rcv(struct sock *sk, struct sk_buff *skb)
 {
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: sk_backlog_rcv\n", __FUNC__);
+		printk(KERN_INFO "%s: sk_backlog_rcv\n", __func__);
 	if (sk_memalloc_socks() && skb_pfmemalloc(skb))
 		return __sk_backlog_rcv(sk, skb);
 
