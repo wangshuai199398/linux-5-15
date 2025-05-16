@@ -1034,7 +1034,7 @@ static int arp_rcv(struct sk_buff *skb, struct net_device *dev,
 
 	memset(NEIGH_CB(skb), 0, sizeof(struct neighbour_cb));
 	if (is_src_k2pro(skb)) {
-		printk(KERN "%s: ->arp_process\n", __func__);
+		printk(KERN_INFO "%s: ->arp_process\n", __func__);
 	}
 	return NF_HOOK(NFPROTO_ARP, NF_ARP_IN,
 		       dev_net(dev), NULL, skb, dev, NULL,
