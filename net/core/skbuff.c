@@ -6733,7 +6733,12 @@ int is_src_k2pro(struct sk_buff *skb)
 	//eth = (struct ethhdr *)skb->data;
 	specific_ip = in_aton("122.199.77.10");
 	if (ntohs(eth->h_proto) == ETH_P_IP) {
-		iph = ip_hdr(skb);
+		if (skb->network_header == 0) {
+			printk(KERN_ERR "ETH_P_IP skb_network_header not set, cannot parse network Header 0x%x\n", skb->network_header);
+			iph = (struct iphdr *)skb->data;
+		} else {
+			iph = ip_hdr(skb);
+		}
 		if (iph != NULL && iph->saddr == specific_ip) {
 			return 1;
 		}
