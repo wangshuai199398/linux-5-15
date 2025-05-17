@@ -3615,7 +3615,7 @@ static int xmit_one(struct sk_buff *skb, struct net_device *dev,
 	unsigned int len;
 	int rc;
 	if (is_dst_k2pro(skb))
-		netdev_info(dev, "%s: ptype_all %d dev->ptype_all %d\n", __func__, list_empty(&ptype_all), list_empty(&dev->ptype_all));
+		netdev_info(dev, "%s: ptype_all empty %d dev->ptype_all empty %d\n", __func__, list_empty(&ptype_all), list_empty(&dev->ptype_all));
 
 	if (dev_nit_active(dev)) {
 		dev_queue_xmit_nit(skb, dev);
@@ -5617,7 +5617,7 @@ static inline void __netif_receive_skb_list_ptype(struct list_head *head,
 			if (is_src_k2pro(skb))
 				printk(KERN_INFO "%s: list_for_each_entry_safe 0x%x\n", __func__, ntohs(pt_prev->type));
 			skb_list_del_init(skb);
-			pt_prev->func(skb, skb->dev, pt_prev, orig_dev);
+			pt_prev->func(skb, skb->dev, pt_prev, orig_dev);//arp_rcv ip_rcv
 		}
 	}
 }
