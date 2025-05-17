@@ -5928,7 +5928,9 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 	 *	 space for instance)
 	 *	PSH flag is ignored.
 	 */
-
+	if (is_src_k2pro(skb)) {
+		printk(KERN_INFO "%s: !rcu_access_pointer\n", __func__);
+	}
 	if ((tcp_flag_word(th) & TCP_HP_BITS) == tp->pred_flags &&
 	    TCP_SKB_CB(skb)->seq == tp->rcv_nxt &&
 	    !after(TCP_SKB_CB(skb)->ack_seq, tp->snd_nxt)) {
@@ -5940,6 +5942,9 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 		 */
 
 		/* Check timestamp */
+		if (is_src_k2pro(skb)) {
+			printk(KERN_INFO "%s: == tp->pred_flags && == tp->rcv_nxt && !after(TCP_SKB_CB(skb)->ack_seq, tp->snd_nxt\n", __func__);
+		}
 		if (tcp_header_len == sizeof(struct tcphdr) + TCPOLEN_TSTAMP_ALIGNED) {
 			/* No? Slow path! */
 			if (!tcp_parse_aligned_timestamp(tp, th))
@@ -6012,7 +6017,9 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 			/* Bulk data transfer: receiver */
 			__skb_pull(skb, tcp_header_len);
 			eaten = tcp_queue_rcv(sk, skb, &fragstolen);
-
+			if (is_src_k2pro(skb)) {
+				printk(KERN_INFO "%s: ->tcp_event_data_recv\n", __func__);
+			}
 			tcp_event_data_recv(sk, skb);
 
 			if (TCP_SKB_CB(skb)->ack_seq != tp->snd_una) {
@@ -6374,6 +6381,7 @@ discard:
 				printk(KERN_INFO "%s: is_src_k2pro tcp_send_ack\n", __func__);
 			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
 				printk(KERN_INFO "%s: is that sock\n", __func__);
+			//发送第三次握手包
 			tcp_send_ack(sk);
 		}
 		return -1;
@@ -6541,7 +6549,7 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb)
 			return 0;
 		}
 		goto discard;
-
+	//收到synack包
 	case TCP_SYN_SENT:
 		tp->rx_opt.saw_tstamp = 0;
 		tcp_mstamp_refresh(tp);

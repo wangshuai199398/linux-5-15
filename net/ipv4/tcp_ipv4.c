@@ -1735,7 +1735,9 @@ INDIRECT_CALLABLE_DECLARE(struct dst_entry *ipv4_dst_check(struct dst_entry *,
 int tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
 {
 	struct sock *rsk;
-
+	if (is_src_k2pro(skb)) {
+		printk(KERN_INFO "%s: ->sk->sk_state 0x%x\n", __func__, sk->sk_state);
+	}
 	if (sk->sk_state == TCP_ESTABLISHED) { /* Fast path */
 		struct dst_entry *dst;
 

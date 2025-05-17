@@ -5648,6 +5648,9 @@ static void __netif_receive_skb_list_core(struct list_head *head, bool pfmemallo
 			printk(KERN_INFO "%s: list_for_each_entry_safe \n", __func__);
 		skb_list_del_init(skb);
 		__netif_receive_skb_core(&skb, pfmemalloc, &pt_prev);
+
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: list_for_each_entry_safe pt_prev %p\n", __func__, pt_prev);
 		if (!pt_prev)
 			continue;
 		if (is_src_k2pro(skb)) {
