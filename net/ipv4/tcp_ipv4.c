@@ -2023,8 +2023,6 @@ int tcp_v4_rcv(struct sk_buff *skb)
 	struct sock *sk;
 	int drop_reason;
 	int ret;
-	if (is_dst_k2pro(skb))
-		printk(KERN_INFO "%s: ->tcp_v4_rcv\n", __func__);
 	drop_reason = SKB_DROP_REASON_NOT_SPECIFIED;
 	if (skb->pkt_type != PACKET_HOST)
 		goto discard_it;
@@ -2055,6 +2053,8 @@ int tcp_v4_rcv(struct sk_buff *skb)
 	th = (const struct tcphdr *)skb->data;
 	iph = ip_hdr(skb);
 lookup:
+	if (is_rcv_k2pro(skb))
+		printk(KERN_INFO "%s: ->__inet_lookup_skb sk->sk_state 0x%x\n", __func__, sk->sk_state);
 	sk = __inet_lookup_skb(&tcp_hashinfo, skb, __tcp_hdrlen(th), th->source,
 			       th->dest, sdif, &refcounted);
 	if (!sk)

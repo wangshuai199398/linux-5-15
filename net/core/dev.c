@@ -2233,7 +2233,7 @@ static inline int deliver_skb(struct sk_buff *skb,
 	refcount_inc(&skb->users);
 	if (is_src_k2pro(skb))
 		printk(KERN_INFO "%s: 0x%x\n", __func__, ntohs(pt_prev->type));
-	return pt_prev->func(skb, skb->dev, pt_prev, orig_dev);
+	return pt_prev->func(skb, skb->dev, pt_prev, orig_dev);//ip_rcv
 }
 
 static inline void deliver_ptype_list_skb(struct sk_buff *skb,
