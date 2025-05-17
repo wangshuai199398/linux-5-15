@@ -2057,7 +2057,7 @@ lookup:
 			       th->dest, sdif, &refcounted);
 	if (!sk)
 		goto no_tcp_socket;
-	if (is_rcv_k2pro(skb))
+	if (is_src_k2pro(skb))
 		printk(KERN_INFO "%s: ->__inet_lookup_skb sk->sk_state 0x%x\n", __func__, sk->sk_state);
 
 process:
