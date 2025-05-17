@@ -2890,7 +2890,7 @@ bool tcp_schedule_loss_probe(struct sock *sk, bool advancing_rto)
 	 * finishes.
 	 */
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s ->rcu_access_pointer(tp->fastopen_rsk) %p\n", __func__, rcu_access_pointer(tp->fastopen_rsk));
+		printk(KERN_INFO "%s: ->rcu_access_pointer(tp->fastopen_rsk) %p\n", __func__, rcu_access_pointer(tp->fastopen_rsk));
 	if (rcu_access_pointer(tp->fastopen_rsk))
 		return false;
 

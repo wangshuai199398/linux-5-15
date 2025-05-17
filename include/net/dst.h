@@ -260,6 +260,7 @@ static inline void refdst_drop(unsigned long refdst)
  * @skb: buffer
  *
  * Drops dst reference count if a reference was taken.
+ * 如果 skb 目前持有一个目标缓存引用 (_skb_refdst 非 0)，则调用 refdst_drop() 释放它，并把 _skb_refdst 设为 0，防止重复释放
  */
 static inline void skb_dst_drop(struct sk_buff *skb)
 {

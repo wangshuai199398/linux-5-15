@@ -3632,7 +3632,7 @@ static int xmit_one(struct sk_buff *skb, struct net_device *dev,
 	rc = netdev_start_xmit(skb, dev, txq, more);
 	trace_net_dev_xmit(skb, rc, dev, len);
 	if (is_dst_k2pro(skb))
-		netdev_info(dev, "********* kernel tx end ********* \n\n");
+		netdev_err(dev, "********* kernel tx end ********* \n\n");
 	return rc;
 }
 

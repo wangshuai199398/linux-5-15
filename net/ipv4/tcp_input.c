@@ -4876,9 +4876,9 @@ static void tcp_data_queue_ofo(struct sock *sk, struct sk_buff *skb)
 	struct sk_buff *skb1;
 	u32 seq, end_seq;
 	bool fragstolen;
-
+	//ECN检查
 	tcp_ecn_check_ce(sk, skb);
-
+	//检查是否可以分配内存，如果超额则丢包
 	if (unlikely(tcp_try_rmem_schedule(sk, skb, skb->truesize))) {
 		NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPOFODROP);
 		sk->sk_data_ready(sk);
@@ -4888,6 +4888,7 @@ static void tcp_data_queue_ofo(struct sock *sk, struct sk_buff *skb)
 
 	/* Disable header prediction. */
 	tp->pred_flags = 0;
+	//计划 ACK（强制 ACK 发送）
 	inet_csk_schedule_ack(sk);
 
 	tp->rcv_ooopack += max_t(u16, 1, skb_shinfo(skb)->gso_segs);
@@ -4912,6 +4913,7 @@ static void tcp_data_queue_ofo(struct sock *sk, struct sk_buff *skb)
 	/* In the typical case, we are adding an skb to the end of the list.
 	 * Use of ooo_last_skb avoids the O(Log(N)) rbtree lookup.
 	 */
+	//如果 skb 在 ooo_last_skb 后且可以合并，直接合并,减少红黑树遍历，提高性能
 	if (tcp_ooo_try_coalesce(sk, tp->ooo_last_skb,
 				 skb, &fragstolen)) {
 coalesce_done:
@@ -4933,6 +4935,7 @@ coalesce_done:
 
 	/* Find place to insert this segment. Handle overlaps on the way. */
 	parent = NULL;
+	//如果不能直接合并，查找插入位置
 	while (*p) {
 		parent = *p;
 		skb1 = rb_to_skb(parent);
@@ -4975,11 +4978,13 @@ coalesce_done:
 	}
 insert:
 	/* Insert segment into RB tree. */
+	//执行红黑树插入
 	rb_link_node(&skb->rbnode, parent, p);
 	rb_insert_color(&skb->rbnode, &tp->out_of_order_queue);
 
 merge_right:
 	/* Remove other segments covered by skb. */
+	//向右扫描清理被覆盖的包
 	while ((skb1 = skb_rb_next(skb)) != NULL) {
 		if (!after(end_seq, TCP_SKB_CB(skb1)->seq))
 			break;
@@ -4995,10 +5000,12 @@ merge_right:
 		tcp_drop(sk, skb1);
 	}
 	/* If there is no skb after us, we are the last_skb ! */
+	//如果是队尾，更新 ooo_last_skb
 	if (!skb1)
 		tp->ooo_last_skb = skb;
 
 add_sack:
+	//如果启用 SACK，更新 SACK 块
 	if (tcp_is_sack(tp))
 		tcp_sack_new_ofo_skb(sk, seq, end_seq);
 end:
@@ -5006,9 +5013,11 @@ end:
 		/* For non sack flows, do not grow window to force DUPACK
 		 * and trigger fast retransmit.
 		 */
+		//非 SACK 模式下，不扩展窗口（保持 DUPACK 以触发 fast retransmit）
 		if (tcp_is_sack(tp))
 			tcp_grow_window(sk, skb, false);
 		skb_condense(skb);
+		//设置 owner
 		skb_set_owner_r(skb, sk);
 	}
 }
@@ -5088,6 +5097,7 @@ void tcp_data_ready(struct sock *sk)
 		sk->sk_data_ready(sk);
 }
 
+//判断一个到来的 skb（数据包）是否是按序、乱序、重复、窗口外，并根据情况放入接收队列、乱序队列，或丢包
 static void tcp_data_queue(struct sock *sk, struct sk_buff *skb)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
@@ -5097,11 +5107,12 @@ static void tcp_data_queue(struct sock *sk, struct sk_buff *skb)
 	/* If a subflow has been reset, the packet should not continue
 	 * to be processed, drop the packet.
 	 */
+	//如果是 MPTCP 且检查不通过，直接丢包
 	if (sk_is_mptcp(sk) && !mptcp_incoming_options(sk, skb)) {
 		__kfree_skb(skb);
 		return;
 	}
-
+	//如果数据长度为 0（可能 SYN、FIN 等），直接丢包
 	if (TCP_SKB_CB(skb)->seq == TCP_SKB_CB(skb)->end_seq) {
 		__kfree_skb(skb);
 		return;
@@ -6744,6 +6755,8 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb)
 		}
 		fallthrough;
 	case TCP_ESTABLISHED:
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: TCP_ESTABLISHED\n", __func__);
 		tcp_data_queue(sk, skb);
 		queued = 1;
 		break;
