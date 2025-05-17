@@ -3971,9 +3971,9 @@ static int tcp_ack(struct sock *sk, const struct sk_buff *skb, int flag)
 				      &rexmit);
 	}
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: is_src_k2pro flag 0x%x\n", __func__, flag)
+		printk(KERN_INFO "%s: is_src_k2pro flag 0x%x\n", __func__, flag);
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: flag 0x%x\n", __func__, flag)
+		printk(KERN_INFO "%s: flag 0x%x\n", __func__, flag);
 	/* If needed, reset TLP/RTO timer when RACK doesn't set. */
 	if (flag & FLAG_SET_XMIT_TIMER)
 		tcp_set_xmit_timer(sk);
@@ -3988,7 +3988,7 @@ static int tcp_ack(struct sock *sk, const struct sk_buff *skb, int flag)
 	tcp_cong_control(sk, ack, delivered, flag, sack_state.rate);
 	tcp_xmit_recovery(sk, rexmit);
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: tcp_xmit_recovery rexmit 0x%x\n", __func__, rexmit)
+		printk(KERN_INFO "%s: tcp_xmit_recovery rexmit 0x%x\n", __func__, rexmit);
 	return 1;
 
 no_queue:
