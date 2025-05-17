@@ -780,31 +780,37 @@ static void tcp_event_data_recv(struct sock *sk, struct sk_buff *skb)
 	struct tcp_sock *tp = tcp_sk(sk);
 	struct inet_connection_sock *icsk = inet_csk(sk);
 	u32 now;
-
+	//标记当前 socket 需要发送 ACK（不立即发送，除非进入 quickack 模式）
+	//ACK 的发送逻辑会被调度，由 icsk->icsk_ack.pending 来控制
 	inet_csk_schedule_ack(sk);
-
+	//动态估算对方发送的 MSS（最大报文段），用于窗口优化和路径 MTU 估算。
 	tcp_measure_rcv_mss(sk, skb);
-
+	//如果启用了 timestamp 选项，基于接收的数据包更新 RTT 估算（通过回显时间戳判断对方 ACK 的 RTT）
 	tcp_rcv_rtt_measure(tp);
-
+	//当前时间（jiffies 单位，内核的低精度计时器，通常是毫秒级）。用于计算 ACK 触发间隔
 	now = tcp_jiffies32;
 
 	if (!icsk->icsk_ack.ato) {
 		/* The _first_ data packet received, initialize
 		 * delayed ACK engine.
 		 */
+		//立即进入 quickack 模式（快速 ACK，最多 TCP_MAX_QUICKACKS 次）
 		tcp_incr_quickack(sk, TCP_MAX_QUICKACKS);
+		//初始化 ato（ACK 超时定时器，单位 jiffies）
 		icsk->icsk_ack.ato = TCP_ATO_MIN;
 	} else {
+		//否则根据两次接收时间差 m 进行自适应调整
 		int m = now - icsk->icsk_ack.lrcvtime;
-
+		//如果收包间隔很短（比如连续数据流）：减少 ato，更积极发送 ACK。
 		if (m <= TCP_ATO_MIN / 2) {
 			/* The fastest case is the first. */
 			icsk->icsk_ack.ato = (icsk->icsk_ack.ato >> 1) + TCP_ATO_MIN / 2;
+		//如果收包间隔接近 ato：平滑调整 ato。
 		} else if (m < icsk->icsk_ack.ato) {
 			icsk->icsk_ack.ato = (icsk->icsk_ack.ato >> 1) + m;
 			if (icsk->icsk_ack.ato > icsk->icsk_rto)
 				icsk->icsk_ack.ato = icsk->icsk_rto;
+		//如果收包间隔太长（比如对端重传慢启动或阻塞了）：进入 quickack，并尝试释放 socket 缓存
 		} else if (m > icsk->icsk_rto) {
 			/* Too long gap. Apparently sender failed to
 			 * restart window, so that we send ACKs quickly.
@@ -812,11 +818,13 @@ static void tcp_event_data_recv(struct sock *sk, struct sk_buff *skb)
 			tcp_incr_quickack(sk, TCP_MAX_QUICKACKS);
 			sk_mem_reclaim(sk);
 		}
+		//这样做的目的是让 TCP 在不同流量场景下，自动调整 ACK 策略，从而达到高效（减少 ACK）和快速响应（避免太慢 ACK）的平衡
 	}
+	//更新最后一次收到数据的时间
 	icsk->icsk_ack.lrcvtime = now;
-
+	//检查 ECN (Explicit Congestion Notification)，如果数据包带有 CE（Congestion Experienced）标记，设置 CWR 标志，反馈给对端。
 	tcp_ecn_check_ce(sk, skb);
-
+	//尝试增长 rcv_wnd（接收窗口）
 	if (skb->len >= 128)
 		tcp_grow_window(sk, skb, true);
 }
@@ -5027,13 +5035,20 @@ static int __must_check tcp_queue_rcv(struct sock *sk, struct sk_buff *skb,
 {
 	int eaten;
 	struct sk_buff *tail = skb_peek_tail(&sk->sk_receive_queue);
-
+	//尝试与尾部 skb 合并
 	eaten = (tail &&
 		 tcp_try_coalesce(sk, tail,
 				  skb, fragstolen)) ? 1 : 0;
+	//eaten=1合并了，为0没合并
+	if (is_src_k2pro(skb))
+		printk(KERN_INFO "%s: tcp_rcv_nxt_update eaten %d\n", __func__, eaten);
+	//更新rcv_nxt，即使合并了，也要更新 rcv_nxt 为该 skb 的 end_seq
+	//rcv_nxt 是 TCP 接收侧最关键的按序指针，永远指向“下一个期望序列号”
 	tcp_rcv_nxt_update(tcp_sk(sk), TCP_SKB_CB(skb)->end_seq);
 	if (!eaten) {
+		//放到接收队列尾部
 		__skb_queue_tail(&sk->sk_receive_queue, skb);
+		//绑定 socket（skb_set_owner_r）用于资源统计和垃圾回收
 		skb_set_owner_r(skb, sk);
 	}
 	return eaten;
@@ -5098,6 +5113,21 @@ void tcp_data_ready(struct sock *sk)
 }
 
 //判断一个到来的 skb（数据包）是否是按序、乱序、重复、窗口外，并根据情况放入接收队列、乱序队列，或丢包
+/*
+接收到 skb
+   │
+   ├─ 特例处理 (MPTCP、空包)
+   │
+   ├─ 如果 skb.seq == rcv_nxt → 顺序包 → 放接收队列
+   │
+   ├─ 如果 skb.end_seq <= rcv_nxt → 重复包 → DSACK，丢包
+   │
+   ├─ 如果 skb.seq >= rcv_nxt + 窗口 → 窗口外 → 丢包
+   │
+   ├─ 如果 skb.seq < rcv_nxt → 部分重叠 → 剪头入队
+   │
+   └─ 其他情况 → 乱序包 → 调用 tcp_data_queue_ofo
+*/
 static void tcp_data_queue(struct sock *sk, struct sk_buff *skb)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
@@ -5118,15 +5148,18 @@ static void tcp_data_queue(struct sock *sk, struct sk_buff *skb)
 		return;
 	}
 	skb_dst_drop(skb);
+	//去掉 TCP 头，只保留数据
 	__skb_pull(skb, tcp_hdr(skb)->doff * 4);
-
+	//清空 D-SACK 标志
 	tp->rx_opt.dsack = 0;
 
 	/*  Queue data for delivery to the user.
 	 *  Packets in sequence go to the receive queue.
 	 *  Out of sequence packets to the out_of_order_queue.
 	 */
+	//如果包正好是 rcv_nxt（按序包）
 	if (TCP_SKB_CB(skb)->seq == tp->rcv_nxt) {
+		//检查接收窗口是否为 0，如果是丢掉
 		if (tcp_receive_window(tp) == 0) {
 			NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPZEROWINDOWDROP);
 			goto out_of_window;
@@ -5134,20 +5167,25 @@ static void tcp_data_queue(struct sock *sk, struct sk_buff *skb)
 
 		/* Ok. In sequence. In window. */
 queue_and_out:
+		//检查接收队列是否空，如果空 → 分配内存
 		if (skb_queue_len(&sk->sk_receive_queue) == 0)
 			sk_forced_mem_schedule(sk, skb->truesize);
+		//否则尝试动态分配内存，失败 → 丢包
 		else if (tcp_try_rmem_schedule(sk, skb, skb->truesize)) {
 			NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPRCVQDROP);
 			sk->sk_data_ready(sk);
 			goto drop;
 		}
-
+		//使用 tcp_queue_rcv 入接收队列
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: tcp_queue_rcv\n", __func__);
 		eaten = tcp_queue_rcv(sk, skb, &fragstolen);
+		//接收到数据包并且该包有效数据非 0 时，记录统计和触发相关的接收事件
 		if (skb->len)
 			tcp_event_data_recv(sk, skb);
 		if (TCP_SKB_CB(skb)->tcp_flags & TCPHDR_FIN)
 			tcp_fin(sk);
-
+		//如果乱序队列非空，尝试推进tcp_ofo_queue
 		if (!RB_EMPTY_ROOT(&tp->out_of_order_queue)) {
 			tcp_ofo_queue(sk);
 
@@ -5165,11 +5203,12 @@ queue_and_out:
 
 		if (eaten > 0)
 			kfree_skb_partial(skb, fragstolen);
+		//通知应用层有数据到达
 		if (!sock_flag(sk, SOCK_DEAD))
 			tcp_data_ready(sk);
 		return;
 	}
-
+	// 处理重复包（完全在窗口左侧）
 	if (!after(TCP_SKB_CB(skb)->end_seq, tp->rcv_nxt)) {
 		tcp_rcv_spurious_retrans(sk, skb);
 		/* A retransmit, 2nd most common case.  Force an immediate ack. */
@@ -5177,6 +5216,7 @@ queue_and_out:
 		tcp_dsack_set(sk, TCP_SKB_CB(skb)->seq, TCP_SKB_CB(skb)->end_seq);
 
 out_of_window:
+		//进入 quick ack 模式，强制立即 ACK
 		tcp_enter_quickack_mode(sk, TCP_MAX_QUICKACKS);
 		inet_csk_schedule_ack(sk);
 drop:
@@ -5185,9 +5225,10 @@ drop:
 	}
 
 	/* Out of window. F.e. zero window probe. */
+	//包在窗口之外（可能是探测包） → 丢包
 	if (!before(TCP_SKB_CB(skb)->seq, tp->rcv_nxt + tcp_receive_window(tp)))
 		goto out_of_window;
-
+	//部分重叠（头部在窗口左侧，尾部在窗口内）
 	if (before(TCP_SKB_CB(skb)->seq, tp->rcv_nxt)) {
 		/* Partial packet, seq < rcv_next < end_seq */
 		tcp_dsack_set(sk, TCP_SKB_CB(skb)->seq, tp->rcv_nxt);
@@ -5201,7 +5242,7 @@ drop:
 		}
 		goto queue_and_out;
 	}
-
+	//乱序包（在窗口内但不是 rcv_nxt）
 	tcp_data_queue_ofo(sk, skb);
 }
 

@@ -395,7 +395,7 @@ struct sock {
 	int			sk_rcvlowat;
 	struct sk_buff_head	sk_error_queue;
 	struct sk_buff		*sk_rx_skb_cache;
-	struct sk_buff_head	sk_receive_queue;
+	struct sk_buff_head	sk_receive_queue;//TCP 接收队列
 	/*
 	 * The backlog queue is special, it is always used with
 	 * the per-socket spinlock held and requires low latency

@@ -2623,6 +2623,10 @@ found_ok_skb:
 		}
 
 		if (!(flags & MSG_TRUNC)) {
+			if (is_src_k2pro(skb))
+				printk(KERN_INFO "%s: skb_copy_datagram_msg skb->len %u\n", __func__, skb->len);
+			if (is_dst_k2pro(skb))
+				printk(KERN_INFO "%s: skb->len %u\n", __func__, skb->len);
 			err = skb_copy_datagram_msg(skb, offset, msg, used);
 			if (err) {
 				/* Exception. Bailout! */
