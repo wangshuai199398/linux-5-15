@@ -2053,12 +2053,12 @@ int tcp_v4_rcv(struct sk_buff *skb)
 	th = (const struct tcphdr *)skb->data;
 	iph = ip_hdr(skb);
 lookup:
-	if (is_rcv_k2pro(skb))
-		printk(KERN_INFO "%s: ->__inet_lookup_skb sk->sk_state 0x%x\n", __func__, sk->sk_state);
 	sk = __inet_lookup_skb(&tcp_hashinfo, skb, __tcp_hdrlen(th), th->source,
 			       th->dest, sdif, &refcounted);
 	if (!sk)
 		goto no_tcp_socket;
+	if (is_rcv_k2pro(skb))
+		printk(KERN_INFO "%s: ->__inet_lookup_skb sk->sk_state 0x%x\n", __func__, sk->sk_state);
 
 process:
 	if (sk->sk_state == TCP_TIME_WAIT)
