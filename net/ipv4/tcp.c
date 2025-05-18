@@ -2625,12 +2625,12 @@ found_ok_skb:
 		if (!(flags & MSG_TRUNC)) {
 			if (is_src_k2pro(skb)) {
 				printk(KERN_INFO "%s: skb_copy_datagram_msg skb->len %u\n", __func__, skb->len);
-				printk(KERN_ERR "%s: ********* kernel rx end ********* \n", __func__);
+				printk(KERN_ERR "%s: ********* kernel rx end ********* \n\n", __func__);
 			}
 
 			if (is_dst_k2pro(skb)) {
 				printk(KERN_INFO "%s: skb->len %u\n", __func__, skb->len);
-				printk(KERN_ERR "%s: ********* kernel rx end ********* \n", __func__);
+				printk(KERN_ERR "%s: ********* kernel rx end ********* \n\n", __func__);
 			}
 
 			err = skb_copy_datagram_msg(skb, offset, msg, used);
