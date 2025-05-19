@@ -5157,6 +5157,8 @@ static void tcp_data_queue(struct sock *sk, struct sk_buff *skb)
 	 *  Packets in sequence go to the receive queue.
 	 *  Out of sequence packets to the out_of_order_queue.
 	 */
+	if (is_src_k2pro(skb))
+		printk(KERN_INFO "%s: TCP_SKB_CB(skb)->seq %u tp->rcv_nxt %u\n", __func__, TCP_SKB_CB(skb)->seq, tp->rcv_nxt);
 	//如果包正好是 rcv_nxt（按序包）
 	if (TCP_SKB_CB(skb)->seq == tp->rcv_nxt) {
 		//检查接收窗口是否为 0，如果是丢掉
@@ -5178,7 +5180,7 @@ queue_and_out:
 		}
 		//使用 tcp_queue_rcv 入接收队列
 		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: tcp_queue_rcv\n", __func__);
+			printk(KERN_ERR "%s: tcp_queue_rcv\n", __func__);
 		eaten = tcp_queue_rcv(sk, skb, &fragstolen);
 		//接收到数据包并且该包有效数据非 0 时，记录统计和触发相关的接收事件
 		if (skb->len)
@@ -6121,6 +6123,8 @@ step5:
 	tcp_urg(sk, skb, th);
 
 	/* step 7: process the segment text */
+	if (is_src_k2pro(skb))
+		printk(KERN_INFO "%s: ->tcp_data_queue\n", __func__);
 	tcp_data_queue(sk, skb);
 
 	tcp_data_snd_check(sk);
