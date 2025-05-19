@@ -6387,8 +6387,12 @@ gro_result_t napi_gro_receive(struct napi_struct *napi, struct sk_buff *skb)
 	trace_napi_gro_receive_entry(skb);
 
 	skb_gro_reset_offset(skb, 0);
-	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: ->dev_gro_receive\n", __func__);
+	if (is_src_k2pro(skb)) {
+		printk(KERN_INFO "%s: ======== rx begin ========\n", __func__);
+		skb_dump(KERN_INFO, skb, true);
+		printk(KERN_INFO "%s: ->dev_gro_receive skb->napi_id %u\n", __func__, skb->napi_id);
+	}
+
 	ret = napi_skb_finish(napi, skb, dev_gro_receive(napi, skb));
 	trace_napi_gro_receive_exit(ret);
 
