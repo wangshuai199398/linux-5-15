@@ -3978,8 +3978,6 @@ static int tcp_ack(struct sock *sk, const struct sk_buff *skb, int flag)
 		tcp_fastretrans_alert(sk, prior_snd_una, num_dupack, &flag,
 				      &rexmit);
 	}
-	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: is_src_k2pro flag 0x%x\n", __func__, flag);
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
 		printk(KERN_INFO "%s: flag 0x%x\n", __func__, flag);
 	/* If needed, reset TLP/RTO timer when RACK doesn't set. */
