@@ -5039,7 +5039,7 @@ static int __must_check tcp_queue_rcv(struct sock *sk, struct sk_buff *skb,
 				  skb, fragstolen)) ? 1 : 0;
 	//eaten=1合并了，为0没合并
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: tcp_rcv_nxt_update eaten %d\n", __func__, eaten);
+		printk(KERN_ERR "%s: tcp_rcv_nxt_update eaten %d\n", __func__, eaten);
 	//更新rcv_nxt，即使合并了，也要更新 rcv_nxt 为该 skb 的 end_seq
 	//rcv_nxt 是 TCP 接收侧最关键的按序指针，永远指向“下一个期望序列号”
 	tcp_rcv_nxt_update(tcp_sk(sk), TCP_SKB_CB(skb)->end_seq);
@@ -5636,6 +5636,8 @@ static void __tcp_ack_snd_check(struct sock *sk, int ofo_possible)
 	    tcp_in_quickack_mode(sk) ||
 	    /* Protocol state mandates a one-time immediate ACK */
 	    inet_csk(sk)->icsk_ack.pending & ICSK_ACK_NOW) {
+		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+			printk(KERN_INFO "%s ->tcp_send_ack\n", __func__);
 send_now:
 		tcp_send_ack(sk);
 		return;
@@ -5980,6 +5982,10 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 	if (is_src_k2pro(skb)) {
 		printk(KERN_INFO "%s: !rcu_access_pointer\n", __func__);
 	}
+	//检查接收到的数据包的标志位是否和预期的快速路径标志相匹配
+	//这个包是否正好是我们期待接收的下一个包（即顺序到达）
+	//ACK 不能确认未来的数据（即 ACK 不能比我们发的还新）
+	//1. TCP 标志与预期一致（通常是纯 ACK 或带一点 PSH 的数据）2. 数据包是按序到达的（无乱序）。3. ACK 合理（没有确认未来未发的数据）,那么这个包可以通过快速路径处理（跳过大量通用 TCP 状态处理逻辑），提高性能
 	if ((tcp_flag_word(th) & TCP_HP_BITS) == tp->pred_flags &&
 	    TCP_SKB_CB(skb)->seq == tp->rcv_nxt &&
 	    !after(TCP_SKB_CB(skb)->ack_seq, tp->snd_nxt)) {
@@ -5992,7 +5998,7 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 
 		/* Check timestamp */
 		if (is_src_k2pro(skb)) {
-			printk(KERN_INFO "%s: == tp->pred_flags && == tp->rcv_nxt && !after(TCP_SKB_CB(skb)->ack_seq, tp->snd_nxt\n", __func__);
+			printk(KERN_INFO "%s: fast process tcp_header_len %d len %d\n", __func__, tcp_header_len, len);
 		}
 		if (tcp_header_len == sizeof(struct tcphdr) + TCPOLEN_TSTAMP_ALIGNED) {
 			/* No? Slow path! */
@@ -6026,7 +6032,7 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 				 * on entry.
 				 */
 				if (is_src_k2pro(skb))
-					printk(KERN_INFO "%s: tcp_ack\n", __func__);
+					printk(KERN_INFO "%s: tcp_ack tcp_data_snd_check\n", __func__);
 				tcp_ack(sk, skb, 0);
 				__kfree_skb(skb);
 				tcp_data_snd_check(sk);
@@ -6065,10 +6071,10 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 
 			/* Bulk data transfer: receiver */
 			__skb_pull(skb, tcp_header_len);
-			eaten = tcp_queue_rcv(sk, skb, &fragstolen);
 			if (is_src_k2pro(skb)) {
-				printk(KERN_INFO "%s: ->tcp_event_data_recv\n", __func__);
+				printk(KERN_INFO "%s: ->tcp_queue_rcv tcp_event_data_recv\n", __func__);
 			}
+			eaten = tcp_queue_rcv(sk, skb, &fragstolen);
 			tcp_event_data_recv(sk, skb);
 
 			if (TCP_SKB_CB(skb)->ack_seq != tp->snd_una) {
@@ -6082,7 +6088,8 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 			} else {
 				tcp_update_wl(tp, TCP_SKB_CB(skb)->seq);
 			}
-
+			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+				printk(KERN_INFO "%s ->__tcp_ack_snd_check\n", __func__);
 			__tcp_ack_snd_check(sk, 0);
 no_ack:
 			if (eaten)
