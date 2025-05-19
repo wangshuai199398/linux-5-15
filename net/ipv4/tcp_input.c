@@ -5140,9 +5140,11 @@ static void tcp_data_queue(struct sock *sk, struct sk_buff *skb)
 		return;
 	}
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: TCP_SKB_CB(skb)->seq %u TCP_SKB_CB(skb)->end_seq %u tp->rcv_nxt %u\n", __func__, TCP_SKB_CB(skb)->seq, TCP_SKB_CB(skb)->end_seq, tp->rcv_nxt);
+		printk(KERN_INFO "%s: TCP_SKB_CB(skb)->seq 0x%x TCP_SKB_CB(skb)->end_seq 0x%x tp->rcv_nxt 0x%x\n", __func__, TCP_SKB_CB(skb)->seq, TCP_SKB_CB(skb)->end_seq, tp->rcv_nxt);
 	//如果数据长度为 0（可能 SYN、FIN 等），直接丢包
 	if (TCP_SKB_CB(skb)->seq == TCP_SKB_CB(skb)->end_seq) {
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: skb payload is 0, drop skb! \n", __func__);
 		__kfree_skb(skb);
 		return;
 	}
