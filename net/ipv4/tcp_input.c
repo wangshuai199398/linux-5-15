@@ -5144,7 +5144,7 @@ static void tcp_data_queue(struct sock *sk, struct sk_buff *skb)
 	//如果数据长度为 0（可能 SYN、FIN 等），直接丢包
 	if (TCP_SKB_CB(skb)->seq == TCP_SKB_CB(skb)->end_seq) {
 		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: skb payload is 0, drop skb! \n", __func__);
+			printk(KERN_ERR "%s: skb payload is 0, drop skb! \n", __func__);
 		__kfree_skb(skb);
 		return;
 	}
@@ -5637,7 +5637,7 @@ static void __tcp_ack_snd_check(struct sock *sk, int ofo_possible)
 	    /* Protocol state mandates a one-time immediate ACK */
 	    inet_csk(sk)->icsk_ack.pending & ICSK_ACK_NOW) {
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s ->tcp_send_ack\n", __func__);
+			printk(KERN_INFO "%s: ->tcp_send_ack\n", __func__);
 send_now:
 		tcp_send_ack(sk);
 		return;
