@@ -6089,7 +6089,7 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 				tcp_update_wl(tp, TCP_SKB_CB(skb)->seq);
 			}
 			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-				printk(KERN_INFO "%s ->__tcp_ack_snd_check\n", __func__);
+				printk(KERN_INFO "%s: ->__tcp_ack_snd_check\n", __func__);
 			__tcp_ack_snd_check(sk, 0);
 no_ack:
 			if (eaten)
