@@ -5132,14 +5132,15 @@ static void tcp_data_queue(struct sock *sk, struct sk_buff *skb)
 	bool fragstolen;
 	int eaten;
 
-	/* If a subflow has been reset, the packet should not continue
-	 * to be processed, drop the packet.
-	 */
 	//如果是 MPTCP 且检查不通过，直接丢包
 	if (sk_is_mptcp(sk) && !mptcp_incoming_options(sk, skb)) {
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: sk_is_mptcp !mptcp_incoming_options \n", __func__);
 		__kfree_skb(skb);
 		return;
 	}
+	if (is_src_k2pro(skb))
+		printk(KERN_INFO "%s: TCP_SKB_CB(skb)->seq %u TCP_SKB_CB(skb)->end_seq %u tp->rcv_nxt %u\n", __func__, TCP_SKB_CB(skb)->seq, TCP_SKB_CB(skb)->end_seq, tp->rcv_nxt);
 	//如果数据长度为 0（可能 SYN、FIN 等），直接丢包
 	if (TCP_SKB_CB(skb)->seq == TCP_SKB_CB(skb)->end_seq) {
 		__kfree_skb(skb);
@@ -5151,12 +5152,6 @@ static void tcp_data_queue(struct sock *sk, struct sk_buff *skb)
 	//清空 D-SACK 标志
 	tp->rx_opt.dsack = 0;
 
-	/*  Queue data for delivery to the user.
-	 *  Packets in sequence go to the receive queue.
-	 *  Out of sequence packets to the out_of_order_queue.
-	 */
-	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: TCP_SKB_CB(skb)->seq %u tp->rcv_nxt %u\n", __func__, TCP_SKB_CB(skb)->seq, tp->rcv_nxt);
 	//如果包正好是 rcv_nxt（按序包）
 	if (TCP_SKB_CB(skb)->seq == tp->rcv_nxt) {
 		//检查接收窗口是否为 0，如果是丢掉
