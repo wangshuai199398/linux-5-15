@@ -318,10 +318,11 @@ INDIRECT_CALLABLE_SCOPE
 struct sk_buff *tcp4_gro_receive(struct list_head *head, struct sk_buff *skb)
 {
 	/* Don't bother verifying checksum if we're going to flush anyway. */
+	//如果需要立即聚合，调用tcp_gro_receive，可以继续聚合但是检验和无效，设置当前skb flush
 	if (!NAPI_GRO_CB(skb)->flush &&
 	    skb_gro_checksum_validate(skb, IPPROTO_TCP,
 				      inet_gro_compute_pseudo)) {
-		NAPI_GRO_CB(skb)->flush = 1;
+		NAPI_GRO_CB(skb)->flush = 1;//标记当前skb需要flush，不能用于 GRO 聚合
 		return NULL;
 	}
 

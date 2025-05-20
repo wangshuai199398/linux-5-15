@@ -898,7 +898,7 @@ void skb_dump(const char *level, const struct sk_buff *skb, bool full_pkt)
 		skb_walk_frags(skb, list_skb)
 			skb_dump(level, list_skb, true);
 	}
-	printk("================\n");
+	printk(KERN_ERR "================\n");
 }
 EXPORT_SYMBOL(skb_dump);
 

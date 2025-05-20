@@ -1473,6 +1473,7 @@ struct sk_buff *inet_gro_receive(struct list_head *head, struct sk_buff *skb)
 	off = skb_gro_offset(skb);
 	hlen = off + sizeof(*iph);
 	iph = skb_gro_header_fast(skb, off);
+	//尝试从skb中快速获取ip头，如果不在线性区说明ip头不可用，使用慢路径，会将头部数据拷贝到线性区域（如果不在）
 	if (skb_gro_header_hard(skb, hlen)) {
 		iph = skb_gro_header_slow(skb, hlen, off);
 		if (unlikely(!iph))
@@ -1487,17 +1488,17 @@ struct sk_buff *inet_gro_receive(struct list_head *head, struct sk_buff *skb)
 
 	if (*(u8 *)iph != 0x45)
 		goto out;
-
+	//ip分片需要先经过IP重组，不做gro
 	if (ip_is_fragment(iph))
 		goto out;
-
+	//快速计算 IP 头部校验和
 	if (unlikely(ip_fast_csum((u8 *)iph, 5)))
 		goto out;
-
+	//基于 IP 报头中的部分字段生成一个 flush 标志，用于判断 当前 skb 是否可与现有的 GRO 包合并
 	id = ntohl(*(__be32 *)&iph->id);
 	flush = (u16)((ntohl(*(__be32 *)iph) ^ skb_gro_len(skb)) | (id & ~IP_DF));
 	id >>= 16;
-
+	//遍历每个包，gro要把属于同一TCP流的IP数据包在内核中提前合并成一个大包，但合并之前必须确保这些包确实属于同一条流，并且某些字段必须一致，否则就不能合并
 	list_for_each_entry(p, head, list) {
 		struct iphdr *iph2;
 		u16 flush_id;
@@ -1552,8 +1553,9 @@ struct sk_buff *inet_gro_receive(struct list_head *head, struct sk_buff *skb)
 		else
 			NAPI_GRO_CB(p)->flush_id |= flush_id;
 	}
-
+	//is_atomic不是分片报文
 	NAPI_GRO_CB(skb)->is_atomic = !!(iph->frag_off & htons(IP_DF));
+	//flush为0表示可以继续聚合，为1表示需要flush，不能继续合并了
 	NAPI_GRO_CB(skb)->flush |= flush;
 	skb_set_network_header(skb, off);
 	/* The above will be needed by the transport layer if there is one
@@ -1563,6 +1565,7 @@ struct sk_buff *inet_gro_receive(struct list_head *head, struct sk_buff *skb)
 	/* Note : No need to call skb_gro_postpull_rcsum() here,
 	 * as we already checked checksum over ipv4 header was 0
 	 */
+	//一开始data_offset指向ip头，这一步跳过ip头指向tcp头
 	skb_gro_pull(skb, sizeof(*iph));
 	skb_set_transport_header(skb, skb_gro_offset(skb));
 	if (is_src_k2pro(skb))

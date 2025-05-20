@@ -6213,13 +6213,14 @@ static enum gro_result dev_gro_receive(struct napi_struct *napi, struct sk_buff 
 	enum gro_result ret;
 	int same_flow;
 	int grow;
-
+	//是否跳过gro，设备不支持或
 	if (netif_elide_gro(skb->dev))
 		goto normal;
-
+	//准备 GRO 接收列表
 	gro_list_prepare(&gro_list->list, skb);
 
 	rcu_read_lock();
+	//遍历RCU保护的链表head获取ptype
 	list_for_each_entry_rcu(ptype, head, list) {
 		if (ptype->type != type || !ptype->callbacks.gro_receive)
 			continue;
