@@ -794,6 +794,9 @@ EXPORT_SYMBOL(kfree_skb_list);
  *
  * Dumps whole packets if full_pkt, only headers otherwise.
  * 
+ * 序列号: 发送数据的位置，告诉接收方这个数据从哪里开始
+ * 确认号: 告诉对方“我已经成功接收到哪个序列号之前的数据，请从这个位置继续发送”
+ * 
  * 按照小端打印出来，即使ip是大端的变量，但是打印出来还是小端的，因为这个机器是小端的
  * 
  * mac     6B	    6B       2B
