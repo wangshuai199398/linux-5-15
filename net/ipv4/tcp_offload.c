@@ -200,7 +200,7 @@ struct sk_buff *tcp_gro_receive(struct list_head *head, struct sk_buff *skb)
 	unsigned int off;
 	int flush = 1;
 	int i;
-
+	//尝试快速方式获取 TCP 头部指针，如果头不在线性区，可能会拷贝头
 	off = skb_gro_offset(skb);
 	hlen = off + sizeof(*th);
 	th = skb_gro_header_fast(skb, off);
@@ -271,7 +271,8 @@ found:
 #ifdef CONFIG_TLS_DEVICE
 	flush |= p->decrypted ^ skb->decrypted;
 #endif
-
+	if (is_src_k2pro(skb))
+		printk(KERN_INFO "%s: ->skb_gro_receive %p\n", __func__);
 	if (flush || skb_gro_receive(p, skb)) {
 		mss = 1;
 		goto out_check_final;

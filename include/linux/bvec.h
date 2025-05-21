@@ -30,9 +30,9 @@ struct page;
  * This holds because page_is_mergeable() checks the above property.
  */
 struct bio_vec {
-	struct page	*bv_page;
-	unsigned int	bv_len;
-	unsigned int	bv_offset;
+	struct page	*bv_page;//数据所在物理页
+	unsigned int	bv_len;//数据长度
+	unsigned int	bv_offset;//数据在该页中的偏移量
 };
 
 struct bvec_iter {

@@ -4406,6 +4406,8 @@ err:
 }
 EXPORT_SYMBOL_GPL(skb_segment);
 
+//p：当前已经在聚合中的 skb
+//skb：新收到、想要尝试合并进去的 skb
 int skb_gro_receive(struct sk_buff *p, struct sk_buff *skb)
 {
 	struct skb_shared_info *pinfo, *skbinfo = skb_shinfo(skb);
@@ -4415,82 +4417,91 @@ int skb_gro_receive(struct sk_buff *p, struct sk_buff *skb)
 	unsigned int delta_truesize;
 	unsigned int new_truesize;
 	struct sk_buff *lp;
-
+	//如果合并后长度超过 64KB，或需要强制 flush，则不允许合并，返回错误
 	if (unlikely(p->len + len >= 65536 || NAPI_GRO_CB(skb)->flush))
 		return -E2BIG;
-
+	//lp是当前GRO链表的最后一个skb，pinfo是lp的共享信息包含分片信息等
 	lp = NAPI_GRO_CB(p)->last;
 	pinfo = skb_shinfo(lp);
-
+	if (is_src_k2pro(skb))
+		printk(KERN_INFO "%s: headlen %u offset %u\n", __func__, headlen, offset);
+	//情况1: skb数据都在frags中（head 不含数据）
 	if (headlen <= offset) {
 		skb_frag_t *frag;
 		skb_frag_t *frag2;
+		//计算新的nr_frags分片数量，如果超过上限，跳转合并失败逻辑
 		int i = skbinfo->nr_frags;
 		int nr_frags = pinfo->nr_frags + i;
-
+		//最大frag数量为17个
 		if (nr_frags > MAX_SKB_FRAGS)
 			goto merge;
-
+		//减去headlen后的offset是需要从frag[0]中跳过的字节数
 		offset -= headlen;
 		pinfo->nr_frags = nr_frags;
 		skbinfo->nr_frags = 0;
 
 		frag = pinfo->frags + nr_frags;
 		frag2 = skbinfo->frags + i;
+		//将skb中的每个分片（page, offset, size 信息）复制到目标skb（p）的frag列表尾部，复制的是page指针
 		do {
 			*--frag = *--frag2;
 		} while (--i);
-
+		//处理skb中第一个frag的offset，offset不包含page中本身的偏移page_offset，其他的不需要考虑，因为其他的page是按原来的值复制的
 		skb_frag_off_add(frag, offset);
+		//将当前frag的数据大小减少offset字节，因为我们从这个frag的中间开始使用，不再使用前面offset字节的数据
 		skb_frag_size_sub(frag, offset);
 
 		/* all fragments truesize : remove (head size + sk_buff) */
+		//重新计算当前 skb 实际使用的内存大小（不包括 frags）
 		new_truesize = SKB_TRUESIZE(skb_end_offset(skb));
 		delta_truesize = skb->truesize - new_truesize;
 
 		skb->truesize = new_truesize;
 		skb->len -= skb->data_len;
 		skb->data_len = 0;
-
+		//正常释放 skb->head
 		NAPI_GRO_CB(skb)->free = NAPI_GRO_FREE;
 		goto done;
 	} else if (skb->head_frag) {
+		//情况2: 线形区里边有数据，head_frag表示skb->head指向的内存是叶片page，说明整个线形区是一个整的page内存
+		//见：现代网卡驱动，XDP、SKB 模式，共同点: 使用build_skb构造skb,接受的buffer是页片
 		int nr_frags = pinfo->nr_frags;
 		skb_frag_t *frag = pinfo->frags + nr_frags;
 		struct page *page = virt_to_head_page(skb->head);
-		unsigned int first_size = headlen - offset;
+		unsigned int first_size = headlen - offset;//线性区中从 offset 处开始到结尾的有效数据长度
 		unsigned int first_offset;
 
 		if (nr_frags + 1 + skbinfo->nr_frags > MAX_SKB_FRAGS)
 			goto merge;
-
+		//希望拷贝/引用的数据在这个页中的起始偏移
 		first_offset = skb->data -
 			       (unsigned char *)page_address(page) +
 			       offset;
 
 		pinfo->nr_frags = nr_frags + 1 + skbinfo->nr_frags;
-
+		//设置skb的第一个frag的page指针，offset和size
 		__skb_frag_set_page(frag, page);
 		skb_frag_off_set(frag, first_offset);
 		skb_frag_size_set(frag, first_size);
-
+		//处理其余的page
 		memcpy(frag + 1, skbinfo->frags, sizeof(*frag) * skbinfo->nr_frags);
 		/* We dont need to clear skbinfo->nr_frags here */
 
 		new_truesize = SKB_DATA_ALIGN(sizeof(struct sk_buff));
 		delta_truesize = skb->truesize - new_truesize;
 		skb->truesize = new_truesize;
+		//合并时将线性区也转为page frag，跳过释放skb->head（防重复释放）
 		NAPI_GRO_CB(skb)->free = NAPI_GRO_FREE_STOLEN_HEAD;
 		goto done;
 	}
-
+//frag数量超限或者线形区无法转page
 merge:
 	/* sk ownership - if any - completely transferred to the aggregated packet */
 	skb->destructor = NULL;
 	skb->sk = NULL;
 	delta_truesize = skb->truesize;
 	if (offset > headlen) {
-		unsigned int eat = offset - headlen;
+		unsigned int eat = offset - headlen;//还需要在 frags[0] 中跳过 eat 字节
 
 		skb_frag_off_add(&skbinfo->frags[0], eat);
 		skb_frag_size_sub(&skbinfo->frags[0], eat);
@@ -4502,11 +4513,13 @@ merge:
 	__skb_pull(skb, offset);
 
 	if (NAPI_GRO_CB(p)->last == p)
-		skb_shinfo(p)->frag_list = skb;
+		skb_shinfo(p)->frag_list = skb;//还没有合并过任何 skb，此时frag_list 是空的，所以需要设置 frag_list = skb
 	else
-		NAPI_GRO_CB(p)->last->next = skb;
+		NAPI_GRO_CB(p)->last->next = skb;//如果已经有一些 skb 合并到 p 上了，就把当前 skb 挂到链表最后一个 skb 的 next 字段上
 	NAPI_GRO_CB(p)->last = skb;
+	//释放 skb中的 线性区头部空间 的引用，告诉系统这段 head 区可以被忽略/释放。
 	__skb_header_release(skb);
+	//表示“最后聚合的 skb”是 p
 	lp = p;
 
 done:
@@ -4520,6 +4533,8 @@ done:
 		lp->len += len;
 	}
 	NAPI_GRO_CB(skb)->same_flow = 1;
+	if (is_src_k2pro(skb))
+		printk(KERN_INFO "%s: return 0\n", __func__);
 	return 0;
 }
 

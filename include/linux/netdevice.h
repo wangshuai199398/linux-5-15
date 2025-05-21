@@ -2550,6 +2550,7 @@ struct napi_gro_cb {
 	unsigned int frag0_len;
 
 	/* This indicates where we are processing relative to skb->data. */
+	//表示在 skb 中，已经被处理掉（比如 IP/TCP 头部）或跳过的偏移字节数
 	int	data_offset;
 
 	/* This is non-zero if the packet cannot be merged with the new skb. */

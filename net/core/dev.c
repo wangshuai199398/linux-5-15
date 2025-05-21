@@ -6213,7 +6213,7 @@ static enum gro_result dev_gro_receive(struct napi_struct *napi, struct sk_buff 
 	enum gro_result ret;
 	int same_flow;
 	int grow;
-	//是否跳过gro，设备不支持或
+	//是否跳过gro，设备不支持或xdp_prog
 	if (netif_elide_gro(skb->dev))
 		goto normal;
 	//准备 GRO 接收列表
@@ -6259,7 +6259,7 @@ static enum gro_result dev_gro_receive(struct napi_struct *napi, struct sk_buff 
 		break;
 	}
 	rcu_read_unlock();
-
+	//遍历完协议，没有找到可以gro的协议
 	if (&ptype->list == head) {
 		if (is_src_k2pro(skb))
 			printk(KERN_INFO "%s: ->ptype->list == head\n", __func__);
@@ -6273,46 +6273,54 @@ static enum gro_result dev_gro_receive(struct napi_struct *napi, struct sk_buff 
 
 	same_flow = NAPI_GRO_CB(skb)->same_flow;
 	ret = NAPI_GRO_CB(skb)->free ? GRO_MERGED_FREE : GRO_MERGED;
-
+	//pp为非空，说明这次 GRO 合并 成功并且 flow 已完成；
+	//pp为 NULL，表示合并失败或没有完成，还不能进入上层
 	if (pp) {
+		//从 GRO 的 gro_list中把pp从链表上摘掉，意思是：这个flow的skb 已经合并完了，不能再追加新包了
 		skb_list_del_init(pp);
+		//将聚合完成的skb交给协议栈的下一层（如 TCP、UDP、IP）处理
 		napi_gro_complete(napi, pp);
 		gro_list->count--;
 	}
 
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: ->same_flow\n", __func__);
+		printk(KERN_INFO "%s: ->same_flow pp %p same_flow %d\n", __func__, pp, same_flow);
+	//已经被某个 GRO flow 吸收（合并）成功，直接跳过后面逻辑，走 ok 路径（继续处理其他包）
 	if (same_flow)
 		goto ok;
-
+	//它不能参与 GRO（如 checksum 不对、flags 不匹配等），直接进入常规包路径，走 normal: 路径，把它原样交给上层协议处理（不参与合并）
 	if (NAPI_GRO_CB(skb)->flush)
 		goto normal;
-
+	//如果当前 GRO 列表中skb数量太多，就从 GRO 链表中找一个最老的 skb，交给协议栈上层处理
 	if (unlikely(gro_list->count >= MAX_GRO_SKBS))
 		gro_flush_oldest(napi, &gro_list->list);
 	else
 		gro_list->count++;
-
+	//初始化新的 skb 作为一个 GRO flow
 	NAPI_GRO_CB(skb)->count = 1;
 	NAPI_GRO_CB(skb)->age = jiffies;
 	NAPI_GRO_CB(skb)->last = skb;
+	//告诉后续 GSO 分段逻辑：这个 skb 的最大 segment 大小是多少（比如 1460 字节），用于最终拆分成多个 MSS 片段
 	skb_shinfo(skb)->gso_size = skb_gro_len(skb);
 	list_add(&skb->list, &gro_list->list);
 	ret = GRO_HELD;
+	if (is_src_k2pro(skb))
+		printk(KERN_INFO "%s: ->skb_shinfo(skb)->gso_size %u\n", __func__, skb_shinfo(skb)->gso_size);
 
 pull:
-	grow = skb_gro_offset(skb) - skb_headlen(skb);
+	//将需要处理的数据从 skb 的第一个 fragment（frag[0]）中拷贝一部分到线性区（head 区）中，以便后续处理（如协议头解析）变得更简单
+	grow = skb_gro_offset(skb) - skb_headlen(skb);//表示当前需要处理的偏移超出了线性区的范围，也就是说，从 frag[0] 中要拿出 grow 字节
 	if (grow > 0)
 		gro_pull_from_frag0(skb, grow);
 ok:
 	if (gro_list->count) {
 		if (!test_bit(bucket, &napi->gro_bitmask))
-			__set_bit(bucket, &napi->gro_bitmask);
+			__set_bit(bucket, &napi->gro_bitmask);//有数据包，对应的bucket位置1
 	} else if (test_bit(bucket, &napi->gro_bitmask)) {
-		__clear_bit(bucket, &napi->gro_bitmask);
+		__clear_bit(bucket, &napi->gro_bitmask);//无包，对bucket位置0
 	}
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: ->return ret %d\n", __func__, ret);
+		printk(KERN_INFO "%s: ->return ret %d gro_list->count %d\n", __func__, ret, gro_list->count);
 
 	return ret;
 
