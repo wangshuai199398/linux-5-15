@@ -437,6 +437,8 @@ static inline void list_cut_before(struct list_head *list,
 	entry->prev = head;
 }
 
+//list   list_head->1->2->3->4
+//合并后: prev->1->2->3->4->next->合并到的流表内容
 static inline void __list_splice(const struct list_head *list,
 				 struct list_head *prev,
 				 struct list_head *next)

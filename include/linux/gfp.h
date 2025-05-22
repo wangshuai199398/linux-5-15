@@ -320,7 +320,10 @@ struct vm_area_struct;
  * version does not attempt reclaim/compaction at all and is by default used
  * in page fault path, while the non-light is used by khugepaged.
  */
+//Get Free Page 高优先级、不可睡眠（non-blocking）的内存分配请求,用于 中断处理上下文、软中断上下文 或 spinlock 等锁保护的临界区中，这些地方 不能睡眠（不能调用调度器），所以必须立即返回
+//如果你马上有空闲内存，就给我；如果没有，也不要等，直接失败返回 NULL
 #define GFP_ATOMIC	(__GFP_HIGH|__GFP_ATOMIC|__GFP_KSWAPD_RECLAIM)
+//普通内核上下文内存分配,允许睡眠，系统调用、线程上下文
 #define GFP_KERNEL	(__GFP_RECLAIM | __GFP_IO | __GFP_FS)
 #define GFP_KERNEL_ACCOUNT (GFP_KERNEL | __GFP_ACCOUNT)
 #define GFP_NOWAIT	(__GFP_KSWAPD_RECLAIM)

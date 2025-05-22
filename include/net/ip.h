@@ -55,6 +55,7 @@ struct inet_skb_parm {
 #define IPSKB_DOREDIRECT	BIT(5)
 #define IPSKB_FRAG_PMTU		BIT(6)
 #define IPSKB_L3SLAVE		BIT(7)
+//标识这个 skb 不受某些安全策略限制
 #define IPSKB_NOPOLICY		BIT(8)
 #define IPSKB_MULTIPATH		BIT(9)
 
@@ -100,6 +101,7 @@ static inline void ipcm_init_sk(struct ipcm_cookie *ipcm,
 	ipcm->protocol = inet->inet_num;
 }
 
+//IPCB(skb) 是对 skb 中 IP 控制块的访问，内核用于存储额外的 IPv4 协议相关信息
 #define IPCB(skb) ((struct inet_skb_parm*)((skb)->cb))
 #define PKTINFO_SKB_CB(skb) ((struct in_pktinfo *)((skb)->cb))
 
@@ -673,7 +675,7 @@ bool ip_call_ra_chain(struct sk_buff *skb);
  */
 
 enum ip_defrag_users {
-	IP_DEFRAG_LOCAL_DELIVER,
+	IP_DEFRAG_LOCAL_DELIVER,//表示这个分片是本地要接收的（不是转发的）
 	IP_DEFRAG_CALL_RA_CHAIN,
 	IP_DEFRAG_CONNTRACK_IN,
 	__IP_DEFRAG_CONNTRACK_IN_END	= IP_DEFRAG_CONNTRACK_IN + USHRT_MAX,

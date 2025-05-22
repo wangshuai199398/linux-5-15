@@ -245,10 +245,11 @@ int ip_local_deliver(struct sk_buff *skb)
 	 *	Reassemble IP fragments.
 	 */
 	struct net *net = dev_net(skb->dev);
-
+	//如果收到的包是一个分片，就尝试进行重组（defragmentation），直到可以完整交付
 	if (ip_is_fragment(ip_hdr(skb))) {
+		//如果重组尚未完成（例如该片是中间片，还未收齐），返回非 0，表示“还不能继续处理该 skb，等待更多分片”
 		if (ip_defrag(net, skb, IP_DEFRAG_LOCAL_DELIVER))
-			return 0;
+			return 0;//表示“还不能继续处理该 skb，等待更多分片”
 	}
 	if (is_src_k2pro(skb))
 		printk(KERN_INFO "%s: ->ip_local_deliver_finish\n", __func__);
@@ -270,15 +271,16 @@ static inline bool ip_rcv_options(struct sk_buff *skb, struct net_device *dev)
 	   and running sniffer is extremely rare condition.
 					      --ANK (980813)
 	*/
+	//skb_cow：Copy-On-Write，确保 skb 头部区域可写（有足够头部空间且没有共享数据），否则复制一份skb
 	if (skb_cow(skb, skb_headroom(skb))) {
 		__IP_INC_STATS(dev_net(dev), IPSTATS_MIB_INDISCARDS);
 		goto drop;
 	}
-
+	//计算 IP 选项长度
 	iph = ip_hdr(skb);
 	opt = &(IPCB(skb)->opt);
 	opt->optlen = iph->ihl*4 - sizeof(struct iphdr);
-
+	//解析和验证 IP 选项，将其转换成内部格式
 	if (ip_options_compile(dev_net(dev), opt, skb)) {
 		__IP_INC_STATS(dev_net(dev), IPSTATS_MIB_INHDRERRORS);
 		goto drop;
@@ -324,14 +326,14 @@ static int ip_rcv_finish_core(struct net *net, struct sock *sk,
 	struct rtable *rt;
 
 	drop_reason = SKB_DROP_REASON_NOT_SPECIFIED;
-
+	//是否可以使用hint中的路由
 	if (ip_can_use_hint(skb, iph, hint)) {
 		err = ip_route_use_hint(skb, iph->daddr, iph->saddr, iph->tos,
 					dev, hint);
 		if (unlikely(err))
 			goto drop_error;
 	}
-
+	//是否启用IPv4早期解复用 当前skb还没有路由缓存skb 没有关联socket IP包不是分片包
 	if (READ_ONCE(net->ipv4.sysctl_ip_early_demux) &&
 	    !skb_dst(skb) &&
 	    !skb->sk &&
@@ -339,6 +341,7 @@ static int ip_rcv_finish_core(struct net *net, struct sock *sk,
 		switch (iph->protocol) {
 		case IPPROTO_TCP:
 			if (READ_ONCE(net->ipv4.sysctl_tcp_early_demux)) {
+				//尝试尽早根据 TCP 头部信息给 skb 关联正确的 socket，提升接收效率
 				tcp_v4_early_demux(skb);
 
 				/* must reload iph, skb->head might have changed */
@@ -362,7 +365,9 @@ static int ip_rcv_finish_core(struct net *net, struct sock *sk,
 	 *	Initialise the virtual path cache for the packet. It describes
 	 *	how the packet travels inside Linux networking.
 	 */
+	//判断skb是否已经有有效的路由缓存（skb->dst 是否有效且没过期）
 	if (!skb_valid_dst(skb)) {
+		//给skb查找并设置路由缓存（目的地址、源地址、TOS 和入接口）
 		err = ip_route_input_noref(skb, iph->daddr, iph->saddr,
 					   iph->tos, dev);
 		if (unlikely(err))
@@ -375,6 +380,7 @@ static int ip_rcv_finish_core(struct net *net, struct sock *sk,
 	}
 
 #ifdef CONFIG_IP_ROUTE_CLASSID
+	//对skb所关联的路由缓存（skb_dst(skb)）中 tclassid（traffic class ID，流量类别 ID）进行统计计数
 	if (unlikely(skb_dst(skb)->tclassid)) {
 		struct ip_rt_acct *st = this_cpu_ptr(ip_rt_acct);
 		u32 idx = skb_dst(skb)->tclassid;
@@ -395,6 +401,8 @@ static int ip_rcv_finish_core(struct net *net, struct sock *sk,
 		__IP_UPD_PO_STATS(net, IPSTATS_MIB_INBCAST, skb->len);
 	} else if (skb->pkt_type == PACKET_BROADCAST ||
 		   skb->pkt_type == PACKET_MULTICAST) {
+		//如果路由类型不是广播或组播，但 skb 的链路层包类型却是广播或组播
+		//取入接口 in_device
 		struct in_device *in_dev = __in_dev_get_rcu(dev);
 
 		/* RFC 1122 3.3.6:
@@ -412,6 +420,9 @@ static int ip_rcv_finish_core(struct net *net, struct sock *sk,
 		 * this is 802.11 protecting against cross-station spoofing (the
 		 * so-called "hole-196" attack) so do it for both.
 		 */
+		//是否启用了 DROP_UNICAST_IN_L2_MULTICAST（丢弃链路层多播中带单播 IP 包）
+		//这是防止例如 “hole-196”攻击 的策略，避免链路层广播中携带单播 IP 包（不符合 RFC1122），防止欺骗或安全隐患
+		//如果开启该策略且匹配，设置丢包原因，跳转丢包
 		if (in_dev &&
 		    IN_DEV_ORCONF(in_dev, DROP_UNICAST_IN_L2_MULTICAST)) {
 			drop_reason = SKB_DROP_REASON_UNICAST_IN_L2_MULTICAST;
@@ -441,6 +452,7 @@ static int ip_rcv_finish(struct net *net, struct sock *sk, struct sk_buff *skb)
 	/* if ingress device is enslaved to an L3 master device pass the
 	 * skb to its handler for processing
 	 */
+	//检查是否启用了L3主设备（例如 VRF），如果是，则更新skb的关联信息（如网络命名空间、设备等），为后续的路由查找提供正确的上下文
 	skb = l3mdev_ip_rcv(skb);
 	if (!skb)
 		return NET_RX_SUCCESS;
@@ -470,7 +482,9 @@ static struct sk_buff *ip_rcv_core(struct sk_buff *skb, struct net *net)
 	}
 
 	__IP_UPD_PO_STATS(net, IPSTATS_MIB_IN, skb->len);
-
+	//如果skb是共享的，即skb的user不为1，clone一份
+	if (is_src_k2pro(skb))
+		printk(KERN_INFO "%s: skb_shared %d\n", __func__, skb_shared(skb));
 	skb = skb_share_check(skb, GFP_ATOMIC);
 	if (!skb) {
 		__IP_INC_STATS(net, IPSTATS_MIB_INDISCARDS);
@@ -524,6 +538,7 @@ static struct sk_buff *ip_rcv_core(struct sk_buff *skb, struct net *net)
 	 * is IP we can trim to the true length of the frame.
 	 * Note this now means skb->len holds ntohs(iph->tot_len).
 	 */
+	//如果报文有多余的数据，删除
 	if (pskb_trim_rcsum(skb, len)) {
 		__IP_INC_STATS(net, IPSTATS_MIB_INDISCARDS);
 		goto drop;
@@ -537,6 +552,7 @@ static struct sk_buff *ip_rcv_core(struct sk_buff *skb, struct net *net)
 	IPCB(skb)->iif = skb->skb_iif;
 
 	/* Must drop socket now because of tproxy. */
+	//如果这个 skb 不是 socket 预取出来的，就解除它与 socket 的关联
 	if (!skb_sk_is_prefetched(skb))
 		skb_orphan(skb);
 

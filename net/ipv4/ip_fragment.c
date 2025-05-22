@@ -279,58 +279,71 @@ static int ip_frag_queue(struct ipq *qp, struct sk_buff *skb)
 	unsigned int fragsize;
 	int err = -ENOENT;
 	u8 ecn;
-
+	//如果已经完成重组了（其他线程或并发过程完成），这片就不能加入了
 	if (qp->q.flags & INET_FRAG_COMPLETE)
 		goto err;
-
-	if (!(IPCB(skb)->flags & IPSKB_FRAG_COMPLETE) &&
-	    unlikely(ip_frag_too_far(qp)) &&
-	    unlikely(err = ip_frag_reinit(qp))) {
-		ipq_kill(qp);
+	if (!(IPCB(skb)->flags & IPSKB_FRAG_COMPLETE) &&//这个标志意味着这个skb是完整的（非分片包）或者是最后一个分片,如果没有这个标志，则意味着它是个中间片段
+	    unlikely(ip_frag_too_far(qp)) &&//检查当前分片是否偏移太大,防止攻击者伪造一个“偏移很远”的片段，从而耗尽重组缓存
+	    unlikely(err = ip_frag_reinit(qp))) {//如果允许重试，会尝试清理当前队列，重新初始化,一般是在ipfrag_high_thresh阈值以下，系统内存尚可的情况下
+		ipq_kill(qp);//重组队列直接丢弃，释放所有已缓存的分片 skb
 		goto err;
 	}
-
+	//从IP首部中的TOS字段提取ECN标志1>tos的最后2位
 	ecn = ip4_frag_ecn(ip_hdr(skb)->tos);
 	offset = ntohs(ip_hdr(skb)->frag_off);
-	flags = offset & ~IP_OFFSET;
+	flags = offset & ~IP_OFFSET;//获取前3位，保留:DF:MF
 	offset &= IP_OFFSET;
 	offset <<= 3;		/* offset is in 8-byte chunks */
-	ihl = ip_hdrlen(skb);
+	ihl = ip_hdrlen(skb);//ip头长度
 
 	/* Determine the position of this fragment. */
+	//计算 end，就是“当前分片数据结束字节偏移”（相对于原始IP包起始）
 	end = offset + skb->len - skb_network_offset(skb) - ihl;
 	err = -EINVAL;
 
 	/* Is this the final fragment? */
+	//最后一片
 	if ((flags & IP_MF) == 0) {
 		/* If we already have some bits beyond end
 		 * or have different end, the segment is corrupted.
 		 */
+		//如果当前最后一个分片的结束位置end小于之前记录的qp->q.len，说明这个最后分片数据长度异常或被篡改，包损坏
+		//如果队列之前已标记有最后分片（INET_FRAG_LAST_IN）且这次新的 end 跟之前的长度不符，说明长度信息不一致，也认为包损坏
 		if (end < qp->q.len ||
 		    ((qp->q.flags & INET_FRAG_LAST_IN) && end != qp->q.len))
 			goto discard_qp;
+		//标记队列中已收到最后一个分片
 		qp->q.flags |= INET_FRAG_LAST_IN;
+		//更新队列记录的最终IP报文长度为当前分片的结束位置end
 		qp->q.len = end;
 	} else {
+		//如果当前不是最后一个分片（IP_MF 为真），则分片数据长度必须是 8 字节的倍数（因为偏移单位是8字节）
 		if (end&7) {
+			//如果未对齐，则将end向下对齐（丢弃尾部非整块的字节数
 			end &= ~7;
+			//同时重置校验和状态为 CHECKSUM_NONE，因为这种不对齐可能使校验和失效，需要重新计算
 			if (skb->ip_summed != CHECKSUM_UNNECESSARY)
 				skb->ip_summed = CHECKSUM_NONE;
 		}
+		//如果当前分片的结束位置 end 超过了已有的队列最大长度 qp->q.len
 		if (end > qp->q.len) {
 			/* Some bits beyond end -> corruption. */
+			//如果队列已标记收到了最后一个分片，却又发现新的分片“跑”得比最后分片还远，说明包数据冲突，跳转丢弃
 			if (qp->q.flags & INET_FRAG_LAST_IN)
 				goto discard_qp;
+			//更新队列最大长度为当前分片的结束位置end
 			qp->q.len = end;
 		}
 	}
+	//当前分片的 数据长度为 0；是一个 空分片
 	if (end == offset)
 		goto discard_qp;
 
 	err = -ENOMEM;
 	if (!pskb_pull(skb, skb_network_offset(skb) + ihl))
 		goto discard_qp;
-
+	//end - offset 就是 本分片应该包含的数据长度
+	//严格限制分片的数据长度，避免多余数据参与后续拼接，保证后续重组出来的完整报文长度是准确且一致的，避免畸形分片（比如 padding 多余数据）带来的攻击风险
 	err = pskb_trim_rcsum(skb, end - offset);
 	if (err)
 		goto discard_qp;
@@ -338,9 +351,11 @@ static int ip_frag_queue(struct ipq *qp, struct sk_buff *skb)
 	/* Note : skb->rbnode and skb->dev share the same location. */
 	dev = skb->dev;
 	/* Makes sure compiler wont do silly aliasing games */
+	//告诉编译器：不要调整前后指令的顺序，dev = skb->dev; 必须先执行，并保证其结果在之后的代码中使用的是准确值
 	barrier();
-
+	//保存旧的队尾分片指针
 	prev_tail = qp->q.fragments_tail;
+	//插入当前分片到队列
 	err = inet_frag_queue_insert(&qp->q, skb, offset, end);
 	if (err)
 		goto insert_error;
@@ -351,24 +366,27 @@ static int ip_frag_queue(struct ipq *qp, struct sk_buff *skb)
 	qp->q.stamp = skb->tstamp;
 	qp->q.meat += skb->len;
 	qp->ecn |= ecn;
-	add_frag_mem_limit(qp->q.fqdir, skb->truesize);
+	add_frag_mem_limit(qp->q.fqdir, skb->truesize);//累计内存占用
 	if (offset == 0)
 		qp->q.flags |= INET_FRAG_FIRST_IN;
-
+	//计算本次分片在原始 IP 报文中所占的总长度，包含skb->len: 当前分片中数据部分，ihl分片头长度
 	fragsize = skb->len + ihl;
-
+	//qp->q.max_size 是记录本次 IP 报文中最大的单个分片长度（包括 IP 头）
 	if (fragsize > qp->q.max_size)
 		qp->q.max_size = fragsize;
-
+	//qp->max_df_size 是记录有 DF（Don’t Fragment）标志的最大片段大小
 	if (ip_hdr(skb)->frag_off & htons(IP_DF) &&
 	    fragsize > qp->max_df_size)
 		qp->max_df_size = fragsize;
-
+	//收到第一个分片且收到最后一个分片 所有分片的字节数之和==期望的完整IP报文长度
 	if (qp->q.flags == (INET_FRAG_FIRST_IN | INET_FRAG_LAST_IN) &&
 	    qp->q.meat == qp->q.len) {
+		//skb->_skb_refdst 是一个优化字段（缓存路由信息的引用），在重组过程中会被覆盖或影响
+		//所以这里把它临时清空，然后重组结束后恢复，避免引发 use-after-free 或引用计数错误
 		unsigned long orefdst = skb->_skb_refdst;
 
 		skb->_skb_refdst = 0UL;
+		//重组
 		err = ip_frag_reasm(qp, skb, prev_tail, dev);
 		skb->_skb_refdst = orefdst;
 		if (err)
@@ -409,7 +427,7 @@ static int ip_frag_reasm(struct ipq *qp, struct sk_buff *skb,
 	void *reasm_data;
 	int len, err;
 	u8 ecn;
-
+	//终止并清理某个分片队列,避免继续插入新分片
 	ipq_kill(qp);
 
 	ecn = ip_frag_ecn_table[qp->ecn];
@@ -419,15 +437,18 @@ static int ip_frag_reasm(struct ipq *qp, struct sk_buff *skb,
 	}
 
 	/* Make the one we just received the head. */
+	//为IP分片的重组做好“内存准备”和“数据拼接”的前置操作
+	//skb是当前刚收到的那个分片，也是即将作为reassembly后最终的skb的起点
+	//prev_tail是指向分片队列中最后一个skb，用于在拼接过程中连接该skb和skb->next
 	reasm_data = inet_frag_reasm_prepare(&qp->q, skb, prev_tail);
 	if (!reasm_data)
 		goto out_nomem;
-
+	//IPv4 总长度字段最大为 65535，超出则认为是畸形包
 	len = ip_hdrlen(skb) + qp->q.len;
 	err = -E2BIG;
 	if (len > 65535)
 		goto out_oversize;
-
+	//把所有收集到的分片合并进 skb 的数据区，准备交给上层协议
 	inet_frag_reasm_finish(&qp->q, skb, reasm_data,
 			       ip_frag_coalesce_ok(qp));
 
@@ -446,13 +467,15 @@ static int ip_frag_reasm(struct ipq *qp, struct sk_buff *skb,
 	 * frag seen to avoid sending tiny DF-fragments in case skb was built
 	 * from one very small df-fragment and one large non-df frag.
 	 */
+	//如果原始分片中有设置(DF)并且是最大分片，则保留DF并设置IPSKB_FRAG_PMTU，内核后续传输此包时，会走路径MTU检查（PMTU discovery）流程
+	//如果两者相等，说明整个IP包的大小受到了DF限制，发送方显然想要避免任何再分片。此时重组后的包也应该保留DF，表示该包仍需路径MTU检查
 	if (qp->max_df_size == qp->q.max_size) {
 		IPCB(skb)->flags |= IPSKB_FRAG_PMTU;
 		iph->frag_off = htons(IP_DF);
 	} else {
 		iph->frag_off = 0;
 	}
-
+	//重新计算IP头校验和
 	ip_send_check(iph);
 
 	__IP_INC_STATS(net, IPSTATS_MIB_REASMOKS);
@@ -473,24 +496,29 @@ out_fail:
 }
 
 /* Process an incoming IP datagram fragment. */
+// net: 网络命名空间
 int ip_defrag(struct net *net, struct sk_buff *skb, u32 user)
 {
 	struct net_device *dev = skb->dev ? : skb_dst(skb)->dev;
+	//获取该设备的 L3 主设备接口索引（如 VRF 环境中使用），用于精确确定分片所属的“虚拟路由上下文”
 	int vif = l3mdev_master_ifindex_rcu(dev);
 	struct ipq *qp;
-
+	//增加“请求重组”计数（每次调用 ip_defrag 就+1）
 	__IP_INC_STATS(net, IPSTATS_MIB_REASMREQDS);
 
 	/* Lookup (or create) queue header */
+	//查找该分片所属的重组队列,找不到会调用inet_frag_create创建一个
+	//标识分片组: 源 IP、目标 IP、协议号、ID、用户、虚拟接口索引
 	qp = ip_find(net, ip_hdr(skb), user, vif);
 	if (qp) {
 		int ret;
 
 		spin_lock(&qp->q.lock);
-
+		//将当前分片插入重组队列
 		ret = ip_frag_queue(qp, skb);
 
 		spin_unlock(&qp->q.lock);
+		//引用计数减1,当重组完成或超时时，整个队列会被销毁
 		ipq_put(qp);
 		return ret;
 	}

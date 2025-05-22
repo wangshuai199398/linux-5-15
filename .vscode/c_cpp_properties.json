@@ -12,7 +12,8 @@
                 "CONFIG_NET_CLS_ACT",
                 "CONFIG_NET_EGRESS",
                 "CONFIG_RPS",
-                "CONFIG_NET_INGRESS"
+                "CONFIG_NET_INGRESS",
+                "CONFIG_IP_ROUTE_CLASSID"
             ],
             "compilerPath": "/usr/bin/clang",
             "cStandard": "c17",

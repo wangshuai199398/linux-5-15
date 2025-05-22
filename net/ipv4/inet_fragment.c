@@ -377,6 +377,14 @@ struct inet_frag_queue *inet_frag_find(struct fqdir *fqdir, void *key)
 }
 EXPORT_SYMBOL(inet_frag_find);
 
+/*将新的分片 skb 插入到当前分片队列中（基于 offset 的位置）
+  •这段代码实质是在红黑树中定位分片的正确插入位置（基于分片偏移排序）；
+  •保证分片在链中无重叠且有序；
+  •重叠分片直接返回错误导致丢弃整个分片重组队列，保证安全性；
+  •重复分片直接忽略；
+  •最终把新的 skb 插入红黑树，便于快速查询和重组
+  为什么要用红黑树: 主要是为了实现高效、可维护的IP分片查找与插入算法
+*/
 int inet_frag_queue_insert(struct inet_frag_queue *q, struct sk_buff *skb,
 			   int offset, int end)
 {
@@ -391,56 +399,61 @@ int inet_frag_queue_insert(struct inet_frag_queue *q, struct sk_buff *skb,
 	 * Duplicates, however, should be ignored (i.e. skb dropped, but the
 	 * queue/fragments kept for later reassembly).
 	 */
+	//没有last说明是第一个分片
 	if (!last)
 		fragrun_create(q, skb);  /* First fragment. */
-	else if (FRAG_CB(last)->ip_defrag_offset + last->len < end) {
+	else if (FRAG_CB(last)->ip_defrag_offset + last->len < end) {//新分片在“最后一个”后面
 		/* This is the common case: skb goes to the end. */
 		/* Detect and discard overlaps. */
+		//检查是否“部分重叠”, 一律丢弃整个包
 		if (offset < FRAG_CB(last)->ip_defrag_offset + last->len)
 			return IPFRAG_OVERLAP;
+		//紧接着上一个，直接追加
 		if (offset == FRAG_CB(last)->ip_defrag_offset + last->len)
 			fragrun_append_to_last(q, skb);
 		else
-			fragrun_create(q, skb);
+			fragrun_create(q, skb);//有间隙，新建 fragment run
 	} else {
 		/* Binary search. Note that skb can become the first fragment,
 		 * but not the last (covered above).
 		 */
 		struct rb_node **rbn, *parent;
-
+		//rbn 指向红黑树的根节点指针
 		rbn = &q->rb_fragments.rb_node;
 		do {
 			struct sk_buff *curr;
 			int curr_run_end;
 
 			parent = *rbn;
-			curr = rb_to_skb(parent);
+			curr = rb_to_skb(parent);//由 rb_node 获取 sk_buff 指针
 			curr_run_end = FRAG_CB(curr)->ip_defrag_offset +
-					FRAG_CB(curr)->frag_run_len;
-			if (end <= FRAG_CB(curr)->ip_defrag_offset)
+					FRAG_CB(curr)->frag_run_len;//当前分片在队列中的“结束偏移”，即起始偏移 + 当前分片长度（包含连续的碎片长度）
+			if (end <= FRAG_CB(curr)->ip_defrag_offset)//如果新分片结束位置end不超过当前分片起始偏移，说明应该插入到当前节点左边
 				rbn = &parent->rb_left;
-			else if (offset >= curr_run_end)
+			else if (offset >= curr_run_end)//如果新分片起始偏移offset在当前分片范围右侧之后，则向右子树继续查找
 				rbn = &parent->rb_right;
 			else if (offset >= FRAG_CB(curr)->ip_defrag_offset &&
-				 end <= curr_run_end)
+				 end <= curr_run_end)//如果新分片完全包含于当前已有分片的范围内，则为重复分片，忽略这次插入
 				return IPFRAG_DUP;
 			else
-				return IPFRAG_OVERLAP;
+				return IPFRAG_OVERLAP;//如果两者有重叠但不完全包含，说明报文异常，需丢弃整个IP分片重组队列
 		} while (*rbn);
 		/* Here we have parent properly set, and rbn pointing to
 		 * one of its NULL left/right children. Insert skb.
 		 */
-		fragcb_clear(skb);
-		rb_link_node(&skb->rbnode, parent, rbn);
-		rb_insert_color(&skb->rbnode, &q->rb_fragments);
+		//parent 是新节点的父节点指针，rbn 是父节点某个子指针的地址(左或右)，当前为 NULL
+		fragcb_clear(skb);//清理 skb 上的 frag control block
+		rb_link_node(&skb->rbnode, parent, rbn);//找到合适位置后，将新节点连接到父节点的左或右指针
+		rb_insert_color(&skb->rbnode, &q->rb_fragments);//插入并修正红黑树平衡
 	}
-
+	//保存这个分片的偏移量，用于后续拼接
 	FRAG_CB(skb)->ip_defrag_offset = offset;
 
 	return IPFRAG_OK;
 }
 EXPORT_SYMBOL(inet_frag_queue_insert);
 
+//将 IP 分片队列中所有 skb 排好序的片段准备串联起来，并处理 skb 的内存、引用、结构等，使其可用作完整包的载体
 void *inet_frag_reasm_prepare(struct inet_frag_queue *q, struct sk_buff *skb,
 			      struct sk_buff *parent)
 {
@@ -481,6 +494,7 @@ void *inet_frag_reasm_prepare(struct inet_frag_queue *q, struct sk_buff *skb,
 			skb->sk = NULL;
 			skb->destructor = NULL;
 		}
+		//利用 skb_morph() 直接将旧头部结构迁移给当前 skb，保证我们拼接的主 skb 是最新到达的分片（可优化 cache locality）
 		skb_morph(skb, head);
 		FRAG_CB(skb)->next_frag = FRAG_CB(head)->next_frag;
 		rb_replace_node(&head->rbnode, &skb->rbnode,
@@ -546,6 +560,13 @@ out_restore_sk:
 }
 EXPORT_SYMBOL(inet_frag_reasm_prepare);
 
+/*将所有接收到的 IP 分片拼接成一个完整的 skb 包，并完成必要的内存/引用计数修正
+	•	从红黑树中按顺序遍历所有分片；
+	•	依次拼接到重组的 skb 上；
+	•	处理校验和、内存统计、frag_list 等数据结构；
+	•	清理红黑树节点。
+try_coalesce：是否尝试直接合并 skb 数据以减少内存使用（通过 skb_try_coalesce）
+*/
 void inet_frag_reasm_finish(struct inet_frag_queue *q, struct sk_buff *head,
 			    void *reasm_data, bool try_coalesce)
 {

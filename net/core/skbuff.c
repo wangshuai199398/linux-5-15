@@ -2219,6 +2219,7 @@ done:
 EXPORT_SYMBOL(___pskb_trim);
 
 /* Note : use pskb_trim_rcsum() instead of calling this directly
+ * 丢弃len多余的部分,就像 pskb_trim，但还会维护并更新接收时的校验和信息（skb->csum）
  */
 int pskb_trim_rcsum_slow(struct sk_buff *skb, unsigned int len)
 {
