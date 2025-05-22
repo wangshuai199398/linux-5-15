@@ -1,0 +1,10 @@
+{
+    "files.exclude": { "**/build": true, "**/out": true },
+    "files.watcherExclude": {
+        "**/build/**": true,
+        "**/out/**": true
+    },
+    "files.associations": {
+        "typeinfo": "c"
+    }
+}

@@ -2146,7 +2146,9 @@ struct net_device {
 	unsigned int		real_num_rx_queues;
 
 	struct bpf_prog __rcu	*xdp_prog;
+	//进行gro时，延迟一小段时间，让更多包聚合进来
 	unsigned long		gro_flush_timeout;
+	//延迟重新使能硬中断，通过“多轮 poll”后才重新启用,允许该 NAPI poll 完成 N 次轮询再重新打开中断
 	int			napi_defer_hard_irqs;
 	rx_handler_func_t __rcu	*rx_handler;
 	void __rcu		*rx_handler_data;

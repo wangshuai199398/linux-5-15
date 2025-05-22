@@ -5701,6 +5701,8 @@ static int __netif_receive_skb(struct sk_buff *skb)
 	return ret;
 }
 
+//按 PF_MEMALLOC 类型对 skb 链表进行切分，确保处理时不要混合 PF_MEMALLOC 与普通包，以防资源管理或调度异常
+//按照类型一段一段的处理
 static void __netif_receive_skb_list(struct list_head *head)
 {
 	unsigned long noreclaim_flag = 0;
@@ -5708,24 +5710,28 @@ static void __netif_receive_skb_list(struct list_head *head)
 	bool pfmemalloc = false; /* Is current sublist PF_MEMALLOC? */
 
 	list_for_each_entry_safe(skb, next, head, list) {
+		//PF_MEMALLOC: 内存紧张内存池
+		//判断当前系统是否是允许PF_MEMALLOC的socket && 判断这个skb是否来自内存紧张时的内存池
 		if ((sk_memalloc_socks() && skb_pfmemalloc(skb)) != pfmemalloc) {
 			struct list_head sublist;
 
-			/* Handle the previous sublist */
+			//把从 head->next 到 &skb->list->prev 这一段剪切出来放到 sublist 中
+			//相当于先处理子链表sublist中的skb（都是同类型pfmemalloc或非pfmemalloc），然后之后不同类型的包再处理
 			list_cut_before(&sublist, head, &skb->list);
 			if (is_src_k2pro(skb))
 				printk(KERN_INFO "%s: list_for_each_entry_safe \n", __func__);
 			if (!list_empty(&sublist))
-				__netif_receive_skb_list_core(&sublist, pfmemalloc);
+				__netif_receive_skb_list_core(&sublist, pfmemalloc);//处理这一段skb
 			pfmemalloc = !pfmemalloc;
 			/* See comments in __netif_receive_skb */
+			//如果skb是紧急内存，设置不应该触发内存回收（reclaim），否则可以进行内存回收
 			if (pfmemalloc)
 				noreclaim_flag = memalloc_noreclaim_save();
 			else
 				memalloc_noreclaim_restore(noreclaim_flag);
 		}
 	}
-	/* Handle the remaining sublist */
+	//处理最后一段skb
 	if (!list_empty(head)) {
 		list_for_each_entry_safe(skb, next, head, list) {
 			if (is_src_k2pro(skb))
@@ -5734,6 +5740,7 @@ static void __netif_receive_skb_list(struct list_head *head)
 		__netif_receive_skb_list_core(head, pfmemalloc);
 	}
 	/* Restore pflags */
+	//恢复允许内存回收标志
 	if (pfmemalloc)
 		memalloc_noreclaim_restore(noreclaim_flag);
 }
@@ -5794,6 +5801,8 @@ static int netif_receive_skb_internal(struct sk_buff *skb)
 	return ret;
 }
 
+//1. 将无需延迟时间戳处理的包放到链表前边
+//2. 如果开启了RPS，会把包按哈希分配给特定 CPU 的输入队列
 static void netif_receive_skb_list_internal(struct list_head *head)
 {
 	struct sk_buff *skb, *next;
@@ -5806,8 +5815,9 @@ static void netif_receive_skb_list_internal(struct list_head *head)
 		if (is_src_k2pro(skb))
 			printk(KERN_INFO "%s: list_for_each_entry_safe \n", __func__);
 		if (!skb_defer_rx_timestamp(skb))
-			list_add_tail(&skb->list, &sublist);
+			list_add_tail(&skb->list, &sublist);//不延迟打时间戳的skb加入sublist
 	}
+	//将sublist整个链表“接回”head前边，并清空sublist
 	list_splice_init(&sublist, head);
 
 	rcu_read_lock();
@@ -5816,7 +5826,8 @@ static void netif_receive_skb_list_internal(struct list_head *head)
 		list_for_each_entry_safe(skb, next, head, list) {
 			struct rps_dev_flow voidflow, *rflow = &voidflow;
 			int cpu = get_rps_cpu(skb->dev, skb, &rflow);
-
+			if (is_src_k2pro(skb))
+				(KERN_INFO "%s: cpu %d \n", __func__, cpu);
 			if (cpu >= 0) {
 				/* Will be handled, remove from list */
 				skb_list_del_init(skb);
@@ -6731,6 +6742,8 @@ void __napi_schedule_irqoff(struct napi_struct *n)
 }
 EXPORT_SYMBOL(__napi_schedule_irqoff);
 
+//判断是否可以结束本次NAPI poll循环，并做一些完成态下的清理和调度准备工作
+//为了驱动是否能够打开硬中断，返回true，打开硬中断
 bool napi_complete_done(struct napi_struct *n, int work_done)
 {
 	unsigned long flags, val, new, timeout = 0;
@@ -6742,6 +6755,9 @@ bool napi_complete_done(struct napi_struct *n, int work_done)
 	 * 2) If we are busy polling, do nothing here, we have
 	 *    the guarantee we will be called later.
 	 */
+	//NAPIF_STATE_NPSVC: poll被服务中（内核用来同步poll状态）
+	//NAPIF_STATE_IN_BUSY_POLL: 当前是忙轮询中（用户空间强制唤醒）
+	//那就不能结束poll
 	if (unlikely(n->state & (NAPIF_STATE_NPSVC |
 				 NAPIF_STATE_IN_BUSY_POLL)))
 		return false;
@@ -6773,8 +6789,11 @@ bool napi_complete_done(struct napi_struct *n, int work_done)
 
 	if (unlikely(!list_empty(&n->poll_list))) {
 		/* If n->poll_list is not empty, we need to mask irqs */
+		//关闭本地中断，防止软中断并发访问 poll_list
 		local_irq_save(flags);
+		//将该poll_list从softnet_data->poll_list中删除
 		list_del_init(&n->poll_list);
+		//恢复本地中断
 		local_irq_restore(flags);
 	}
 
@@ -6791,15 +6810,18 @@ bool napi_complete_done(struct napi_struct *n, int work_done)
 		 * because we will call napi->poll() one more time.
 		 * This C code was suggested by Alexander Duyck to help gcc.
 		 */
+		//如果之前有错过调度，就保留 SCHED 状态
 		new |= (val & NAPIF_STATE_MISSED) / NAPIF_STATE_MISSED *
 						    NAPIF_STATE_SCHED;
-	} while (cmpxchg(&n->state, val, new) != val);
+	} while (cmpxchg(&n->state, val, new) != val);//如果 n->state 在我们计算期间被其他 CPU 改变了（CAS 失败），则重试
 
+	//在这个 NAPI poll 正在运行时，又有新数据包到达，因为此时 `SCHED` 状态还在，所以 NAPI 没法再立即调度。
+	//因此需要在这里手动再调用 `__napi_schedule(n)` 重新调度 NAPI 执行 poll
 	if (unlikely(val & NAPIF_STATE_MISSED)) {
 		__napi_schedule(n);
 		return false;
 	}
-
+	//如果设置延迟gro，设置定时器，用于延迟恢复中断或刷新GRO合并的数据包
 	if (timeout)
 		hrtimer_start(&n->timer, ns_to_ktime(timeout),
 			      HRTIMER_MODE_REL_PINNED);
@@ -7183,6 +7205,7 @@ EXPORT_SYMBOL(__netif_napi_del);
 static int __napi_poll(struct napi_struct *n, bool *repoll)
 {
 	int work, weight;
+	struct sk_buff *skb, *next;
 
 	weight = n->weight;
 
@@ -7202,6 +7225,10 @@ static int __napi_poll(struct napi_struct *n, bool *repoll)
 	if (unlikely(work > weight))
 		pr_err_once("NAPI poll function %pS returned %d, exceeding its budget of %d.\n",
 			    n->poll, work, weight);
+	list_for_each_entry_safe(skb, next, &n->rx_list, list) {
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: gro_normal_list work %d weight %d\n", __func__, work, weight);
+	}
 
 	if (likely(work < weight))
 		return work;
@@ -7211,7 +7238,7 @@ static int __napi_poll(struct napi_struct *n, bool *repoll)
 	 * still "owns" the NAPI instance and therefore can
 	 * move the instance around on the list at-will.
 	 */
-	if (unlikely(napi_disable_pending(n))) {//查询是否在请求禁用该 napi 实例
+	if (unlikely(napi_disable_pending(n))) {//查询是否有人调用napi_disable来禁用该napi实例
 		napi_complete(n);//完成 poll，重启硬中断，并清除 napi 状态
 		return work;
 	}
@@ -7219,11 +7246,13 @@ static int __napi_poll(struct napi_struct *n, bool *repoll)
 	/* The NAPI context has more processing work, but busy-polling
 	 * is preferred. Exit early.
 	 */
+	//busy-poll用于低延迟（比如低延迟、AF_XDP、用户态轮询等）
 	if (napi_prefer_busy_poll(n)) {
 		if (napi_complete_done(n, work)) {
 			/* If timeout is not set, we need to make sure
 			 * that the NAPI is re-scheduled.
 			 */
+			//如果 busy-poll 模式启用了，而 poll 做完了， 还需要确保 napi 重新调度
 			napi_schedule(n);
 		}
 		return work;
@@ -7235,16 +7264,12 @@ static int __napi_poll(struct napi_struct *n, bool *repoll)
 		 */
 		napi_gro_flush(n, HZ >= 1000);
 	}
-	struct sk_buff *skb, *next;
-	list_for_each_entry_safe(skb, next, &n->rx_list, list) {
-		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: gro_normal_list work %d weight %d\n", __func__, work, weight);
-	}
 	gro_normal_list(n);
 
 	/* Some drivers may have called napi_schedule
 	 * prior to exhausting their budget.
 	 */
+	//当 NAPI poll 完成后，如果发现 napi_struct->poll_list 不为空，说明本次 NAPI 被重新调度了，但 budget 已耗尽，于是记录警告并提前返回
 	if (unlikely(!list_empty(&n->poll_list))) {
 		pr_warn_once("%s: Budget exhausted after napi rescheduled\n",
 			     n->dev ? n->dev->name : "backlog");
