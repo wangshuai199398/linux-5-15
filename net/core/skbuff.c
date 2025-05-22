@@ -5795,6 +5795,7 @@ struct sk_buff *skb_vlan_untag(struct sk_buff *skb)
 
 	vhdr = (struct vlan_hdr *)skb->data;
 	vlan_tci = ntohs(vhdr->h_vlan_TCI);
+	//将解析出来的嵌入 VLAN tag，转存进 skb->vlan_tci/vlan_proto 中，使其在后续协议处理（如 vlan_do_receive()）中以硬件加速模式继续被处理
 	__vlan_hwaccel_put_tag(skb, skb->protocol, vlan_tci);
 
 	skb_pull_rcsum(skb, VLAN_HLEN);

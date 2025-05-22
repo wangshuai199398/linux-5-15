@@ -11,7 +11,8 @@
                 "CONFIG_INET",
                 "CONFIG_NET_CLS_ACT",
                 "CONFIG_NET_EGRESS",
-                "CONFIG_RPS"
+                "CONFIG_RPS",
+                "CONFIG_NET_INGRESS"
             ],
             "compilerPath": "/usr/bin/clang",
             "cStandard": "c17",

@@ -161,6 +161,7 @@
 static DEFINE_SPINLOCK(ptype_lock);
 static DEFINE_SPINLOCK(offload_lock);
 struct list_head ptype_base[PTYPE_HASH_SIZE] __read_mostly;
+//全局链表，挂的是 ETH_P_ALL 类型的 packet_type: 如抓包工具用到的 AF_PACKET 套接字,tcpdump -i any；netfilter raw 表（在 IP 层之前处理原始包）；某些监控/安全模块；
 struct list_head ptype_all __read_mostly;	/* Taps */
 static struct list_head offload_base __read_mostly;
 
@@ -5340,6 +5341,18 @@ static inline int nf_ingress(struct sk_buff *skb, struct packet_type **pt_prev,
 	return 0;
 }
 
+/*
+为什么遍历时总是将上一个ptype调用 deliver_skb，最后一个ptype不会在for循环里处理，而是循环结束后，再单独处理pt_prev？
+clone只是延迟了，能够少一次kfree_skb的调用，为了提升自定义packet_type的优先级，使之位于某些特殊处理之前执行
+http://bbs.chinaunix.net/thread-1933943-1-1.html
+1. 处理skb的metadata，如时间戳，网络头，传输层头，dev，skb_iif字段
+2. xdp处理，用于做快速包处理、丢弃、修改、转发等
+3. vlan处理，如果skb 上有 VLAN tag，交给 VLAN 子系统解析
+4. 抓包支持，对前 n-1 个 clone skb 调用 ptype->func，最后一个直接使用原始 skb
+5. tc ingress、netfilter ingress hook（流控 + 防火墙）
+6. Bridge/macvlan/bonding 的 RX handler 机制
+7. ptype 类型的协议匹配分发（核心协议调度），ptype_base 是所有注册的协议处理器链（按 protocol 哈希），ptype_specific 是绑定在某个设备上的协议处理器
+*/
 static int __netif_receive_skb_core(struct sk_buff **pskb, bool pfmemalloc,
 				    struct packet_type **ppt_prev)
 {
@@ -5350,13 +5363,13 @@ static int __netif_receive_skb_core(struct sk_buff **pskb, bool pfmemalloc,
 	bool deliver_exact = false;
 	int ret = NET_RX_DROP;
 	__be16 type;
-
+	//如果 未启用 prequeue 时间戳优化，就给 skb 添加一个软件时间戳
 	net_timestamp_check(!READ_ONCE(netdev_tstamp_prequeue), skb);
 
 	trace_netif_receive_skb(skb);
 
 	orig_dev = skb->dev;
-
+	//重置network header，此时skb指向IP头（没有vlan的情况下）
 	skb_reset_network_header(skb);
 	if (!skb_transport_header_was_set(skb))
 		skb_reset_transport_header(skb);
@@ -5365,15 +5378,17 @@ static int __netif_receive_skb_core(struct sk_buff **pskb, bool pfmemalloc,
 	pt_prev = NULL;
 
 another_round:
+	//设置接收设备索引号
 	skb->skb_iif = skb->dev->ifindex;
-
+	//当前cpu处理的数据包统计
 	__this_cpu_inc(softnet_data.processed);
 
+	//如果启用了 Generic XDP，执行挂载在设备上的 xdp_prog，并根据其返回值决定是否继续处理 skb 或丢弃它
 	if (static_branch_unlikely(&generic_xdp_needed_key)) {
 		if (is_src_k2pro(skb))
 			printk(KERN_INFO "%s: migrate_disable \n", __func__);
 		int ret2;
-
+		//禁止当前任务在执行过程中被迁移到其他 CPU
 		migrate_disable();
 		ret2 = do_xdp_generic(rcu_dereference(skb->dev->xdp_prog), skb);
 		migrate_enable();
@@ -5383,25 +5398,32 @@ another_round:
 			goto out;
 		}
 	}
-
+	//如果数据包是 VLAN 类型，则去掉 VLAN 头部，并更新 skb 中的协议号和偏移
 	if (eth_type_vlan(skb->protocol)) {
 		skb = skb_vlan_untag(skb);
 		if (unlikely(!skb))
 			goto out;
 	}
-
+	//返回true表示skb是重定向过来的、已经处理过一次，不需要再走一次，跳过tc的 ingress classify和协议处理流程
 	if (skb_skip_tc_classify(skb))
 		goto skip_classify;
 	if (is_src_k2pro(skb))
 		printk(KERN_INFO "%s: ->deliver_skb pt_prev %p pfmemalloc %d CONFIG_NET_INGRESS %d\n", __func__, pt_prev, pfmemalloc, CONFIG_NET_INGRESS);
+	//紧急内存的skb不允许ptype_all处理，即tcpdump抓不到
 	if (pfmemalloc)
 		goto skip_taps;
+	//每次循环执行上一次的ptype deliver_skb，paket_type.type 为 ETH_P_ALL，典型场景就是tcpdump抓包所使用的协议
 	list_for_each_entry_rcu(ptype, &ptype_all, list) {
 		if (is_src_k2pro(skb))
 			printk(KERN_INFO "%s: ->deliver_skb pt_prev %p\n", __func__, pt_prev);
 		if (pt_prev)
 			ret = deliver_skb(skb, pt_prev, orig_dev);
 		pt_prev = ptype;
+		if (is_src_k2pro(skb)) {
+			if (ptype->type == htons(ETH_P_ALL)) {
+    			printk(KERN_INFO ">>> Grabbing packet for pcap, ptype->func = %pF\n", ptype->func);
+			}
+		}
 	}
 
 	list_for_each_entry_rcu(ptype, &skb->dev->ptype_all, list) {
@@ -5410,25 +5432,35 @@ another_round:
 		if (pt_prev)
 			ret = deliver_skb(skb, pt_prev, orig_dev);
 		pt_prev = ptype;
+		if (is_src_k2pro(skb)) {
+			if (ptype->type == htons(ETH_P_ALL)) {
+    			printk(KERN_INFO ">>> dev Grabbing packet for pcap, ptype->func = %pF\n", ptype->func);
+			}
+		}
 	}
 
 skip_taps:
 #ifdef CONFIG_NET_INGRESS
+	// Ingress qdisc 或 netfilter hook处理
 	if (static_branch_unlikely(&ingress_needed_key)) {
 		bool another = false;
-
+		//Qdisc队列规则子系统Ingress入口函数，允许tc（如tc filter add dev eth0 ingress ...）对进入的skb进行控制、打标、丢弃、重定向
 		skb = sch_handle_ingress(skb, &pt_prev, &ret, orig_dev,
 					 &another);
+		//another为true表示需要重新处理（比如重定向到另一个netdev）
+		//skb为空表示包被drop
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: ->nf_ingress another %d, skb %p\n", __func__, another, skb);
 		if (another)
 			goto another_round;
 		if (!skb)
 			goto out;
-		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: ->nf_ingress \n", __func__);
+		//Netfilter的ingress hook处理
 		if (nf_ingress(skb, &pt_prev, &ret, orig_dev) < 0)
 			goto out;
 	}
 #endif
+	//清除 skb 上的重定向目标信息
 	skb_reset_redirect(skb);
 skip_classify:
 	if (pfmemalloc && !skb_pfmemalloc_protocol(skb))
@@ -5441,12 +5473,14 @@ skip_classify:
 			ret = deliver_skb(skb, pt_prev, orig_dev);
 			pt_prev = NULL;
 		}
+		//将数据包分发到上层协议栈或虚拟 VLAN 接口（vlanX）中，根据实际的vlan设备调整信息，再走一遍
 		if (vlan_do_receive(&skb))
 			goto another_round;
 		else if (unlikely(!skb))
 			goto out;
 	}
-
+	//获取网络设备的接收处理函数，特殊处理：网桥（bridge）设备会注册一个 RX handler 来拦截包并转发；bonding/macvlan 设备也会注册；普通物理设备（如 eth0）默认是没有RX handler的
+	/*如果一个dev被添加到一个bridge（做为bridge的一个接口)，这个接口设备的rx_handler将被设置为br_handle_frame函数，这是在br_add_if函数中设置的，而br_add_if (net/bridge/br_if.c)是在向网桥设备上添加接口时设置的。进入br_handle_frame也就进入了bridge的逻辑代码。*/
 	rx_handler = rcu_dereference(skb->dev->rx_handler);
 	if (rx_handler) {
 		if (is_src_k2pro(skb))
@@ -5470,40 +5504,40 @@ skip_classify:
 			BUG();
 		}
 	}
-
+	//还有vlan标记，说明找不到vlanid对应的设备，netdev_uses_dsa为真，表示该设备是一个DSA端口设备
 	if (unlikely(skb_vlan_tag_present(skb)) && !netdev_uses_dsa(skb->dev)) {
 check_vlan_id:
 		if (skb_vlan_tag_get_id(skb)) {
-			/* Vlan id is non 0 and vlan_do_receive() above couldn't
-			 * find vlan device.
+			/* VLAN ID 非 0，但 vlan_do_receive() 没有找到对应的 VLAN 设备
+			 * 将 skb->pkt_type 设置为 PACKET_OTHERHOST，表示该包不是发给本机的
 			 */
 			skb->pkt_type = PACKET_OTHERHOST;
 		} else if (eth_type_vlan(skb->protocol)) {
-			/* Outer header is 802.1P with vlan 0, inner header is
-			 * 802.1Q or 802.1AD and vlan_do_receive() above could
-			 * not find vlan dev for vlan id 0.
+			/* 处理 VLAN ID 为 0 的特殊情况：
+			 * 外层是 802.1P (VLAN 0 的优先级标记)，内层是 802.1Q 或 802.1AD
+			 * 且 vlan_do_receive() 找不到 vlan 设备
 			 */
+			// 清除 VLAN 硬件加速标签
 			__vlan_hwaccel_clear_tag(skb);
+			//去除 VLAN 头部（802.1P）
 			skb = skb_vlan_untag(skb);
 			if (unlikely(!skb))
 				goto out;
 			if (vlan_do_receive(&skb))
-				/* After stripping off 802.1P header with vlan 0
-				 * vlan dev is found for inner header.
+				/* 去除 802.1P 外层 VLAN 头后，找到了 VLAN 设备
+				 * 重新开始处理 (another_round)
 				 */
 				goto another_round;
 			else if (unlikely(!skb))
 				goto out;
 			else
-				/* We have stripped outer 802.1P vlan 0 header.
-				 * But could not find vlan dev.
-				 * check again for vlan id to set OTHERHOST.
+				/* 去除了外层 VLAN 0 头，但仍找不到对应 VLAN 设备
+				 * 重新检查 VLAN ID，继续走 check_vlan_id 逻辑
 				 */
 				goto check_vlan_id;
 		}
-		/* Note: we might in the future use prio bits
-		 * and set skb->priority like in vlan_do_receive()
-		 * For the time being, just ignore Priority Code Point
+		/* 这里暂时不使用优先级码 (Priority Code Point)，
+		 * 只简单清除硬件加速 VLAN 标签
 		 */
 		__vlan_hwaccel_clear_tag(skb);
 	}
@@ -5514,12 +5548,13 @@ check_vlan_id:
 	if (likely(!deliver_exact)) {
 		if (is_src_k2pro(skb))
 			printk(KERN_INFO "%s: ->deliver_ptype_list_skb !deliver_exact \n", __func__);
+		//这里会调用上边抓包的deliver_skb，而pt_prev返回skb的协议类型如ipv4 ipv6 arp等
 		deliver_ptype_list_skb(skb, &pt_prev, orig_dev, type,
 				       &ptype_base[ntohs(type) &
 						   PTYPE_HASH_MASK]);
 	}
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: ->deliver_ptype_list_skb \n", __func__);
+		printk(KERN_INFO "%s: ->deliver_ptype_list_skb ptype_specific \n", __func__);
 	deliver_ptype_list_skb(skb, &pt_prev, orig_dev, type,
 			       &orig_dev->ptype_specific);
 
@@ -5529,6 +5564,7 @@ check_vlan_id:
 		deliver_ptype_list_skb(skb, &pt_prev, orig_dev, type,
 				       &skb->dev->ptype_specific);
 	}
+	//以上deliver_ptype_list_skb中deliver_skb是最后一个抓包函数的处理，还不是ip_rcv的处理
 
 	if (pt_prev) {
 		if (unlikely(skb_orphan_frags_rx(skb, GFP_ATOMIC)))
@@ -5623,6 +5659,7 @@ static inline void __netif_receive_skb_list_ptype(struct list_head *head,
 	}
 }
 
+//遍历skb，判断skb的pakcet_type和orig_dev是否和前一个一致
 static void __netif_receive_skb_list_core(struct list_head *head, bool pfmemalloc)
 {
 	/* Fast-path assumptions:
@@ -5660,9 +5697,10 @@ static void __netif_receive_skb_list_core(struct list_head *head, bool pfmemallo
 				printk(KERN_INFO "%s: __netif_receive_skb_list_ptype \n", __func__);
 			}
 		}
-
+		//批量处理，只有当某个skb的协议（ip，ipv6，arp）不同了，才调用处理函数对sublist中的报文进行处理
 		if (pt_curr != pt_prev || od_curr != orig_dev) {
 			/* dispatch old sublist */
+			//这个是真正的协议处理ip_rcv
 			__netif_receive_skb_list_ptype(&sublist, pt_curr, od_curr);
 			/* start new sublist */
 			INIT_LIST_HEAD(&sublist);
@@ -5673,6 +5711,7 @@ static void __netif_receive_skb_list_core(struct list_head *head, bool pfmemallo
 	}
 
 	/* dispatch final sublist */
+	//处理最后剩下的sublist
 	__netif_receive_skb_list_ptype(&sublist, pt_curr, od_curr);
 }
 

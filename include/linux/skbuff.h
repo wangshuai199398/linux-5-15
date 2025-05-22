@@ -2941,6 +2941,7 @@ static inline int skb_orphan_frags(struct sk_buff *skb, gfp_t gfp_mask)
 }
 
 /* Frags must be orphaned, even if refcounted, if skb might loop to rx path */
+//将这些 frags ‘orphan’（解绑）掉”
 static inline int skb_orphan_frags_rx(struct sk_buff *skb, gfp_t gfp_mask)
 {
 	if (likely(!skb_zcopy(skb)))

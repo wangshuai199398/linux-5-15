@@ -1995,6 +1995,7 @@ struct net_device {
 	struct list_head	napi_list;
 	struct list_head	unreg_list;
 	struct list_head	close_list;
+	//当前包所在设备的抓包处理器tcpdump -i eth0创建的 AF_PACKET socket, 还有某些按接口绑定的安全模块
 	struct list_head	ptype_all;
 	struct list_head	ptype_specific;
 
