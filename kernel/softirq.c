@@ -699,8 +699,10 @@ void raise_softirq(unsigned int nr)
 
 void __raise_softirq_irqoff(unsigned int nr)
 {
+	//断言当前已经关闭中断
 	lockdep_assert_irqs_disabled();
 	trace_softirq_raise(nr);
+	//设置 softirq pending 标志位
 	or_softirq_pending(1UL << nr);
 }
 

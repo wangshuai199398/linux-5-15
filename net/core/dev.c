@@ -4440,6 +4440,7 @@ static inline void ____napi_schedule(struct softnet_data *sd,
 	}
 
 	list_add_tail(&napi->poll_list, &sd->poll_list);
+	//触发软中断
 	__raise_softirq_irqoff(NET_RX_SOFTIRQ);
 }
 
@@ -6045,6 +6046,8 @@ static int napi_gro_complete(struct napi_struct *napi, struct sk_buff *skb)
 	}
 
 out:
+	if (is_src_k2pro(skb))
+		printk(KERN_INFO "%s: ->gro_normal_one\n", __func__);
 	gro_normal_one(napi, skb, NAPI_GRO_CB(skb)->count);
 	return NET_RX_SUCCESS;
 }
@@ -6382,6 +6385,8 @@ static gro_result_t napi_skb_finish(struct napi_struct *napi,
 	case GRO_HELD:
 	case GRO_MERGED:
 	case GRO_CONSUMED:
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: ->GRO_MERGED\n", __func__);
 		break;
 	}
 
@@ -7065,6 +7070,7 @@ int dev_set_threaded(struct net_device *dev, bool threaded)
 }
 EXPORT_SYMBOL(dev_set_threaded);
 
+//添加驱动的软中断处理函数
 void netif_napi_add(struct net_device *dev, struct napi_struct *napi,
 		    int (*poll)(struct napi_struct *, int), int weight)
 {
@@ -7188,6 +7194,7 @@ static int __napi_poll(struct napi_struct *n, bool *repoll)
 	 */
 	work = 0;
 	if (test_bit(NAPI_STATE_SCHED, &n->state)) {
+		//驱动注册的软中断处理函数netif_napi_add添加的
 		work = n->poll(n, weight);
 		trace_napi_poll(n, work, weight);
 	}
@@ -7204,8 +7211,8 @@ static int __napi_poll(struct napi_struct *n, bool *repoll)
 	 * still "owns" the NAPI instance and therefore can
 	 * move the instance around on the list at-will.
 	 */
-	if (unlikely(napi_disable_pending(n))) {
-		napi_complete(n);
+	if (unlikely(napi_disable_pending(n))) {//查询是否在请求禁用该 napi 实例
+		napi_complete(n);//完成 poll，重启硬中断，并清除 napi 状态
 		return work;
 	}
 
@@ -7231,7 +7238,7 @@ static int __napi_poll(struct napi_struct *n, bool *repoll)
 	struct sk_buff *skb, *next;
 	list_for_each_entry_safe(skb, next, &n->rx_list, list) {
 		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: gro_normal_list \n", __func__);
+			printk(KERN_INFO "%s: gro_normal_list work %d weight %d\n", __func__, work, weight);
 	}
 	gro_normal_list(n);
 
@@ -7248,7 +7255,7 @@ static int __napi_poll(struct napi_struct *n, bool *repoll)
 
 	return work;
 }
-
+//软中断触发->__do_softirq->net_rx_action->napi_poll->__napi_poll
 static int napi_poll(struct napi_struct *n, struct list_head *repoll)
 {
 	bool do_repoll = false;
