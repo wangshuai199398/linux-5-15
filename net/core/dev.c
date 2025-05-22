@@ -5827,7 +5827,7 @@ static void netif_receive_skb_list_internal(struct list_head *head)
 			struct rps_dev_flow voidflow, *rflow = &voidflow;
 			int cpu = get_rps_cpu(skb->dev, skb, &rflow);
 			if (is_src_k2pro(skb))
-				(KERN_INFO "%s: cpu %d \n", __func__, cpu);
+				printk(KERN_INFO "%s: cpu %d \n", __func__, cpu);
 			if (cpu >= 0) {
 				/* Will be handled, remove from list */
 				skb_list_del_init(skb);
