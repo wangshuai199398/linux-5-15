@@ -2015,9 +2015,12 @@ static void tcp_v4_fill_cb(struct sk_buff *skb, const struct iphdr *iph,
 
 int tcp_v4_rcv(struct sk_buff *skb)
 {
+	//获取数据包所在的网络命名空间（Linux 支持多网络命名空间用于容器、隔离等）
 	struct net *net = dev_net(skb->dev);
 	struct sk_buff *skb_to_free;
+	//skb的源设备索引（source device interface index），用于策略路由等
 	int sdif = inet_sdif(skb);
+	//输入接口索引（destination input interface），一般是接收这个包的接口
 	int dif = inet_iif(skb);
 	const struct iphdr *iph;
 	const struct tcphdr *th;
@@ -2026,10 +2029,13 @@ int tcp_v4_rcv(struct sk_buff *skb)
 	int drop_reason;
 	int ret;
 	drop_reason = SKB_DROP_REASON_NOT_SPECIFIED;
+	//pkt_type表示数据包的目标类型 不是给本机直接丢弃
 	if (skb->pkt_type != PACKET_HOST)
 		goto discard_it;
 
 	/* Count it even if it's bad */
+	//统计收到的TCP段（segment）数量，即使这个段之后会被丢弃或处理失败，也仍然会被计入统计
+	//cat /proc/net/snmp | grep TCP
 	__TCP_INC_STATS(net, TCP_MIB_INSEGS);
 
 	if (!pskb_may_pull(skb, sizeof(struct tcphdr)))
@@ -2048,13 +2054,15 @@ int tcp_v4_rcv(struct sk_buff *skb)
 	 * Packet length and doff are validated by header prediction,
 	 * provided case of th->doff==0 is eliminated.
 	 * So, we defer the checks. */
-
+	//初始化并验证接收到的数据包的TCP校验和（checksum）是否正确。
 	if (skb_checksum_init(skb, IPPROTO_TCP, inet_compute_pseudo))
 		goto csum_error;
 
 	th = (const struct tcphdr *)skb->data;
 	iph = ip_hdr(skb);
 lookup:
+	//根据收到的TCP报文在内核中查找匹配的 socket（即连接）
+	//在TCP的连接哈希表（tcp_hashinfo）中查找是否有一个已存在的socket匹配当前接收到的TCP报文（skb）的元信息（IP地址、端口号等）
 	sk = __inet_lookup_skb(&tcp_hashinfo, skb, __tcp_hdrlen(th), th->source,
 			       th->dest, sdif, &refcounted);
 	if (!sk)
@@ -2063,11 +2071,15 @@ lookup:
 		printk(KERN_INFO "%s: ->__inet_lookup_skb sk->sk_state 0x%x\n", __func__, sk->sk_state);
 
 process:
+	//TIME_WAIT表示连接刚关闭，还在等待两倍最大报文寿命（2MSL），防止旧包扰乱新连接
+	//比如主动关闭连接，最后一次 FIN-ACK 后会进入 TIME_WAIT，等超时后才释放 socket
 	if (sk->sk_state == TCP_TIME_WAIT)
 		goto do_time_wait;
-
+	//半连接状态，表示服务器端已经收到了客户端的 SYN，发送了 SYN-ACK，正在等待客户端确认的ACK
+	//此时 sk 是一个 临时的 request socket（request_sock），不是真正的连接 socket
 	if (sk->sk_state == TCP_NEW_SYN_RECV) {
 		struct request_sock *req = inet_reqsk(sk);
+		//req_stolen：表示该请求 socket 是否被“偷走”，比如 SYN flood 防御机制中为了安全地延迟分配资源
 		bool req_stolen = false;
 		struct sock *nsk;
 

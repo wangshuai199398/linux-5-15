@@ -548,6 +548,7 @@ static inline void ip_select_ident(struct net *net, struct sk_buff *skb,
 	ip_select_ident_segs(net, skb, sk, 1);
 }
 
+//用于生成 TCP 伪头部（pseudo-header）的函数指针，用于 checksum 计算
 static inline __wsum inet_compute_pseudo(struct sk_buff *skb, int proto)
 {
 	return csum_tcpudp_nofold(ip_hdr(skb)->saddr, ip_hdr(skb)->daddr,

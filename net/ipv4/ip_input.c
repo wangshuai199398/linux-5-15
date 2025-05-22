@@ -190,11 +190,13 @@ void ip_protocol_deliver_rcu(struct net *net, struct sk_buff *skb, int protocol)
 	int raw, ret;
 
 resubmit:
+	//将IP层数据包交付给本地 RAW sockets 的函数
 	raw = raw_local_deliver(skb, protocol);
 
 	ipprot = rcu_dereference(inet_protos[protocol]);
 	if (ipprot) {
 		if (!ipprot->no_policy) {
+			//检查该数据包是否符合是否符合 IPSec 安全策略（是否允许接收等）
 			if (!xfrm4_policy_check(NULL, XFRM_POLICY_IN, skb)) {
 				kfree_skb(skb);
 				return;
@@ -207,18 +209,20 @@ resubmit:
 				      skb);
 		if (ret < 0) {
 			protocol = -ret;
-			goto resubmit;
+			goto resubmit;//上层协议返回负数，表示这个包需要另一个协议重新处理，sctp、ip-in-ip在解析时会更改下一跳协议号重新递交
 		}
 		__IP_INC_STATS(net, IPSTATS_MIB_INDELIVERS);
 	} else {
 		if (!raw) {
 			if (xfrm4_policy_check(NULL, XFRM_POLICY_IN, skb)) {
 				__IP_INC_STATS(net, IPSTATS_MIB_INUNKNOWNPROTOS);
+				//发送ICMP协议不可达
 				icmp_send(skb, ICMP_DEST_UNREACH,
 					  ICMP_PROT_UNREACH, 0);
 			}
 			kfree_skb(skb);
 		} else {
+			//认为 RAW 已处理，统计并释放资源
 			__IP_INC_STATS(net, IPSTATS_MIB_INDELIVERS);
 			consume_skb(skb);
 		}
@@ -227,6 +231,7 @@ resubmit:
 
 static int ip_local_deliver_finish(struct net *net, struct sock *sk, struct sk_buff *skb)
 {
+	//传输层头
 	__skb_pull(skb, skb_network_header_len(skb));
 
 	rcu_read_lock();
