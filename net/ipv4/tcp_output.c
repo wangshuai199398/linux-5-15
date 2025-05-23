@@ -3655,13 +3655,17 @@ void tcp_send_active_reset(struct sock *sk, gfp_t priority)
 int tcp_send_synack(struct sock *sk)
 {
 	struct sk_buff *skb;
-
+	//找到最早的（首个）SYN 报文。如果找不到，或者报文不含 SYN，则视为逻辑错误
 	skb = tcp_rtx_queue_head(sk);
 	if (!skb || !(TCP_SKB_CB(skb)->tcp_flags & TCPHDR_SYN)) {
 		pr_err("%s: wrong queue state\n", __func__);
 		return -EFAULT;
 	}
+	//如果当前报文未带 ACK，则构造 ACK
 	if (!(TCP_SKB_CB(skb)->tcp_flags & TCPHDR_ACK)) {
+		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+			printk(KERN_INFO "%s: ->TCPHDR_ACK \n", __func__);
+		//若 skb 是克隆的，需要复制一份再修改
 		if (skb_cloned(skb)) {
 			struct sk_buff *nskb;
 
@@ -3679,12 +3683,13 @@ int tcp_send_synack(struct sock *sk)
 			sk_mem_charge(sk, nskb->truesize);
 			skb = nskb;
 		}
-
+		//设置ACK标志
 		TCP_SKB_CB(skb)->tcp_flags |= TCPHDR_ACK;
+		//处理 ECN 相关标记
 		tcp_ecn_send_synack(sk, skb);
 	}
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "tcp_send_synack -> tcp_transmit_skb \n");
+		printk(KERN_INFO "%s: ->tcp_transmit_skb \n", __func__);
 	return tcp_transmit_skb(sk, skb, 1, GFP_ATOMIC);
 }
 

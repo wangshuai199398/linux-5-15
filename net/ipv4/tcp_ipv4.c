@@ -1033,7 +1033,8 @@ static int tcp_v4_send_synack(const struct sock *sk, struct dst_entry *dst,
 		return -1;
 
 	skb = tcp_make_synack(sk, dst, req, foc, synack_type, syn_skb);
-
+	if (ireq->ir_rmt_addr == 0xa4dc77a)
+		printk(KERN_INFO "%s: ip_build_and_send_pkt \n", __func__);
 	if (skb) {
 		__tcp_v4_send_check(skb, ireq->ir_loc_addr, ireq->ir_rmt_addr);
 
