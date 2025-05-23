@@ -4058,7 +4058,7 @@ old_ack:
 	//如果当前段数据被 SACK 确认，说明接收端通知发送端某些数据成功接收，更新发送队列中的状态（标记已确认的数据）。
 	if (TCP_SKB_CB(skb)->sacked) {
 		flag |= tcp_sacktag_write_queue(sk, skb, prior_snd_una,
-						&sack_state);
+						&sack_state);//处理接收到的 SACK（Selective Acknowledgment）信息并标记发送队列中被确认数据段 
 		tcp_fastretrans_alert(sk, prior_snd_una, num_dupack, &flag,
 				      &rexmit);//检测是否需要触发快速重传
 		tcp_newly_delivered(sk, delivered, flag);//统计新的交付数据字节数
