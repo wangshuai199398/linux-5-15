@@ -1001,9 +1001,11 @@ struct sock *inet_csk_clone_lock(const struct sock *sk,
 		newsk->sk_wait_pending = 0;
 		inet_sk_set_state(newsk, TCP_SYN_RECV);
 		newicsk->icsk_bind_hash = NULL;
-
+		//设置新 socket 的 目标端口
 		inet_sk(newsk)->inet_dport = inet_rsk(req)->ir_rmt_port;
+		//设置新 socket 的 本地端口号
 		inet_sk(newsk)->inet_num = inet_rsk(req)->ir_num;
+		//设置新 socket 的 本地端口号（网络字节序）
 		inet_sk(newsk)->inet_sport = htons(inet_rsk(req)->ir_num);
 
 		/* listeners have SOCK_RCU_FREE, not the children */
@@ -1022,9 +1024,9 @@ struct sock *inet_csk_clone_lock(const struct sock *sk,
 
 		/* Deinitialize accept_queue to trap illegal accesses. */
 		memset(&newicsk->icsk_accept_queue, 0, sizeof(newicsk->icsk_accept_queue));
-
+		//克隆其上层协议（ULP, Upper Layer Protocol）相关状态的函数
 		inet_clone_ulp(req, newsk, priority);
-
+		//复制与安全模块（比如 SELinux、AppArmor、Smack 等）相关的安全标识和上下文
 		security_inet_csk_clone(newsk, req);
 	}
 	return newsk;
@@ -1153,13 +1155,16 @@ struct sock *inet_csk_reqsk_queue_add(struct sock *sk,
 				      struct request_sock *req,
 				      struct sock *child)
 {
+	//获取监听 socket 的 accept 队列
 	struct request_sock_queue *queue = &inet_csk(sk)->icsk_accept_queue;
 
 	spin_lock(&queue->rskq_lock);
+	//如果监听 socket 已不在 TCP_LISTEN 状态（例如关闭中），放弃 child
 	if (unlikely(sk->sk_state != TCP_LISTEN)) {
-		inet_child_forget(sk, req, child);
+		inet_child_forget(sk, req, child);//清理 child 与 request 的绑定
 		child = NULL;
 	} else {
+		//将 child 插入 accept 队列, 若为空，则设置为头；否则追加在尾部，并更新尾指针
 		req->sk = child;
 		req->dl_next = NULL;
 		if (queue->rskq_accept_head == NULL)
@@ -1167,20 +1172,25 @@ struct sock *inet_csk_reqsk_queue_add(struct sock *sk,
 		else
 			queue->rskq_accept_tail->dl_next = req;
 		queue->rskq_accept_tail = req;
-		sk_acceptq_added(sk);
+		sk_acceptq_added(sk);//更新统计信息
 	}
 	spin_unlock(&queue->rskq_lock);
 	return child;
 }
 EXPORT_SYMBOL(inet_csk_reqsk_queue_add);
 
+/*
+将 req 所代表的连接请求和 child socket 绑定到监听 socket 的 accept 队列中（或迁移到另一个监听 socket），最终使 child 进入 ESTABLISHED 状态并可被 accept() 接收
+*/
 struct sock *inet_csk_complete_hashdance(struct sock *sk, struct sock *child,
 					 struct request_sock *req, bool own_req)
 {
+	//如果当前请求是“我们”负责处理的
 	if (own_req) {
+		//将 req 从监听 socket 的等待队列中移除
 		inet_csk_reqsk_queue_drop(req->rsk_listener, req);
 		reqsk_queue_removed(&inet_csk(req->rsk_listener)->icsk_accept_queue, req);
-
+		//如果当前的 sk 不是最初接收 SYN 的监听 socket，说明请求被“迁移”到了另一个监听 socket（比如 SO_REUSEPORT 多监听 socket 场景）
 		if (sk != req->rsk_listener) {
 			/* another listening sk has been selected,
 			 * migrate the req to it.
@@ -1190,6 +1200,7 @@ struct sock *inet_csk_complete_hashdance(struct sock *sk, struct sock *child,
 			/* hold a refcnt for the nreq->rsk_listener
 			 * which is assigned in inet_reqsk_clone()
 			 */
+			//创建一个新的 request nreq，绑定到目标 socket sk
 			sock_hold(sk);
 			nreq = inet_reqsk_clone(req, sk);
 			if (!nreq) {
@@ -1198,6 +1209,7 @@ struct sock *inet_csk_complete_hashdance(struct sock *sk, struct sock *child,
 			}
 
 			refcount_set(&nreq->rsk_refcnt, 1);
+			//将新的 request 添加到目标 socket 的 accept 队列
 			if (inet_csk_reqsk_queue_add(sk, nreq, child)) {
 				__NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPMIGRATEREQSUCCESS);
 				reqsk_migrate_reset(req);
@@ -1208,6 +1220,7 @@ struct sock *inet_csk_complete_hashdance(struct sock *sk, struct sock *child,
 			__NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPMIGRATEREQFAILURE);
 			reqsk_migrate_reset(nreq);
 			__reqsk_free(nreq);
+		//如果能成功将原始 request 绑定子 socket，加到 accept 队列中，直接返回 child
 		} else if (inet_csk_reqsk_queue_add(sk, req, child)) {
 			return child;
 		}

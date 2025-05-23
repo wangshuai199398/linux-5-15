@@ -5,6 +5,7 @@
         "**/out/**": true
     },
     "files.associations": {
-        "typeinfo": "c"
+        "typeinfo": "c",
+        "__node_handle": "c"
     }
 }

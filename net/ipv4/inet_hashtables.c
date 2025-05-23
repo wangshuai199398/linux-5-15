@@ -556,6 +556,7 @@ bool inet_ehash_insert(struct sock *sk, struct sock *osk, bool *found_dup_sk)
 	return ret;
 }
 
+//found_dup_sk用于返回是否检测到重复的 socket（例如 syncookie 重复连接）
 bool inet_ehash_nolisten(struct sock *sk, struct sock *osk, bool *found_dup_sk)
 {
 	bool ok = inet_ehash_insert(sk, osk, found_dup_sk);

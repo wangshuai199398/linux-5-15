@@ -1771,7 +1771,7 @@ int tcp_trim_head(struct sock *sk, struct sk_buff *skb, u32 len)
 	return 0;
 }
 
-/* Calculate MSS not accounting any TCP options.  */
+/* 计算MSS not accounting any TCP options.  */
 static inline int __tcp_mtu_to_mss(struct sock *sk, int pmtu)
 {
 	const struct tcp_sock *tp = tcp_sk(sk);
@@ -1885,12 +1885,16 @@ unsigned int tcp_sync_mss(struct sock *sk, u32 pmtu)
 		icsk->icsk_mtup.search_high = pmtu;
 
 	mss_now = tcp_mtu_to_mss(sk, pmtu);
+	//根据发送窗口大小进一步限制 MSS
 	mss_now = tcp_bound_to_half_wnd(tp, mss_now);
 
 	/* And store cached results */
+	//缓存当前路径 MTU 
 	icsk->icsk_pmtu_cookie = pmtu;
+	//如果开启了 MTU 探测功能，结合最小 MTU 再调整 MSS
 	if (icsk->icsk_mtup.enabled)
 		mss_now = min(mss_now, tcp_mtu_to_mss(sk, icsk->icsk_mtup.search_low));
+	//更新 TCP MSS 缓存
 	tp->mss_cache = mss_now;
 
 	return mss_now;

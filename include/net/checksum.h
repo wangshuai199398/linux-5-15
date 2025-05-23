@@ -54,6 +54,7 @@ csum_partial_copy_nocheck(const void *src, void *dst, int len)
 #endif
 
 #ifndef HAVE_ARCH_CSUM_ADD
+//这是一个一补码加法函数，用来将两个校验和值相加，同时考虑进位（carry around）。返回的结果仍然是一个 32 位的中间值（__wsum）
 static __always_inline __wsum csum_add(__wsum csum, __wsum addend)
 {
 	u32 res = (__force u32)csum;

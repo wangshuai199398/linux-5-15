@@ -3105,9 +3105,11 @@ __sum16 __skb_checksum_complete(struct sk_buff *skb)
 {
 	__wsum csum;
 	__sum16 sum;
-
+	//软件重新计算整个 skb 的 payload 的校验和
 	csum = skb_checksum(skb, 0, skb->len, 0);
-
+	//将原有 skb->csum（伪头部校验和）与新算出的数据部分校验和合并，并折叠成16位
+	//将 skb 原有的伪头部校验和（skb->csum）与实际数据校验和（csum）合并，再折叠为 16 位值，得出最终的校验和 sum
+	//如果 sum == 0（一补码逻辑下为 0xFFFF），说明数据完整无误
 	sum = csum_fold(csum_add(skb->csum, csum));
 	/* This check is inverted, because we already knew the hardware
 	 * checksum is invalid before calling this function. So, if the
@@ -3117,11 +3119,15 @@ __sum16 __skb_checksum_complete(struct sk_buff *skb)
 	 * when moving skb->data around.
 	 */
 	if (likely(!sum)) {
+		//CHECKSUM_COMPLETE表示网卡声称自己计算过checksum并认为结果有效，csum_complete_sw软件计算过校验和
+		//出现矛盾：进来这里说明网卡报告结果是错的，而软件计算是对的，所以记录网卡硬件校验异常
 		if (unlikely(skb->ip_summed == CHECKSUM_COMPLETE) &&
 		    !skb->csum_complete_sw)
 			netdev_rx_csum_fault(skb->dev, skb);
 	}
-
+	//如果 skb 没被共享，就把校验结果写回 skb，避免重复计算。
+	//标记 CHECKSUM_COMPLETE，表示完整校验和已在软件中完成。
+	//csum_valid 被设置成 true（1）时，说明此包可认为通过了校验。
 	if (!skb_shared(skb)) {
 		/* Save full packet checksum */
 		skb->csum = csum;

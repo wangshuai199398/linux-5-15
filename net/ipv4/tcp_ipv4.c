@@ -1572,8 +1572,7 @@ EXPORT_SYMBOL(tcp_v4_conn_request);
 
 
 /*
- * The three way handshake has completed - we got a valid synack -
- * now create the new socket.
+ * 创建一个新的、真正用于数据传输的 socket
  */
 struct sock *tcp_v4_syn_recv_sock(const struct sock *sk, struct sk_buff *skb,
 				  struct request_sock *req,
@@ -1592,7 +1591,7 @@ struct sock *tcp_v4_syn_recv_sock(const struct sock *sk, struct sk_buff *skb,
 	int l3index;
 #endif
 	struct ip_options_rcu *inet_opt;
-
+	//检查监听 socket 的 accept 队列是否已满
 	if (sk_acceptq_is_full(sk))
 		goto exit_overflow;
 
@@ -1601,12 +1600,16 @@ struct sock *tcp_v4_syn_recv_sock(const struct sock *sk, struct sk_buff *skb,
 		goto exit_nonewsk;
 
 	newsk->sk_gso_type = SKB_GSO_TCPV4;
+	//给新创建的socket设置接收数据包时所用的目的地缓存（dst entry）
 	inet_sk_rx_dst_set(newsk, skb);
 
 	newtp		      = tcp_sk(newsk);
 	newinet		      = inet_sk(newsk);
 	ireq		      = inet_rsk(req);
+	//设置 socket 的目标 IP 地址
 	sk_daddr_set(newsk, ireq->ir_rmt_addr);
+	//sk_rcv_saddr_set设置的是 sock 结构体中专门用于接收匹配的本地地址。
+	//inet_saddr是更上层的IPv4连接管理字段，两者配合使用保证内核的各个子模块都知道这个连接的本地地址。
 	sk_rcv_saddr_set(newsk, ireq->ir_loc_addr);
 	newsk->sk_bound_dev_if = ireq->ir_iif;
 	newinet->inet_saddr   = ireq->ir_loc_addr;
@@ -1634,12 +1637,13 @@ struct sock *tcp_v4_syn_recv_sock(const struct sock *sk, struct sk_buff *skb,
 		/* syncookie case : see end of cookie_v4_check() */
 	}
 	sk_setup_caps(newsk, dst);
-
+	//初始化 拥塞控制（congestion control） 相关状态
 	tcp_ca_openreq_child(newsk, dst);
 
 	tcp_sync_mss(newsk, dst_mtu(dst));
+	//advertised MSS，公告的最大报文段长度，用来限制该连接的最大 TCP 段大小
 	newtp->advmss = tcp_mss_clamp(tcp_sk(sk), dst_metric_advmss(dst));
-
+	//初始化接收端 MSS
 	tcp_initialize_rcv_mss(newsk);
 
 #ifdef CONFIG_TCP_MD5SIG
@@ -1659,21 +1663,25 @@ struct sock *tcp_v4_syn_recv_sock(const struct sock *sk, struct sk_buff *skb,
 		sk_nocaps_add(newsk, NETIF_F_GSO_MASK);
 	}
 #endif
-
+	//继承监听套接字（sk）的本地端口号给新创建的套接字
 	if (__inet_inherit_port(sk, newsk) < 0)
 		goto put_and_exit;
+	//尝试将新 socket newsk 插入到 TCP 已连接 socket 的散列表（ehash）中
 	*own_req = inet_ehash_nolisten(newsk, req_to_sk(req_unhash),
 				       &found_dup_sk);
 	if (likely(*own_req)) {
+		//把握手请求（SYN）状态从 request_sock 迁移到新建的tcp_sock（newtp），完成连接状态转换
 		tcp_move_syn(newtp, req);
+		//清空请求选项 ireq->ireq_opt = NULL;，释放相关资源
 		ireq->ireq_opt = NULL;
 	} else {
 		newinet->inet_opt = NULL;
-
+		//如果没有解哈希请求且发现重复socket，这通常是 syncookie 情况
 		if (!req_unhash && found_dup_sk) {
 			/* This code path should only be executed in the
 			 * syncookie case only
 			 */
+			//释放新 socket 相关资源：先解锁，减少引用计数
 			bh_unlock_sock(newsk);
 			sock_put(newsk);
 			newsk = NULL;
@@ -1700,7 +1708,8 @@ static struct sock *tcp_v4_cookie_check(struct sock *sk, struct sk_buff *skb)
 {
 #ifdef CONFIG_SYN_COOKIES
 	const struct tcphdr *th = tcp_hdr(skb);
-
+	//为什么不是 SYN 时才调用 cookie 校验？
+	//SYN cookie 是服务器在未创建状态的连接上，主动伪造 SYN+ACK，客户端回应的 ACK 中会携带 cookie
 	if (!th->syn)
 		sk = cookie_v4_check(sk, skb);
 #endif
@@ -1740,12 +1749,14 @@ int tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
 	}
 	if (sk->sk_state == TCP_ESTABLISHED) { /* Fast path */
 		struct dst_entry *dst;
-
+		//读取 socket 的接收方向路由缓存（sk_rx_dst）
 		dst = rcu_dereference_protected(sk->sk_rx_dst,
 						lockdep_sock_is_held(sk));
-
+		//保存 RPS 哈希值（接收包的散列值，用于 CPU 负载均衡）
 		sock_rps_save_rxhash(sk, skb);
+		//标记当前 socket 使用哪个 NAPI poll 实例（内核网络中断优化机制）
 		sk_mark_napi_id(sk, skb);
+		//如果当前 socket 有路由缓存，检查是否接口不一致或者路由已失效，如果是就清除当前路由缓存并释放 dst
 		if (dst) {
 			if (sk->sk_rx_dst_ifindex != skb->skb_iif ||
 			    !INDIRECT_CALL_1(dst->ops->check, ipv4_dst_check,
@@ -1762,6 +1773,11 @@ int tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
 		goto csum_err;
 
 	if (sk->sk_state == TCP_LISTEN) {
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: ->TCP_LISTEN\n", __func__);
+		//尝试通过 syncookie 校验机制处理 SYN 报文，防止 SYN Flood 攻击
+		//当服务器监听 socket 的 SYN 接收队列（accept queue）溢出时，也就是 backlog 满了，内核就会启用 SYN cookie
+		//cat /proc/sys/net/ipv4/tcp_syncookies
 		struct sock *nsk = tcp_v4_cookie_check(sk, skb);
 
 		if (!nsk)
@@ -2075,31 +2091,40 @@ process:
 	//比如主动关闭连接，最后一次 FIN-ACK 后会进入 TIME_WAIT，等超时后才释放 socket
 	if (sk->sk_state == TCP_TIME_WAIT)
 		goto do_time_wait;
+
 	//半连接状态，表示服务器端已经收到了客户端的 SYN，发送了 SYN-ACK，正在等待客户端确认的ACK
-	//此时 sk 是一个 临时的 request socket（request_sock），不是真正的连接 socket
+	//此时sk是一个临时的request socket，放在半连接队列（syn queue）中，不是真正的连接socket
+	//服务端
 	if (sk->sk_state == TCP_NEW_SYN_RECV) {
+		//获取临时的request socket
 		struct request_sock *req = inet_reqsk(sk);
 		//req_stolen：表示该请求 socket 是否被“偷走”，比如 SYN flood 防御机制中为了安全地延迟分配资源
 		bool req_stolen = false;
 		struct sock *nsk;
-
+		//获取真正监听的listen_socket,也就是accept调用最终接收连接的那个socket
 		sk = req->rsk_listener;
+		//是否接受该连接前进行安全策略与完整性校验
 		if (unlikely(!xfrm4_policy_check(sk, XFRM_POLICY_IN, skb) ||
 			     tcp_v4_inbound_md5_hash(sk, skb, dif, sdif))) {
 			sk_drops_add(sk, skb);
 			reqsk_put(req);
 			goto discard_it;
 		}
+		//检查这个 TCP 包的校验和是否正确,返回true表示校验失败
 		if (tcp_checksum_complete(skb)) {
-			reqsk_put(req);
+			reqsk_put(req);//释放request_socket资源
 			goto csum_error;
 		}
+		//如果 sk 不是监听状态，那就可能是需要迁移 socket 到另一个监听 socket（通过 SO_REUSEPORT 实现负载均衡）
 		if (unlikely(sk->sk_state != TCP_LISTEN)) {
+			//尝试找到一个更合适的监听 socket
 			nsk = reuseport_migrate_sock(sk, req_to_sk(req), skb);
 			if (!nsk) {
+				//如果迁移失败，就放弃请求（释放 req）并回到 lookup 路径重新查找
 				inet_csk_reqsk_queue_drop_and_put(sk, req);
 				goto lookup;
 			}
+			//迁移成功，替换当前 sk，并持有一个引用
 			sk = nsk;
 			/* reuseport_migrate_sock() has already held one sk_refcnt
 			 * before returning.
@@ -2108,55 +2133,68 @@ process:
 			/* We own a reference on the listener, increase it again
 			 * as we might lose it too soon.
 			 */
+			//是监听socket，增加引用计数，防止过早释放
 			sock_hold(sk);
 		}
+		//表示当前 socket 已持有引用，后续逻辑需要注意是否释放
 		refcounted = true;
 		nsk = NULL;
+		//如果没有设置 BPF 过滤器或者通过了过滤，则继续处理
 		if (!tcp_filter(sk, skb)) {
 			th = (const struct tcphdr *)skb->data;
 			iph = ip_hdr(skb);
+			//把 IP 和 TCP 头中的关键字段拷贝到 skb->cb 中
 			tcp_v4_fill_cb(skb, iph, th);
+			//连接校验: 如果 ACK 正常，并且握手成功，会返回新建好的child socket (nsk),如果失败，则返回 NULL。如果另一个CPU抢先处理了这个req，则会设置req_stolen=true
 			nsk = tcp_check_req(sk, skb, req, false, &req_stolen);
 		}
+		//未生成新的socket
 		if (!nsk) {
+			//释放 request_sock
 			reqsk_put(req);
 			if (req_stolen) {
+				//被其他 CPU 抢先处理，这个包还是有用的，不应该丢
 				/* Another cpu got exclusive access to req
 				 * and created a full blown socket.
 				 * Try to feed this packet to this socket
 				 * instead of discarding it.
 				 */
-				tcp_v4_restore_cb(skb);
-				sock_put(sk);
-				goto lookup;
+				tcp_v4_restore_cb(skb);//恢复 skb->cb 的控制块
+				sock_put(sk);//放掉当前持有的 socket 引用
+				goto lookup;//回退重新查找 socket 并处理
 			}
-			goto discard_and_relse;
+			goto discard_and_relse;//彻底丢弃
 		}
+		//清除 netfilter 连接跟踪,因为我们即将把这个 skb 交给新的 socket 使用，因此需要清除之前连接跟踪关联信息
 		nf_reset_ct(skb);
+		//tcp_check_req() 中某些情况不会建立新 socket，而是要求原监听 socket 继续处理，比如 syncookie 验证失败等
 		if (nsk == sk) {
 			reqsk_put(req);
 			tcp_v4_restore_cb(skb);
-		} else if (tcp_child_process(sk, nsk, skb)) {
+		} else if (tcp_child_process(sk, nsk, skb)) {//负责真正处理新连接（完成连接建立 + 调用 accept 队列逻辑）
+			//如果出错，发送 RST 复位报文
 			tcp_v4_send_reset(nsk, skb);
 			goto discard_and_relse;
 		} else {
+			//否则一切顺利，放掉监听 socket 的引用并返回
 			sock_put(sk);
 			return 0;
 		}
 	}
+	//检查进入的 TCP 报文的 IP TTL 是否小于本地 socket 设置的最小 TTL，若是则丢弃该报文
 	if (unlikely(iph->ttl < inet_sk(sk)->min_ttl)) {
 		__NET_INC_STATS(net, LINUX_MIB_TCPMINTTLDROP);
 		goto discard_and_relse;
 	}
-
+	//IPSec 安全策略检查
 	if (!xfrm4_policy_check(sk, XFRM_POLICY_IN, skb))
 		goto discard_and_relse;
-
+	//TCP MD5 签名验证（BGP 等场景）
 	if (tcp_v4_inbound_md5_hash(sk, skb, dif, sdif))
 		goto discard_and_relse;
-
+	//重置连接跟踪状态
 	nf_reset_ct(skb);
-
+	//BPF过滤
 	if (tcp_filter(sk, skb)) {
 		drop_reason = SKB_DROP_REASON_SOCKET_FILTER;
 		goto discard_and_relse;
@@ -2166,7 +2204,7 @@ process:
 	tcp_v4_fill_cb(skb, iph, th);
 
 	skb->dev = NULL;
-
+	//三次握手第一步: SYN 服务端调用了listen
 	if (sk->sk_state == TCP_LISTEN) {
 		if (is_src_k2pro(skb)) {
 			printk(KERN_INFO "%s: ->TCP_LISTEN tcp_v4_do_rcv\n", __func__);
@@ -2174,12 +2212,14 @@ process:
 		ret = tcp_v4_do_rcv(sk, skb);
 		goto put_and_return;
 	}
-
+	//更新 socket 最近接收数据的 CPU ID，优化 cache locality
 	sk_incoming_cpu_update(sk);
-
+	//获取 socket 锁（软中断上下文中的 bottom half 锁），防止并发访问
 	bh_lock_sock_nested(sk);
+	//增加 sk->tcp_stats.segs_in 计数器，表示收到了一个 TCP 段
 	tcp_segs_in(tcp_sk(sk), skb);
 	ret = 0;
+	//如果这个socket不在用户态占用中（比如没有被用户进程锁定在read，send，recv()、poll() 等），就可以立即处理数据包
 	if (!sock_owned_by_user(sk)) {
 		skb_to_free = sk->sk_rx_skb_cache;
 		sk->sk_rx_skb_cache = NULL;
@@ -2188,11 +2228,17 @@ process:
 		}
 		ret = tcp_v4_do_rcv(sk, skb);
 	} else {
+		//如果 socket 被用户占用，不能立即处理这个包，尝试把包放入 backlog 队列，如果 backlog 满了，丢弃包
+		if (is_src_k2pro(skb)) {
+			printk(KERN_INFO "%s: ->sock_owned_by_user tcp_v4_do_rcv\n", __func__);
+		}
 		if (tcp_add_backlog(sk, skb))
 			goto discard_and_relse;
 		skb_to_free = NULL;
 	}
+	//解锁 socket，允许其他上下文访问
 	bh_unlock_sock(sk);
+	//如果有缓存的 skb 被释放，现在就释放它，防止内存泄露
 	if (skb_to_free)
 		__kfree_skb(skb_to_free);
 
@@ -2233,6 +2279,7 @@ discard_and_relse:
 
 do_time_wait:
 	if (!xfrm4_policy_check(NULL, XFRM_POLICY_IN, skb)) {
+		//释放一个处于 TCP_TIME_WAIT 状态的 socket 引用
 		inet_twsk_put(inet_twsk(sk));
 		goto discard_it;
 	}
@@ -2244,7 +2291,8 @@ do_time_wait:
 		goto csum_error;
 	}
 	switch (tcp_timewait_state_process(inet_twsk(sk), skb, th)) {
-	case TCP_TW_SYN: {
+	case TCP_TW_SYN: {//收到了 SYN，要尝试建立一个新连接
+		//尝试查找是否有监听 socket 能处理这个 SYN
 		struct sock *sk2 = inet_lookup_listener(dev_net(skb->dev),
 							&tcp_hashinfo, skb,
 							__tcp_hdrlen(th),
@@ -2253,23 +2301,27 @@ do_time_wait:
 							inet_iif(skb),
 							sdif);
 		if (sk2) {
+			//释放老的 TIME_WAIT socket
 			inet_twsk_deschedule_put(inet_twsk(sk));
 			sk = sk2;
 			tcp_v4_restore_cb(skb);
 			refcounted = false;
+			//重新处理这个包
 			goto process;
 		}
 	}
 		/* to ACK */
 		fallthrough;
-	case TCP_TW_ACK:
+	case TCP_TW_ACK://收到 ACK、应该回一个 ACK
+		//根据 TCP 标准，TIME_WAIT 状态下收到 ACK，回一个 ACK 是允许的，保持连接稳定
 		tcp_v4_timewait_ack(sk, skb);
 		break;
-	case TCP_TW_RST:
+	case TCP_TW_RST://收到特殊包，比如非法 SYN/ACK，应该发一个 RST 响应
+		//发个 TCP RST 报文告诉对方这个连接“无效”，然后释放 TIME_WAIT socket
 		tcp_v4_send_reset(sk, skb);
 		inet_twsk_deschedule_put(inet_twsk(sk));
 		goto discard_it;
-	case TCP_TW_SUCCESS:;
+	case TCP_TW_SUCCESS:;//没有特殊情况，丢弃这个包
 	}
 	goto discard_it;
 }

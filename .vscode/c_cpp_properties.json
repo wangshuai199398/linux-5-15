@@ -13,7 +13,10 @@
                 "CONFIG_NET_EGRESS",
                 "CONFIG_RPS",
                 "CONFIG_NET_INGRESS",
-                "CONFIG_IP_ROUTE_CLASSID"
+                "CONFIG_IP_ROUTE_CLASSID",
+                "CONFIG_SOCK_CGROUP_DATA",
+                "CONFIG_CGROUPS",
+                "CONFIG_SECURITY_NETWORK"
             ],
             "compilerPath": "/usr/bin/clang",
             "cStandard": "c17",

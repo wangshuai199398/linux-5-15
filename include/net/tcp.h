@@ -1374,8 +1374,11 @@ static inline __sum16 tcp_v4_check(int len, __be32 saddr,
 	return csum_tcpudp_magic(saddr, daddr, len, IPPROTO_TCP, base);
 }
 
+//判断一个 TCP 包是否需要并且通过了校验和检查
 static inline bool tcp_checksum_complete(struct sk_buff *skb)
 {
+	//如果网卡已经正确做了校验和offload，就会设置CHECKSUM_UNNECESSARY
+	//软件重新计算 checksum，并判断是否正确（返回 0 表示校验通过）
 	return !skb_csum_unnecessary(skb) &&
 		__skb_checksum_complete(skb);
 }

@@ -6581,7 +6581,7 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb)
 	switch (sk->sk_state) {
 	case TCP_CLOSE:
 		goto discard;
-
+	//收到syn包
 	case TCP_LISTEN:
 		if (th->ack)
 			return 1;
@@ -6597,7 +6597,7 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb)
 			 */
 			rcu_read_lock();
 			local_bh_disable();
-			acceptable = icsk->icsk_af_ops->conn_request(sk, skb) >= 0;
+			acceptable = icsk->icsk_af_ops->conn_request(sk, skb) >= 0;//tcp_v4_conn_request
 			local_bh_enable();
 			rcu_read_unlock();
 

@@ -1853,6 +1853,7 @@ static void sock_copy(struct sock *nsk, const struct sock *osk)
 #endif
 }
 
+//分配一个新的 sock 结构
 static struct sock *sk_prot_alloc(struct proto *prot, gfp_t priority,
 		int family)
 {
@@ -1861,18 +1862,21 @@ static struct sock *sk_prot_alloc(struct proto *prot, gfp_t priority,
 
 	slab = prot->slab;
 	if (slab != NULL) {
+		//如果协议定义了 slab cache（如 TCP 定义的 tcp_cachep），用 kmem_cache_alloc() 分配对象
 		sk = kmem_cache_alloc(slab, priority & ~__GFP_ZERO);
 		if (!sk)
 			return sk;
+		//如果分配标志中带初始化请求（如内存隔离、调试），调用sk_prot_clear_nulls清理空指针位置
 		if (want_init_on_alloc(priority))
 			sk_prot_clear_nulls(sk, prot->obj_size);
 	} else
 		sk = kmalloc(prot->obj_size, priority);
 
 	if (sk != NULL) {
+		//让 SELinux、AppArmor 等安全模块检查是否允许该 socket 被创建
 		if (security_sk_alloc(sk, family, priority))
 			goto out_free;
-
+		//增加协议模块引用计数，防止使用时被卸载
 		if (!try_module_get(prot->owner))
 			goto out_free_sec;
 	}
@@ -2068,12 +2072,13 @@ struct sock *sk_clone_lock(const struct sock *sk, const gfp_t priority)
 	newsk = sk_prot_alloc(prot, priority, sk->sk_family);
 	if (!newsk)
 		goto out;
-
+	//将原socket的内存状态复制到新 socket，但跳过中间一段内存区域，避免复制某些私有、敏感或运行时特有字段
 	sock_copy(newsk, sk);
 
 	newsk->sk_prot_creator = prot;
 
 	/* SANITY */
+	//在新创建的socket处理网络命名空间的引用计数和使用统计
 	if (likely(newsk->sk_net_refcnt)) {
 		get_net(sock_net(newsk));
 		sock_inuse_add(sock_net(newsk), 1);
@@ -2105,7 +2110,7 @@ struct sock *sk_clone_lock(const struct sock *sk, const gfp_t priority)
 
 	/* sk->sk_memcg will be populated at accept() time */
 	newsk->sk_memcg = NULL;
-
+	//增加cgroup引用计数
 	cgroup_sk_clone(&newsk->sk_cgrp_data);
 
 	rcu_read_lock();
@@ -2141,6 +2146,7 @@ struct sock *sk_clone_lock(const struct sock *sk, const gfp_t priority)
 	/* Clear sk_user_data if parent had the pointer tagged
 	 * as not suitable for copying when cloning.
 	 */
+	//检查是否需要清除 sk_user_data，防止将不安全或线程本地的用户数据错误继承
 	if (sk_user_data_is_nocopy(newsk))
 		newsk->sk_user_data = NULL;
 

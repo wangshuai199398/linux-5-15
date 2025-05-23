@@ -447,11 +447,7 @@ static void smc_check_reset_syn_req(struct tcp_sock *oldtp,
 #endif
 }
 
-/* This is not only more efficient than what we used to do, it eliminates
- * a lot of code duplication between IPv4/IPv6 SYN recv processing. -DaveM
- *
- * Actually, we could lots of memory writes here. tp of listening
- * socket contains all necessary default parameters.
+/* 监听 socket (sk) 的 tcp_sock 结构（简称 tp）中已经包含很多默认配置，可以直接继承到新的 socket，不必重复初始化
  */
 struct sock *tcp_create_openreq_child(const struct sock *sk,
 				      struct request_sock *req,
@@ -470,7 +466,7 @@ struct sock *tcp_create_openreq_child(const struct sock *sk,
 	newicsk = inet_csk(newsk);
 	newtp = tcp_sk(newsk);
 	oldtp = tcp_sk(sk);
-
+	//处理 SMC（Shared Memory Communications，微软的共享内存通信技术）相关的状态检查和复位
 	smc_check_reset_syn_req(oldtp, req, newtp);
 
 	/* Now setup tcp_sock */
@@ -489,7 +485,7 @@ struct sock *tcp_create_openreq_child(const struct sock *sk,
 
 	INIT_LIST_HEAD(&newtp->tsq_node);
 	INIT_LIST_HEAD(&newtp->tsorted_sent_queue);
-
+	//初始化 拥塞窗口（Window Limiting，简称 WL） 相关状态
 	tcp_init_wl(newtp, treq->rcv_isn);
 
 	minmax_reset(&newtp->rtt_min, tcp_jiffies32, ~0U);
@@ -498,10 +494,10 @@ struct sock *tcp_create_openreq_child(const struct sock *sk,
 	newtp->lsndtime = tcp_jiffies32;
 	newsk->sk_txhash = treq->txhash;
 	newtp->total_retrans = req->num_retrans;
-
+	//初始化 TCP 传输定时器
 	tcp_init_xmit_timers(newsk);
 	WRITE_ONCE(newtp->write_seq, newtp->pushed_seq = treq->snt_isn + 1);
-
+	//如果开启了 SO_KEEPALIVE 标志（即 SOCK_KEEPOPEN），就会启动或重置 TCP 的 Keepalive 定时器
 	if (sock_flag(newsk, SOCK_KEEPOPEN))
 		inet_csk_reset_keepalive_timer(newsk,
 					       keepalive_time_when(newtp));
@@ -544,6 +540,7 @@ struct sock *tcp_create_openreq_child(const struct sock *sk,
 	if (skb->len >= TCP_MSS_DEFAULT + newtp->tcp_header_len)
 		newicsk->icsk_ack.last_seg_size = skb->len - newtp->tcp_header_len;
 	newtp->rx_opt.mss_clamp = req->mss;
+	//设置新连接支持的 ECN 标志
 	tcp_ecn_openreq_child(newtp, req);
 	newtp->fastopen_req = NULL;
 	RCU_INIT_POINTER(newtp->fastopen_rsk, NULL);
@@ -578,141 +575,89 @@ struct sock *tcp_check_req(struct sock *sk, struct sk_buff *skb,
 	struct sock *child;
 	const struct tcphdr *th = tcp_hdr(skb);
 	__be32 flg = tcp_flag_word(th) & (TCP_FLAG_RST|TCP_FLAG_SYN|TCP_FLAG_ACK);
+	//是否因为 PAWS（保护窗口避免旧数据包）机制而拒绝该包
 	bool paws_reject = false;
 	bool own_req;
 
 	tmp_opt.saw_tstamp = 0;
+	//TCP数据偏移字段表明有选项
 	if (th->doff > (sizeof(struct tcphdr)>>2)) {
+		//提取选项（如时间戳、窗口缩放等）
 		tcp_parse_options(sock_net(sk), skb, &tmp_opt, 0, NULL);
 
 		if (tmp_opt.saw_tstamp) {
+			//从 req 中取出记录的时间戳
 			tmp_opt.ts_recent = READ_ONCE(req->ts_recent);
+			//修正 rcv_tsecr 的值以考虑 TSO 偏移
 			if (tmp_opt.rcv_tsecr)
 				tmp_opt.rcv_tsecr -= tcp_rsk(req)->ts_off;
-			/* We do not store true stamp, but it is not required,
-			 * it can be estimated (approximately)
-			 * from another data.
-			 */
+			/* We do not store true stamp, but it is not required, it can be estimated (approximately) from another data. */
+			//构造“时间戳上次收到时间”
 			tmp_opt.ts_recent_stamp = ktime_get_seconds() - reqsk_timeout(req, TCP_RTO_MAX) / HZ;
+			//判断时间戳是否合法（是否老包），如果不合法，说明是旧包（比如迟到的 SYN 重传），就可以忽略掉
 			paws_reject = tcp_paws_reject(&tmp_opt, th->rst);
 		}
 	}
 
-	/* Check for pure retransmitted SYN. */
+	//检查是否是重复SYN重传，如果当前包的SEQ和原始ISN一致，并且它是纯SYN，并且没有被PAWS拒绝，那说明这可能是客户端重发的SYN，你可以选择忽略掉，或者做某些idempotent处理
 	if (TCP_SKB_CB(skb)->seq == tcp_rsk(req)->rcv_isn &&
 	    flg == TCP_FLAG_SYN &&
 	    !paws_reject) {
-		/*
-		 * RFC793 draws (Incorrectly! It was fixed in RFC1122)
-		 * this case on figure 6 and figure 8, but formal
-		 * protocol description says NOTHING.
-		 * To be more exact, it says that we should send ACK,
-		 * because this segment (at least, if it has no data)
-		 * is out of window.
-		 *
-		 *  CONCLUSION: RFC793 (even with RFC1122) DOES NOT
-		 *  describe SYN-RECV state. All the description
-		 *  is wrong, we cannot believe to it and should
-		 *  rely only on common sense and implementation
-		 *  experience.
-		 *
-		 * Enforce "SYN-ACK" according to figure 8, figure 6
-		 * of RFC793, fixed by RFC1122.
-		 *
-		 * Note that even if there is new data in the SYN packet
-		 * they will be thrown away too.
-		 *
-		 * Reset timer after retransmitting SYNACK, similar to
-		 * the idea of fast retransmit in recovery.
+		/* 如果客户端的ACK不对（如窗口外、重复等），服务器重新发送SYN-ACK，期望客户端再回复正确的ACK
+		 * 即便客户端的 SYN 中包含数据（违反规范），也会直接丢弃
+		 * 重新传 SYN-ACK 的同时，重置超时重传定时器，和 fast retransmit 类似，避免过早放弃连接
+		 * 客户端发出了SYN，收到了SYN-ACK，但ACK丢了，此时它会再发一个SYN。服务端看到重复的SYN，但自己还在SYN-RECV，这时就会重新发SYN-ACK，重置计时器，再等客户端ACK
 		 */
+		//是否要对同一客户端重传ACK或SYN-ACK进行限速，防止DoS或SYN flood，参数last_oow_ack_time是上次给该客户端重发ACK的时间
 		if (!tcp_oow_rate_limited(sock_net(sk), skb,
 					  LINUX_MIB_TCPACKSKIPPEDSYNRECV,
 					  &tcp_rsk(req)->last_oow_ack_time) &&
-
-		    !inet_rtx_syn_ack(sk, req)) {
+		    !inet_rtx_syn_ack(sk, req)) {//尝试重传SYN-ACK报文，成功返回0
 			unsigned long expires = jiffies;
-
+			//返回一个当前最大重传超时时间
 			expires += reqsk_timeout(req, TCP_RTO_MAX);
 			if (!fastopen)
+				//将req->rsk_timer加入定时器队列，并设置新的超时时间 expires；如果定时器已经在队列中，会更新它的超时点
 				mod_timer_pending(&req->rsk_timer, expires);
 			else
-				req->rsk_timer.expires = expires;
+				req->rsk_timer.expires = expires;//只设置expires字段，启动时机延迟，由其他逻辑决定是否启动定时器
+
 		}
 		return NULL;
 	}
 
-	/* Further reproduces section "SEGMENT ARRIVES"
-	   for state SYN-RECEIVED of RFC793.
-	   It is broken, however, it does not work only
-	   when SYNs are crossed.
-
-	   You would think that SYN crossing is impossible here, since
-	   we should have a SYN_SENT socket (from connect()) on our end,
-	   but this is not true if the crossed SYNs were sent to both
-	   ends by a malicious third party.  We must defend against this,
-	   and to do that we first verify the ACK (as per RFC793, page
-	   36) and reset if it is invalid.  Is this a true full defense?
-	   To convince ourselves, let us consider a way in which the ACK
-	   test can still pass in this 'malicious crossed SYNs' case.
-	   Malicious sender sends identical SYNs (and thus identical sequence
-	   numbers) to both A and B:
-
-		A: gets SYN, seq=7
-		B: gets SYN, seq=7
-
-	   By our good fortune, both A and B select the same initial
-	   send sequence number of seven :-)
-
-		A: sends SYN|ACK, seq=7, ack_seq=8
-		B: sends SYN|ACK, seq=7, ack_seq=8
-
-	   So we are now A eating this SYN|ACK, ACK test passes.  So
-	   does sequence test, SYN is truncated, and thus we consider
-	   it a bare ACK.
-
-	   If icsk->icsk_accept_queue.rskq_defer_accept, we silently drop this
-	   bare ACK.  Otherwise, we create an established connection.  Both
-	   ends (listening sockets) accept the new incoming connection and try
-	   to talk to each other. 8-)
-
-	   Note: This case is both harmless, and rare.  Possibility is about the
-	   same as us discovering intelligent life on another plant tomorrow.
-
-	   But generally, we should (RFC lies!) to accept ACK
-	   from SYNACK both here and in tcp_rcv_state_process().
-	   tcp_rcv_state_process() does not, hence, we do not too.
-
-	   Note that the case is absolutely generic:
-	   we cannot optimize anything here without
-	   violating protocol. All the checks must be made
-	   before attempt to create socket.
+	/* 假设攻击者发送了完全相同的 SYN 包
+	   A: 收到 SYN，seq=7
+	   B: 收到 SYN，seq=7
+	   由于运气好，A 和 B 恰好都选择了初始发送序列号为 7
+	   A: 发送 SYN|ACK，seq=7，ack_seq=8
+	   B: 发送 SYN|ACK，seq=7，ack_seq=8
+	   现在 A 收到 B 的 SYN|ACK，看起来完全合法。ACK 检查通过，序列号检查也通过，SYN 被截断，最终这个包被当作一个普通 ACK。
+	   如果开启了 icsk->icsk_accept_queue.rskq_defer_accept，我们会悄悄丢弃这个裸 ACK；
+	   否则，我们会直接建立连接。此时 A 和 B 这两个监听 socket 都建立了连接，然后……互相通信。8
+	   注意：这个情况虽然存在，但既无害，又极其罕见
+	   防御：
+	   ACK 校验（tcp_ack）  防止接受伪造 ACK 建立连接
+       ISN 加密            防止预测/伪造 SYN/ACK 序列号
+       TCP 时间戳（PAWS）   检测并拒绝过期或伪造段
+       defer_accept 策略   拒绝无数据 ACK 引发的“伪连接”
+       Fast Open 特判      防止带数据的早期 ACK 被绕过校验
 	 */
-
-	/* RFC793 page 36: "If the connection is in any non-synchronized state ...
-	 *                  and the incoming segment acknowledges something not yet
-	 *                  sent (the segment carries an unacceptable ACK) ...
-	 *                  a reset is sent."
-	 *
-	 * Invalid ACK: reset will be sent by listening socket.
-	 * Note that the ACK validity check for a Fast Open socket is done
-	 * elsewhere and is checked directly against the child socket rather
-	 * than req because user data may have been sent out.
-	 */
+	//如果是ACK包，并且没有开启Fast Open，且ACK序列号不等于ISN+1，说明这个包不是合法的ACK包，返回监听 socket sk，让上层函数发一个TCP RST，表示这是个非法连接尝试，关闭连接
+	//ack是对端发过来的报文seq+数据长度，也是下一个对端发过来的seq，seq是上一次自己发的set+数据长度
 	if ((flg & TCP_FLAG_ACK) && !fastopen &&
 	    (TCP_SKB_CB(skb)->ack_seq !=
 	     tcp_rsk(req)->snt_isn + 1))
 		return sk;
 
-	/* Also, it would be not so bad idea to check rcv_tsecr, which
-	 * is essentially ACK extension and too early or too late values
-	 * should cause reset in unsynchronized states.
+	/* 检查 rcv_tsecr（接收方时间戳回显）其实是个不错的主意。它相当于是 ACK 的一个扩展字段，如果其值太早或太晚（不合理）
+	 * 在连接还没完全建立（非同步状态）时，就可以视为非法包 —— 应该立刻发 RST
 	 */
-
-	/* RFC793: "first check sequence number". */
-
+	//时间戳太旧或者数据包序列号不在接收窗口内 判断数据包seq~end_seq是否落在预期接收窗口[rcv_nxt, rcv_nxt + rcv_wnd]范围内，如果不在窗口内，表示包失序、伪造、重复或非法，应该丢弃
 	if (paws_reject || !tcp_in_window(TCP_SKB_CB(skb)->seq, TCP_SKB_CB(skb)->end_seq,
 					  tcp_rsk(req)->rcv_nxt, tcp_rsk(req)->rcv_nxt + req->rsk_rcv_wnd)) {
 		/* Out of window: send ACK and drop. */
+		//如果不是RST包，而且没有触发速率限制，则回ACK告诉发送方当前的窗口/状态，但不继续处理这个包
 		if (!(flg & TCP_FLAG_RST) &&
 		    !tcp_oow_rate_limited(sock_net(sk), skb,
 					  LINUX_MIB_TCPACKSKIPPEDSYNRECV,
@@ -723,99 +668,97 @@ struct sock *tcp_check_req(struct sock *sk, struct sk_buff *skb,
 		return NULL;
 	}
 
-	/* In sequence, PAWS is OK. */
-
-	/* TODO: We probably should defer ts_recent change once
-	 * we take ownership of @req.
-	 */
+	//如果数据包中带有时间戳且这个包的seq小于或等于rcv_nxt（即是旧包或当前应接收的包），就更新 req->ts_recent，为将来的PAWS检查提供参考
 	if (tmp_opt.saw_tstamp && !after(TCP_SKB_CB(skb)->seq, tcp_rsk(req)->rcv_nxt))
 		WRITE_ONCE(req->ts_recent, tmp_opt.rcv_tsval);
-
+	//如果SYN重传且seq和原始初始序列号一致（rcv_isn），说明这个SYN已经处理过了，现在应该视为重复包，去掉SYN标志。
 	if (TCP_SKB_CB(skb)->seq == tcp_rsk(req)->rcv_isn) {
-		/* Truncate SYN, it is out of window starting
-		   at tcp_rsk(req)->rcv_isn + 1. */
+		//裁剪SYN标志位，因为它已经在我们期望的接收窗口之外，从rcv_isn+1开始就不再期望SYN
 		flg &= ~TCP_FLAG_SYN;
 	}
 
-	/* RFC793: "second check the RST bit" and
-	 *	   "fourth, check the SYN bit"
-	 */
+	//当接收到一个带有RST或SYN标志的包时，在连接仍处于SYN-RECEIVED状态时，认为这是非法或异常的连接尝试，进行重置处理
 	if (flg & (TCP_FLAG_RST|TCP_FLAG_SYN)) {
 		TCP_INC_STATS(sock_net(sk), TCP_MIB_ATTEMPTFAILS);
 		goto embryonic_reset;
 	}
 
-	/* ACK sequence verified above, just make sure ACK is
-	 * set.  If ACK not set, just silently drop the packet.
-	 *
-	 * XXX (TFO) - if we ever allow "data after SYN", the
-	 * following check needs to be removed.
-	 */
+	//这里检查是否设置了ACK标志。如果没有设置（即不是一个带 ACK 的包），则直接丢弃该包（return NULL），不做进一步处理。
 	if (!(flg & TCP_FLAG_ACK))
 		return NULL;
 
-	/* For Fast Open no more processing is needed (sk is the
-	 * child socket).
-	 */
+	//如果TFO请求，那么不需要进一步处理这个包，直接返回已建立的子socket
 	if (fastopen)
 		return sk;
 
-	/* While TCP_DEFER_ACCEPT is active, drop bare ACK. */
-	if (req->num_timeout < inet_csk(sk)->icsk_accept_queue.rskq_defer_accept &&
-	    TCP_SKB_CB(skb)->end_seq == tcp_rsk(req)->rcv_isn + 1) {
+	/* 当启用了TCP_DEFER_ACCEPT（延迟接受）选项时，如果收到一个“裸的 ACK”（即没有数据，只是 ACK），就丢弃它 */
+	if (req->num_timeout < inet_csk(sk)->icsk_accept_queue.rskq_defer_accept &&//表示这是一个还在延迟接受计数器允许范围内的请求
+	    TCP_SKB_CB(skb)->end_seq == tcp_rsk(req)->rcv_isn + 1) {//表示客户端发来的 ACK 只是确认了最初 SYN+ACK 的应答，没有附带数据
+		//标记这个请求已经被ACK过，这个标志在后续处理中可以用来判断连接是否被客户端确认过
 		inet_rsk(req)->acked = 1;
 		__NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPDEFERACCEPTDROP);
+		//丢弃这个 ACK 报文，不创建 socket，连接不进入 accept 队列。
+	    //等待客户端重新发送带数据的报文，才会真正创建 socket 并传递给 accept()
 		return NULL;
 	}
 
-	/* OK, ACK is valid, create big socket and
-	 * feed this segment to it. It will repeat all
-	 * the tests. THIS SEGMENT MUST MOVE SOCKET TO
-	 * ESTABLISHED STATE. If it will be dropped after
-	 * socket is created, wait for troubles.
+	/* OK, ACK is valid, create big socket and feed this segment to it. It will repeat all the tests. THIS SEGMENT MUST MOVE SOCKET TOESTABLISHED STATE.
+	 * If it will be dropped after socket is created, wait for troubles.
 	 */
 	child = inet_csk(sk)->icsk_af_ops->syn_recv_sock(sk, skb, req, NULL,
-							 req, &own_req);
+							 req, &own_req);//tcp_v4_syn_recv_sock
 	if (!child)
 		goto listen_overflow;
-
+	//own_req 表示当前处理逻辑是否“拥有”该 request socket
+	//rsk_drop_req是否应立即丢弃这个 req（可能是连接超时、被撤销等）
 	if (own_req && rsk_drop_req(req)) {
 		reqsk_queue_removed(&inet_csk(req->rsk_listener)->icsk_accept_queue, req);
 		inet_csk_reqsk_queue_drop_and_put(req->rsk_listener, req);
 		return child;
 	}
-
+	//保存接收到的skb中的 RPS（Receive Packet Steering）哈希。
+	//这用于将接下来的数据包调度到对应CPU，提高多核并发处理能力。
 	sock_rps_save_rxhash(child, skb);
+	//基于握手 RTT（往返时延）计算，更新这个连接的 RTT 初值
 	tcp_synack_rtt_meas(child, req);
+	//如果当前逻辑是“偷”了别人处理的请求（例如 TFO 处理路径中这样可能发生），设置 *req_stolen = true，否则，标记为自己处理的请求
 	*req_stolen = !own_req;
+	//完成 hashdance 操作，hashdance 是一个术语，指将新的 socket 从临时连接状态（req）转换为完整连接，并插入到 established 哈希表中
+	//此函数也负责设置 socket 状态为 ESTABLISHED，并通知上层应用该连接可用。
 	return inet_csk_complete_hashdance(sk, child, req, own_req);
 
 listen_overflow:
+	//如果当前使用的 sk 不是监听 socket（可能是因为 TFO 创建了 child socket），记录一次“迁移失败”的统计信息
 	if (sk != req->rsk_listener)
 		__NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPMIGRATEREQFAILURE);
-
+	//开关关闭：就不会对连接发RST，只标记 ACK 收到，然后“静默”丢弃这个请求。这样客户端会挂起，等待重试，而不是立即失败
 	if (!READ_ONCE(sock_net(sk)->ipv4.sysctl_tcp_abort_on_overflow)) {
 		inet_rsk(req)->acked = 1;
 		return NULL;
 	}
 
 embryonic_reset:
+	//如果不是一个RST报文（即不是客户端主动断开连接）
 	if (!(flg & TCP_FLAG_RST)) {
 		/* Received a bad SYN pkt - for TFO We try not to reset
 		 * the local connection unless it's really necessary to
 		 * avoid becoming vulnerable to outside attack aiming at
 		 * resetting legit local connections.
 		 */
-		req->rsk_ops->send_reset(sk, skb);
+		req->rsk_ops->send_reset(sk, skb);//主动向客户端发送一个 RST，表示连接已拒绝
 	} else if (fastopen) { /* received a valid RST pkt */
-		reqsk_fastopen_remove(sk, req, true);
+		reqsk_fastopen_remove(sk, req, true);//清理 Fast Open 请求
 		tcp_reset(sk, skb);
 	}
 	if (!fastopen) {
+		//将请求从 listen 队列中删除
 		bool unlinked = inet_csk_reqsk_queue_drop(sk, req);
 
 		if (unlinked)
 			__NET_INC_STATS(sock_net(sk), LINUX_MIB_EMBRYONICRSTS);
+		//表示请求是否还留在队列中（比如刚刚已经被别人处理过）
+		//unlinked为1表示删除了，说明请求已“被处理”或“被释放”了，告诉调用者“请求没被偷走”或“请求不再存在”
+		//unlinked为0说明请求未被成功移除（可能被别人抢先处理）
 		*req_stolen = !unlinked;
 	}
 	return NULL;
@@ -843,22 +786,29 @@ int tcp_child_process(struct sock *parent, struct sock *child,
 
 	/* record NAPI ID of child */
 	sk_mark_napi_id(child, skb);
-
+	//更新当前 socket 的统计信息
 	tcp_segs_in(tcp_sk(child), skb);
+	//child socket 当前没有被用户持有（未被应用层调用如 recv() 占用）
 	if (!sock_owned_by_user(child)) {
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: ->tcp_rcv_state_process\n", __func__);
+		//处理接收的 TCP 包，改变状态机（如 SYN_RECV → ESTABLISHED），或者继续处理数据包。
 		ret = tcp_rcv_state_process(child, skb);
 		/* Wakeup parent, send SIGIO */
+		//如果状态从 TCP_SYN_RECV 转变（说明握手完成），会：通知监听 socket（父socket）数据已准备好：可能触发select()/epoll()的返回或信号通知（如SIGIO）
 		if (state == TCP_SYN_RECV && child->sk_state != state)
 			parent->sk_data_ready(parent);
 	} else {
 		/* Alas, it is possible again, because we do lookup
 		 * in main socket hash table and lock on listening
 		 * socket does not protect us more.
+		 * 说明 socket 被用户线程持有，暂时不能直接处理该 skb，把skb加入 socket 的 backlog 队列，由后续 release_sock() 时处理
 		 */
 		__sk_add_backlog(child, skb);
 	}
 
 	bh_unlock_sock(child);
+	//递减 child 的引用计数（sock_put），可能触发回收
 	sock_put(child);
 	return ret;
 }

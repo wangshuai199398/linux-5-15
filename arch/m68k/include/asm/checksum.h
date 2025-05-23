@@ -64,6 +64,8 @@ static inline __sum16 ip_fast_csum(const void *iph, unsigned int ihl)
 	return (__force __sum16)~sum;
 }
 
+//这是一个 折叠操作，将 32 位的中间结果 wsum（__wsum）折叠成标准的 16 位校验和结果（__sum16）
+//折叠方法：把高 16 位加到低 16 位，再进行进位折返，最后取反（~）
 static inline __sum16 csum_fold(__wsum sum)
 {
 	unsigned int tmp = (__force u32)sum;
