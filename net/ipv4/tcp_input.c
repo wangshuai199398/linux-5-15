@@ -4060,9 +4060,9 @@ old_ack:
 		flag |= tcp_sacktag_write_queue(sk, skb, prior_snd_una,
 						&sack_state);
 		tcp_fastretrans_alert(sk, prior_snd_una, num_dupack, &flag,
-				      &rexmit);//
-		tcp_newly_delivered(sk, delivered, flag);
-		tcp_xmit_recovery(sk, rexmit);
+				      &rexmit);//检测是否需要触发快速重传
+		tcp_newly_delivered(sk, delivered, flag);//统计新的交付数据字节数
+		tcp_xmit_recovery(sk, rexmit);//如果有丢包或重传需求，执行传输恢复
 	}
 
 	return 0;
