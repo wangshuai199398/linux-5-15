@@ -6373,7 +6373,7 @@ ok:
 		__clear_bit(bucket, &napi->gro_bitmask);//无包，对bucket位置0
 	}
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: ->return ret %d gro_list->count %d\n", __func__, ret, gro_list->count);
+		printk(KERN_INFO "%s: ->return ret %d gro_list->count %d grow %d\n", __func__, ret, gro_list->count, grow);
 
 	return ret;
 
