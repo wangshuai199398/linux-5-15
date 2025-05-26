@@ -1911,6 +1911,7 @@ SYSCALL_DEFINE4(accept4, int, fd, struct sockaddr __user *, upeer_sockaddr,
 	return __sys_accept4(fd, upeer_sockaddr, upeer_addrlen, flags);
 }
 
+//accept_wangs
 SYSCALL_DEFINE3(accept, int, fd, struct sockaddr __user *, upeer_sockaddr,
 		int __user *, upeer_addrlen)
 {
@@ -1971,9 +1972,11 @@ int __sys_connect(int fd, struct sockaddr __user *uservaddr, int addrlen)
 	return ret;
 }
 
+//connect_wangs
 SYSCALL_DEFINE3(connect, int, fd, struct sockaddr __user *, uservaddr,
 		int, addrlen)
 {
+	pr_err("%s: __sys_connect fd %d addrlen %d \n", __func__, fd, addrlen);
 	return __sys_connect(fd, uservaddr, addrlen);
 }
 
