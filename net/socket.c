@@ -1748,8 +1748,10 @@ int __sys_bind(int fd, struct sockaddr __user *umyaddr, int addrlen)
 	return err;
 }
 
+//bind_wangs
 SYSCALL_DEFINE3(bind, int, fd, struct sockaddr __user *, umyaddr, int, addrlen)
 {
+	pr_err("%s: __sys_bind fd %d addrlen %d \n", __func__, fd, addrlen);
 	return __sys_bind(fd, umyaddr, addrlen);
 }
 
