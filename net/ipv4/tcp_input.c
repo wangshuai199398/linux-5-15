@@ -5650,7 +5650,9 @@ void tcp_check_space(struct sock *sk)
 
 static inline void tcp_data_snd_check(struct sock *sk)
 {
+	//尝试将写缓冲区（send buffer）中尚未发送或尚未完全发送的数据段推送到网络中
 	tcp_push_pending_frames(sk);
+	//检查发送窗口空间、拥塞窗口空间、接收端的确认是否释放了buffer,如果发现应用程序之前因为发送窗口满而被阻塞，现在又有空间了，会唤醒应用程序
 	tcp_check_space(sk);
 }
 
