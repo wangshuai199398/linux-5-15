@@ -39,6 +39,12 @@ static bool tcp_in_window(u32 seq, u32 end_seq, u32 s_win, u32 e_win)
 	return seq == e_win && seq == end_seq;
 }
 
+/* tw: time-wait套接字，记录连接的基本状态
+ * skb: 收到的TCP报文
+ * mib_idx: 用于统计的指标索引
+ * 防止资源耗尽攻击：比如攻击者不断发送不合法包触发 ACK，系统就会频繁发 ACK，占用资源
+ * 进行速率限制：在一定时间内收到太多类似无效包，会限制或丢弃响应
+*/
 static enum tcp_tw_status
 tcp_timewait_check_oow_rate_limit(struct inet_timewait_sock *tw,
 				  const struct sk_buff *skb, int mib_idx)
@@ -89,6 +95,12 @@ tcp_timewait_check_oow_rate_limit(struct inet_timewait_sock *tw,
  * We don't need to initialize tmp_out.sack_ok as we don't use the results
  */
 //处理TIME-WAIT状态的TCP连接收到的报文
+/*
+三种情况，三种处理方式
+新SYN且可信（RFC 1337）   返回 TCP_TW_SYN，准备接管          新连接reuse
+ACKless SYN/无效包      reschedule并检查响应频率限制         可能是老包重传
+RST包                   不响应，直接释放 socket             静默处理
+*/
 enum tcp_tw_status
 tcp_timewait_state_process(struct inet_timewait_sock *tw, struct sk_buff *skb,
 			   const struct tcphdr *th)
@@ -115,24 +127,28 @@ tcp_timewait_state_process(struct inet_timewait_sock *tw, struct sk_buff *skb,
 		}
 	}
 	//半关闭状态，本端收到了对方的FIN，并发送了ACK，但还没有等到对方完全关闭连接
+	//状态表示本端已经发送了 FIN 并收到了对方的 ACK，正在等待对方发送 FIN 以完成连接的关闭
 	if (tw->tw_substate == TCP_FIN_WAIT2) {
 		/* Just repeat all the checks of tcp_rcv_state_process() */
 
-		/* Out of window, send ACK */
+		//启用了PAWS检测且失败或收到的包序列号超出了接收窗口
 		if (paws_reject ||
 		    !tcp_in_window(TCP_SKB_CB(skb)->seq, TCP_SKB_CB(skb)->end_seq,
 				   tcptw->tw_rcv_nxt,
 				   tcptw->tw_rcv_nxt + tcptw->tw_rcv_wnd))
+			//检查并限制异常 ACK 的发送频率
 			return tcp_timewait_check_oow_rate_limit(
 				tw, skb, LINUX_MIB_TCPACKSKIPPEDFINWAIT2);
-
+		//收到 RST（重置）表示对方强制关闭连接，直接处理资源释放
 		if (th->rst)
 			goto kill;
-
+		//如果在 FIN_WAIT2 状态下收到了 SYN 包（即重建连接），但其序列号不早于期望值，说明对方可能是误操作或者攻击，返回RST
 		if (th->syn && !before(TCP_SKB_CB(skb)->seq, tcptw->tw_rcv_nxt))
 			return TCP_TW_RST;
 
 		/* Dup ACK? */
+		//如果不是ACK,或者没有新数据（序列号没有推进），或者是空的 ACK（起始和结束序列号相同）
+		//释放一个 time-wait socket 的引用计数，忽略包
 		if (!th->ack ||
 		    !after(TCP_SKB_CB(skb)->end_seq, tcptw->tw_rcv_nxt) ||
 		    TCP_SKB_CB(skb)->end_seq == TCP_SKB_CB(skb)->seq) {
@@ -143,19 +159,23 @@ tcp_timewait_state_process(struct inet_timewait_sock *tw, struct sk_buff *skb,
 		/* New data or FIN. If new data arrive after half-duplex close,
 		 * reset.
 		 */
+		//如果不是 FIN，或者接收到的数据长度不等于 1（说明可能是数据而非单独的 FIN），那么这在 FIN_WAIT2 状态是不允许的，直接返回 RST
 		if (!th->fin ||
 		    TCP_SKB_CB(skb)->end_seq != tcptw->tw_rcv_nxt + 1)
 			return TCP_TW_RST;
 
 		/* FIN arrived, enter true time-wait state. */
+		//收到合法 FIN，进入真正的 TIME_WAIT 状态,说明连接已经完全关闭，只是需要等待一定时间以确保数据包不会在网络中残留
 		tw->tw_substate	  = TCP_TIME_WAIT;
 		tcptw->tw_rcv_nxt = TCP_SKB_CB(skb)->end_seq;
+		//如果启用了时间戳选项（TSopt），更新最近时间戳值
 		if (tmp_opt.saw_tstamp) {
 			tcptw->tw_ts_recent_stamp = ktime_get_seconds();
 			tcptw->tw_ts_recent	  = tmp_opt.rcv_tsval;
 		}
-
+		//重新调度 TIME_WAIT 超时时间
 		inet_twsk_reschedule(tw, TCP_TIMEWAIT_LEN);
+		//返回 ACK 表示正常处理完成
 		return TCP_TW_ACK;
 	}
 
@@ -175,7 +195,7 @@ tcp_timewait_state_process(struct inet_timewait_sock *tw, struct sk_buff *skb,
 	 *	(2)  returns to TIME-WAIT state if the SYN turns out
 	 *	to be an old duplicate".
 	 */
-
+	//时间戳合法，收到的包正好是我们期望的下一个序列号，无数据段即纯 ACK（空段）或者是一个带有RST的包
 	if (!paws_reject &&
 	    (TCP_SKB_CB(skb)->seq == tcptw->tw_rcv_nxt &&
 	     (TCP_SKB_CB(skb)->seq == TCP_SKB_CB(skb)->end_seq || th->rst))) {
@@ -186,20 +206,22 @@ tcp_timewait_state_process(struct inet_timewait_sock *tw, struct sk_buff *skb,
 			 * Oh well... nobody has a sufficient solution to this
 			 * protocol bug yet.
 			 */
+			//收到RST且未启用rfc1337，移除并释放timewait socket，这个连接就提前被终结了（可能是攻击，也可能是对端异常关闭）
 			if (!READ_ONCE(twsk_net(tw)->ipv4.sysctl_tcp_rfc1337)) {
 kill:
 				inet_twsk_deschedule_put(tw);
 				return TCP_TW_SUCCESS;
 			}
 		} else {
+			//更新超时时间，重启 TIME_WAIT 生命周期
 			inet_twsk_reschedule(tw, TCP_TIMEWAIT_LEN);
 		}
-
+		//更新时间戳
 		if (tmp_opt.saw_tstamp) {
 			tcptw->tw_ts_recent	  = tmp_opt.rcv_tsval;
 			tcptw->tw_ts_recent_stamp = ktime_get_seconds();
 		}
-
+		//表示这次处理完毕，不需要发送任何响应（ACK/RST），安全地释放 socket 引用计数
 		inet_twsk_put(tw);
 		return TCP_TW_SUCCESS;
 	}
@@ -220,11 +242,16 @@ kill:
 	   we must return socket to time-wait state. It is not good,
 	   but not fatal yet.
 	 */
-
+	//收到的是SYN包 说明它是一个“纯 SYN”，没有携带RST或ACK 时间戳没有被PAWS拒绝
+	//SYN的序列号大于我们原连接的rcv_nxt，疑似新连接
+	//rcv_tsval > tw_ts_recent，表明这个 SYN 包是后来的，可能是新的连接
 	if (th->syn && !th->rst && !th->ack && !paws_reject &&
 	    (after(TCP_SKB_CB(skb)->seq, tcptw->tw_rcv_nxt) ||
 	     (tmp_opt.saw_tstamp &&
 	      (s32)(tcptw->tw_ts_recent - tmp_opt.rcv_tsval) < 0))) {
+		//构造一个新的初始序列号（ISN）用于新连接（防止序列号冲突）
+		//设置 TCP_SKB_CB(skb)->tcp_tw_isn：用于后续三次握手逻辑
+		//返回 TCP_TW_SYN：告诉上层，准备接管这个新连接
 		u32 isn = tcptw->tw_snd_nxt + 65535 + 2;
 		if (isn == 0)
 			isn++;
@@ -234,7 +261,7 @@ kill:
 
 	if (paws_reject)
 		__NET_INC_STATS(twsk_net(tw), LINUX_MIB_PAWSESTABREJECTED);
-
+	//不是新的 SYN，但也不是 RST，可能是老 SYN 重传或 ACK-less SYN
 	if (!th->rst) {
 		/* In this case we must reset the TIMEWAIT timer.
 		 *
@@ -242,12 +269,15 @@ kill:
 		 * and new good SYN with random sequence number <rcv_nxt.
 		 * Do not reschedule in the last case.
 		 */
+		//如果启用了 PAWS 或是 ACK，我们延长 TIME_WAIT 生命周期
 		if (paws_reject || th->ack)
 			inet_twsk_reschedule(tw, TCP_TIMEWAIT_LEN);
-
+		//限制响应频率（防攻击）
+		//统计一次“非窗口 ACK”的跳过计数
 		return tcp_timewait_check_oow_rate_limit(
 			tw, skb, LINUX_MIB_TCPACKSKIPPEDTIMEWAIT);
 	}
+	//如果是 RST 报文：释放 socket 引用，不响应任何东西
 	inet_twsk_put(tw);
 	return TCP_TW_SUCCESS;
 }

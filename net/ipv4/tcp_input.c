@@ -5988,8 +5988,10 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 
 	/* TCP congestion window tracking */
 	trace_tcp_probe(sk, skb);
-
+	//刷新当前TCP时间戳tp->tcp_mstamp
 	tcp_mstamp_refresh(tp);
+	//如果这个 socket 还没设置目标路由缓存(sk_rx_dst)，就通过协议族操作设置它
+	//例如，对于 IPv4，它会设置dst_entry，用于后续发送ACK或其他响应包时做路由决策
 	if (unlikely(!rcu_access_pointer(sk->sk_rx_dst)))
 		inet_csk(sk)->icsk_af_ops->sk_rx_dst_set(sk, skb);
 	/*
@@ -6006,7 +6008,7 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 	 *	extra cost of the net_bh soft interrupt processing...
 	 *	We do checksum and copy also but from device to kernel.
 	 */
-
+	//为了避免误用之前接收包的时间戳信息
 	tp->rx_opt.saw_tstamp = 0;
 
 	/*	pred_flags is 0xS?10 << 16 + snd_wnd
@@ -6020,13 +6022,16 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 	if (is_src_k2pro(skb)) {
 		printk(KERN_INFO "%s: !rcu_access_pointer\n", __func__);
 	}
-	//检查接收到的数据包的标志位是否和预期的快速路径标志相匹配
-	//这个包是否正好是我们期待接收的下一个包（即顺序到达）
-	//ACK 不能确认未来的数据（即 ACK 不能比我们发的还新）
-	//1. TCP 标志与预期一致（通常是纯 ACK 或带一点 PSH 的数据）2. 数据包是按序到达的（无乱序）。3. ACK 合理（没有确认未来未发的数据）,那么这个包可以通过快速路径处理（跳过大量通用 TCP 状态处理逻辑），提高性能
+	//tcp_flag_word(th) 提取 TCP 首部中的 flags 字段
+	//TCP_HP_BITS 是快速路径中允许的 flags 位（如 ACK，但不包含 SYN、RST、FIN 等）。
+	//tp->pred_flags 是预期的 flag 状态，通常是 ACK + 没有其它控制位。
+	//判断这个包是不是我们“最理想的那类包： 纯 ACK 包（也可能带数据），没有控制标志、选项、异常行为
+	//这个包的序列号 seq 等于我们期望的下一个序列号 rcv_nxt，说明：包是按顺序来的，不是重传，不是乱序
+	//ACK 的确认号 ≤ 我们已发送的数据尾部 snd_nxt,对方不是在“乱确认”未来还没发出去的数据
 	if ((tcp_flag_word(th) & TCP_HP_BITS) == tp->pred_flags &&
 	    TCP_SKB_CB(skb)->seq == tp->rcv_nxt &&
 	    !after(TCP_SKB_CB(skb)->ack_seq, tp->snd_nxt)) {
+		//是一个纯ACK包（可能带数据） 数据正好是我们期望接收的下一个段  ACK确认合法，不是伪造或异常ACK
 		int tcp_header_len = tp->tcp_header_len;
 
 		/* Timestamp header prediction: tcp_header_len
@@ -6038,12 +6043,16 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 		if (is_src_k2pro(skb)) {
 			printk(KERN_INFO "%s: fast process tcp_header_len %d len %d\n", __func__, tcp_header_len, len);
 		}
+		//当前报文的 TCP 头长度是否精确等于基本 TCP 首部 + 时间戳选项（aligned 后的长度）
+		//这个包只带了 时间戳选项，没有其他复杂选项（如 SACK、窗口缩放等）
 		if (tcp_header_len == sizeof(struct tcphdr) + TCPOLEN_TSTAMP_ALIGNED) {
 			/* No? Slow path! */
+			//解析时间戳值,如果格式不正确（时间戳字段损坏或不规范），则放弃快路径，走慢路径处理
 			if (!tcp_parse_aligned_timestamp(tp, th))
 				goto slow_path;
 
 			/* If PAWS failed, check it more carefully in slow path */
+			//检查这个时间戳是否小于之前接收到的时间戳，如果是，说明可能是重放旧包
 			if ((s32)(tp->rx_opt.rcv_tsval - tp->rx_opt.ts_recent) < 0)
 				goto slow_path;
 
@@ -6053,9 +6062,10 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 			 * future packets due to the PAWS test.
 			 */
 		}
-
+		//说明这个包没有数据
 		if (len <= tcp_header_len) {
 			/* Bulk data transfer: sender */
+			//一个标准的、无负载的 ACK 包
 			if (len == tcp_header_len) {
 				/* Predicted packet is in window by definition.
 				 * seq == rcv_nxt and rcv_wup <= rcv_nxt.
@@ -6063,21 +6073,25 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 				 */
 				if (tcp_header_len ==
 				    (sizeof(struct tcphdr) + TCPOLEN_TSTAMP_ALIGNED) &&
-				    tp->rcv_nxt == tp->rcv_wup)
-					tcp_store_ts_recent(tp);
+				    tp->rcv_nxt == tp->rcv_wup)//rcv_nxt == rcv_wup：窗口更新指针和下一个期望序列号相同，说明窗口干净、无乱序
+					tcp_store_ts_recent(tp);//存储最近一次的 ts_recent
 
 				/* We know that such packets are checksummed
 				 * on entry.
 				 */
 				if (is_src_k2pro(skb))
 					printk(KERN_INFO "%s: tcp_ack tcp_data_snd_check\n", __func__);
+				//处理ACK
 				tcp_ack(sk, skb, 0);
+				//ACK包中没有数据，处理完可以直接释放
 				__kfree_skb(skb);
+				//检查是否需要发数据,看看现在有没有数据可以发，比如窗口扩大或新数据待发送
 				tcp_data_snd_check(sk);
 				/* When receiving pure ack in fast path, update
 				 * last ts ecr directly instead of calling
 				 * tcp_rcv_rtt_measure_ts()
 				 */
+				//快路径中，不调用 tcp_rcv_rtt_measure_ts()，直接更新一个用于后续 RTT 估算的时间戳副本
 				tp->rcv_rtt_last_tsecr = tp->rx_opt.rcv_tsecr;
 				return;
 			} else { /* Header too small */
@@ -6087,10 +6101,10 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 		} else {
 			int eaten = 0;
 			bool fragstolen = false;
-
+			//校验TCP报文是否完整有效
 			if (tcp_checksum_complete(skb))
 				goto csum_error;
-
+			//检查内存资源（socket 接收缓存是否足够）
 			if ((int)skb->truesize > sk->sk_forward_alloc)
 				goto step5;
 
@@ -6101,8 +6115,8 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 			if (tcp_header_len ==
 			    (sizeof(struct tcphdr) + TCPOLEN_TSTAMP_ALIGNED) &&
 			    tp->rcv_nxt == tp->rcv_wup)
-				tcp_store_ts_recent(tp);
-
+				tcp_store_ts_recent(tp);//与之前一样，在干净窗口中更新 ts_recent，用于 PAWS 检查
+			//基于时间戳估算 RTT，便于拥塞控制、超时重传等
 			tcp_rcv_rtt_measure_ts(sk, skb);
 
 			NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPHPHITS);
@@ -6113,61 +6127,70 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 				printk(KERN_INFO "%s: ->tcp_queue_rcv tcp_event_data_recv\n", __func__);
 			}
 			eaten = tcp_queue_rcv(sk, skb, &fragstolen);
+			//如更新 rcv_nxt、通知拥塞控制模块、统计数据包到达等
 			tcp_event_data_recv(sk, skb);
-
+			//如果 ACK 号与未确认号不同（说明这个数据包顺便确认了一些新数据）
 			if (TCP_SKB_CB(skb)->ack_seq != tp->snd_una) {
 				/* Well, only one small jumplet in fast path... */
 				if (is_src_k2pro(skb))
 					printk(KERN_INFO "%s: tcp_ack\n", __func__);
+				//处理 ACK，更新发送窗口，看看是否要立即发送 ACK 响应
 				tcp_ack(sk, skb, FLAG_DATA);
 				tcp_data_snd_check(sk);
+				//表示当前 ACK 计时器未激活，可以跳过发送
 				if (!inet_csk_ack_scheduled(sk))
 					goto no_ack;
 			} else {
+				//没带新 ACK，只更新窗口比较变量
 				tcp_update_wl(tp, TCP_SKB_CB(skb)->seq);
 			}
 			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
 				printk(KERN_INFO "%s: ->__tcp_ack_snd_check\n", __func__);
+			//根据当前 socket 状态判断是否需要发送 ACK（例如 delayed ACK、生 ACK、窗口更新等）
 			__tcp_ack_snd_check(sk, 0);
 no_ack:
 			if (eaten)
-				kfree_skb_partial(skb, fragstolen);
-			tcp_data_ready(sk);
+				kfree_skb_partial(skb, fragstolen);//skb 释放（如果数据已被“吃掉”）
+			tcp_data_ready(sk);//通知等待在 recv() 或 epoll 的进程，socket 收到了新数据
 			return;
 		}
 	}
-
+//慢速路径，会走标准状态机、乱序处理、窗口更新等全流程逻辑
 slow_path:
+	//首部长度/校验和校验
 	if (len < (th->doff << 2) || tcp_checksum_complete(skb))
 		goto csum_error;
-
+	//报文必须至少包含一个控制位（ACK / SYN / RST），否则就是可疑或非法
 	if (!th->ack && !th->rst && !th->syn)
 		goto discard;
-
-	/*
-	 *	Standard slow path.
-	 */
-
+	
+	//合法性验证
 	if (!tcp_validate_incoming(sk, skb, th, 1))
 		return;
 
 step5:
 	if (is_src_k2pro(skb))
 		printk(KERN_INFO "%s: tcp_ack\n", __func__);
+	//处理ACK序号确认，更新拥塞窗口 / 重传队列 / RTT / SACK 等状态
+	//FLAG_SLOWPATH：表明是慢路径处理  FLAG_UPDATE_TS_RECENT：允许更新ts_recent（用于 PAWS 检查）
 	if (tcp_ack(sk, skb, FLAG_SLOWPATH | FLAG_UPDATE_TS_RECENT) < 0)
 		goto discard;
-
+	//如果对方报文中带有 timestamp（TSopt），使用 tsval/tsecr 估算 RTT，用于后续拥塞控制（如 TCP Vegas, BBR）
 	tcp_rcv_rtt_measure_ts(sk, skb);
 
-	/* Process urgent data. */
+	//处理紧急指针
 	tcp_urg(sk, skb, th);
 
 	/* step 7: process the segment text */
 	if (is_src_k2pro(skb))
 		printk(KERN_INFO "%s: ->tcp_data_queue\n", __func__);
+	//将数据包放入 socket 的接收队列（sk_receive_queue）
+	//如果数据是乱序，会暂存到 out-of-order 队列并等待重排
+	//如果数据正好是期望的序列，可能直接可读，等待应用层 recv()
 	tcp_data_queue(sk, skb);
-
+	//如果 ACK 打开了新窗口，或者未发送数据还在等待，这里检查是否能立刻发出去
 	tcp_data_snd_check(sk);
+	//检查是否应该发送 ACK，例如：如果延迟 ACK 定时器触发、对方数据量较大、或者协议要求立刻回应，这里可能会触发发送 ACK
 	tcp_ack_snd_check(sk);
 	return;
 

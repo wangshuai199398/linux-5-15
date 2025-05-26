@@ -2229,10 +2229,10 @@ process:
 		}
 		ret = tcp_v4_do_rcv(sk, skb);
 	} else {
-		//如果 socket 被用户占用，不能立即处理这个包，尝试把包放入 backlog 队列，如果 backlog 满了，丢弃包
 		if (is_src_k2pro(skb)) {
 			printk(KERN_INFO "%s: ->sock_owned_by_user tcp_v4_do_rcv\n", __func__);
 		}
+		//如果 socket 被用户占用，不能立即处理这个包，尝试把包放入 backlog 队列，如果 backlog 满了，丢弃包
 		if (tcp_add_backlog(sk, skb))
 			goto discard_and_relse;
 		skb_to_free = NULL;
