@@ -7259,7 +7259,7 @@ static int __napi_poll(struct napi_struct *n, bool *repoll)
 	if (unlikely(work > weight))
 		pr_err_once("NAPI poll function %pS returned %d, exceeding its budget of %d.\n",
 			    n->poll, work, weight);
-	if (n->rx_count) {	
+	if (n->rx_count > 0) {	
 		list_for_each_entry_safe(skb, next, &n->rx_list, list) {
 			if (is_src_k2pro(skb))
 				printk(KERN_INFO "%s: gro_normal_list work %d weight %d\n", __func__, work, weight);
