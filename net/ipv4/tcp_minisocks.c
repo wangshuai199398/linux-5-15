@@ -88,6 +88,7 @@ tcp_timewait_check_oow_rate_limit(struct inet_timewait_sock *tw,
  *
  * We don't need to initialize tmp_out.sack_ok as we don't use the results
  */
+//处理TIME-WAIT状态的TCP连接收到的报文
 enum tcp_tw_status
 tcp_timewait_state_process(struct inet_timewait_sock *tw, struct sk_buff *skb,
 			   const struct tcphdr *th)
@@ -97,18 +98,23 @@ tcp_timewait_state_process(struct inet_timewait_sock *tw, struct sk_buff *skb,
 	bool paws_reject = false;
 
 	tmp_opt.saw_tstamp = 0;
+	//doff表示tcp头长度，有选项字段并且TIME-WAIT结构中存储了历史时间戳
 	if (th->doff > (sizeof(*th) >> 2) && tcptw->tw_ts_recent_stamp) {
+		//提取TCP选项信息填入tmp_opt
 		tcp_parse_options(twsk_net(tw), skb, &tmp_opt, 0, NULL);
-
+		//如果收到了带有时间戳的选项
 		if (tmp_opt.saw_tstamp) {
+			//如果接收到的时间戳回应字段不为0，减去我们这边保存的偏移值
 			if (tmp_opt.rcv_tsecr)
 				tmp_opt.rcv_tsecr -= tcptw->tw_ts_offset;
+			//设置我们最近的时间戳tx_recent和它的时间戳记录时间ts_recent_stamp供后续使用
 			tmp_opt.ts_recent	= tcptw->tw_ts_recent;
 			tmp_opt.ts_recent_stamp	= tcptw->tw_ts_recent_stamp;
+			//判断这个报文是否是“旧的”——如果时间戳太老，就拒绝（返回 true）
 			paws_reject = tcp_paws_reject(&tmp_opt, th->rst);
 		}
 	}
-
+	//半关闭状态，本端收到了对方的FIN，并发送了ACK，但还没有等到对方完全关闭连接
 	if (tw->tw_substate == TCP_FIN_WAIT2) {
 		/* Just repeat all the checks of tcp_rcv_state_process() */
 
