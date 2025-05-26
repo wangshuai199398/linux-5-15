@@ -1907,12 +1907,14 @@ int __sys_accept4(int fd, struct sockaddr __user *upeer_sockaddr,
 SYSCALL_DEFINE4(accept4, int, fd, struct sockaddr __user *, upeer_sockaddr,
 		int __user *, upeer_addrlen, int, flags)
 {
+	pr_err("%s: __sys_accept4 fd %d flags 0x%x \n", __func__, fd, flags);
 	return __sys_accept4(fd, upeer_sockaddr, upeer_addrlen, flags);
 }
 
 SYSCALL_DEFINE3(accept, int, fd, struct sockaddr __user *, upeer_sockaddr,
 		int __user *, upeer_addrlen)
 {
+	pr_err("%s: __sys_accept4 fd %d \n", __func__, fd);
 	return __sys_accept4(fd, upeer_sockaddr, upeer_addrlen, 0);
 }
 
