@@ -2883,6 +2883,9 @@ repair:
 	return !tp->packets_out && !tcp_write_queue_empty(sk);
 }
 
+//为 TCP 连接调度一次“丢包探测”，以便在不依赖完整超时（RTO，重传超时）的情况下更快地检测并恢复丢失的数据包
+//如果满足丢包探测调度的前提条件，TCP 会计算一个合理的超时时间（考虑 RTT、RTO 和延迟确认等），然后设置一个定时器，
+//在这个时间点触发一次 丢包探测报文（如 TLP），以便更快恢复潜在的丢包，而无需等待较长的 RTO
 bool tcp_schedule_loss_probe(struct sock *sk, bool advancing_rto)
 {
 	struct inet_connection_sock *icsk = inet_csk(sk);
@@ -2890,20 +2893,16 @@ bool tcp_schedule_loss_probe(struct sock *sk, bool advancing_rto)
 	u32 timeout, timeout_us, rto_delta_us;
 	int early_retrans;
 
-	/* Don't do any loss probe on a Fast Open connection before 3WHS
-	 * finishes.
-	 */
+	// 在Fast Open连接完成三次握手（3WHS）之前，不要进行任何丢包探测
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
 		printk(KERN_INFO "%s: ->rcu_access_pointer(tp->fastopen_rsk) %p\n", __func__, rcu_access_pointer(tp->fastopen_rsk));
 	if (rcu_access_pointer(tp->fastopen_rsk))
 		return false;
-
+	// TCP Early Retransmit（早期重传）机制
 	early_retrans = READ_ONCE(sock_net(sk)->ipv4.sysctl_tcp_early_retrans);
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
 		printk(KERN_INFO "%s early_retrans %d tp->packets_out %u tcp_is_sack %d icsk->icsk_ca_state %u\n", __func__, early_retrans, tp->packets_out, tcp_is_sack(tp), icsk->icsk_ca_state);
-	/* Schedule a loss probe in 2*RTT for SACK capable connections
-	 * not in loss recovery, that are either limited by cwnd or application.
-	 */
+	// 对于启用 SACK 的连接，如果当前不处于丢包恢复阶段，并且连接受限于拥塞窗口（cwnd）或应用层限制，则在 2 倍 RTT 时间后调度一个丢包探测。
 	if ((early_retrans != 3 && early_retrans != 4) ||
 	    !tp->packets_out || !tcp_is_sack(tp) ||
 	    (icsk->icsk_ca_state != TCP_CA_Open &&
@@ -2911,12 +2910,12 @@ bool tcp_schedule_loss_probe(struct sock *sk, bool advancing_rto)
 		return false;
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
 		printk(KERN_INFO "%s ->tp->srtt_us %d\n", __func__, tp->srtt_us);
-	/* Probe timeout is 2*rtt. Add minimum RTO to account
-	 * for delayed ack when there's one outstanding packet. If no RTT
-	 * sample is available then probe after TCP_TIMEOUT_INIT.
-	 */
+	//丢包探测（TLP）的超时时间是 2 倍的 RTT。如果当前只有一个未确认的包，为了考虑对端的延迟确认（Delayed ACK），则额外加上最小 RTO。
+	//如果当前还没有 RTT 样本（即 srtt_us 还没被初始化），则使用默认的 TCP_TIMEOUT_INIT 作为探测超时
+	//平滑RTT/4
 	if (tp->srtt_us) {
 		timeout_us = tp->srtt_us >> 2;
+		//如果当前仅有一个未确认的数据包，为了应对延迟确认机制+tcp_rto_min_us，否则加一个固定超时值
 		if (tp->packets_out == 1)
 			timeout_us += tcp_rto_min_us(sk);
 		else
@@ -2927,12 +2926,15 @@ bool tcp_schedule_loss_probe(struct sock *sk, bool advancing_rto)
 	}
 
 	/* If the RTO formula yields an earlier time, then use that time. */
+	//如果 advancing_rto 为 true，表示你希望重新评估 RTO 时间，那么就取当前的 icsk_rto
+	//否则，调用 tcp_rto_delta_us(sk) 来获取 “距离下次 RTO 的剩余时间”
 	rto_delta_us = advancing_rto ?
 			jiffies_to_usecs(inet_csk(sk)->icsk_rto) :
 			tcp_rto_delta_us(sk);  /* How far in future is RTO? */
+	//如果计算出来的 RTO 剩余时间比之前我们算出来的 loss probe 的调度时间还短，就使用 更早 的时间，确保不会“晚于 RTO”
 	if (rto_delta_us > 0)
 		timeout = min_t(u32, timeout, usecs_to_jiffies(rto_delta_us));
-
+	//设置一个新的超时定时器，用于未来调度一次 LOSS_PROBE
 	tcp_reset_xmit_timer(sk, ICSK_TIME_LOSS_PROBE, timeout, TCP_RTO_MAX);
 	return true;
 }
