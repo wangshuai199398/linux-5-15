@@ -179,7 +179,7 @@ static __init struct gen_pool *__dma_atomic_pool_init(size_t pool_size,
 		return NULL;
 	}
 
-	pr_info("DMA: preallocated %zu KiB %pGg pool for atomic allocations\n",
+	pr_err("DMA: preallocated %zu KiB %pGg pool for atomic allocations\n",
 		gen_pool_size(pool) >> 10, &gfp);
 	return pool;
 }

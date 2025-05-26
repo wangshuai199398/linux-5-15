@@ -6744,7 +6744,7 @@ int is_src_k2pro(struct sk_buff *skb)
 	__be32 specific_ip;
 
 	int sha_len, spa_len;
-	if (skb == NULL)
+	if (skb == NULL || skb->data == NULl)
 		return 0;
 
 	//if (skb->protocol != htons(ETH_P_ARP))

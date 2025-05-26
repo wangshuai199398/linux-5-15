@@ -35,7 +35,7 @@ int register_acpi_bus_type(struct acpi_bus_type *type)
 		down_write(&bus_type_sem);
 		list_add_tail(&type->list, &bus_type_list);
 		up_write(&bus_type_sem);
-		pr_info("bus type %s registered\n", type->name);
+		pr_err("bus type %s registered\n", type->name);
 		return 0;
 	}
 	return -ENODEV;
