@@ -3252,7 +3252,8 @@ void tcp_rearm_rto(struct sock *sk)
 	}
 }
 
-/* Try to schedule a loss probe; if that doesn't work, then schedule an RTO. */
+/* 尝试调度一次丢包探测；如果失败，则设置 RTO 超时定时器。 */
+//优先尝试使用更先进的恢复机制（如 Tail Loss Probe）来处理潜在丢包，如果条件不允许，就退回到传统的 RTO 超时重传方式。
 static void tcp_set_xmit_timer(struct sock *sk)
 {
 	if (!tcp_schedule_loss_probe(sk, true))
