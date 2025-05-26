@@ -6337,7 +6337,7 @@ static enum gro_result dev_gro_receive(struct napi_struct *napi, struct sk_buff 
 	}
 
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: ->same_flow pp %p same_flow %d\n", __func__, pp, same_flow);
+		printk(KERN_INFO "%s: ->same_flow pp %p same_flow %d flush %hu\n", __func__, pp, same_flow, NAPI_GRO_CB(skb)->flush);
 	//已经被某个 GRO flow 吸收（合并）成功，直接跳过后面逻辑，走 ok 路径（继续处理其他包）
 	if (same_flow)
 		goto ok;
