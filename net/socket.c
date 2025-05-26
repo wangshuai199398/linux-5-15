@@ -1611,7 +1611,7 @@ int __sys_socket(int family, int type, int protocol)
 //socket_wangs
 SYSCALL_DEFINE3(socket, int, family, int, type, int, protocol)
 {
-	pr_err("%s: __sys_socket family %d type %x%x protocol %d \n", __func__, family, type, protocol);//AF_INET 2 SOCK_STREAM 2 IPPROTO_TCP 6
+	pr_err("%s: __sys_socket family %d type 0x%x protocol %d \n", __func__, family, type, protocol);//AF_INET 2 SOCK_STREAM 2 IPPROTO_TCP 6
 	return __sys_socket(family, type, protocol);
 }
 
