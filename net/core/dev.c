@@ -7248,12 +7248,7 @@ static int __napi_poll(struct napi_struct *n, bool *repoll)
 
 	weight = n->weight;
 
-	/* This NAPI_STATE_SCHED test is for avoiding a race
-	 * with netpoll's poll_napi().  Only the entity which
-	 * obtains the lock and sees NAPI_STATE_SCHED set will
-	 * actually make the ->poll() call.  Therefore we avoid
-	 * accidentally calling ->poll() when NAPI is not scheduled.
-	 */
+	// NAPI_STATE_SCHED的测试是为了避免与netpoll的poll_napi函数之间的竞争条件
 	work = 0;
 	if (test_bit(NAPI_STATE_SCHED, &n->state)) {
 		//驱动注册的软中断处理函数netif_napi_add添加的
@@ -7272,25 +7267,20 @@ static int __napi_poll(struct napi_struct *n, bool *repoll)
 	if (likely(work < weight))
 		return work;
 
-	/* Drivers must not modify the NAPI state if they
-	 * consume the entire weight.  In such cases this code
-	 * still "owns" the NAPI instance and therefore can
-	 * move the instance around on the list at-will.
-	 */
+	//如果驱动程序消耗了全部的weight（权重），则不得修改NAPI的状态
+	//weight 是 NAPI poll 的“配额”或处理上限，表示本次 poll 调用最多可以处理多少个包。
+	//如果 驱动没有处理完（还剩下 weight），那么它可能会修改 NAPI 的调度状态，比如重新加入 poll 列表。
+	//但如果 驱动已经消耗完了全部 weight，那么根据协议，它不应再修改 NAPI 的状态，因为此时控制权还属于调度器，而不是驱动。
 	if (unlikely(napi_disable_pending(n))) {//查询是否有人调用napi_disable来禁用该napi实例
 		napi_complete(n);//完成 poll，重启硬中断，并清除 napi 状态
 		return work;
 	}
 
-	/* The NAPI context has more processing work, but busy-polling
-	 * is preferred. Exit early.
-	 */
+	// NAPI 上下文还有更多处理工作，但优先使用 busy-polling，因此提前退出
 	//busy-poll用于低延迟（比如低延迟、AF_XDP、用户态轮询等）
 	if (napi_prefer_busy_poll(n)) {
 		if (napi_complete_done(n, work)) {
-			/* If timeout is not set, we need to make sure
-			 * that the NAPI is re-scheduled.
-			 */
+			//如果未设置超时（timeout），我们需要确保 NAPI 被重新调度。
 			//如果 busy-poll 模式启用了，而 poll 做完了， 还需要确保 napi 重新调度
 			napi_schedule(n);
 		}
@@ -7298,16 +7288,13 @@ static int __napi_poll(struct napi_struct *n, bool *repoll)
 	}
 
 	if (n->gro_bitmask) {
-		/* flush too old packets
-		 * If HZ < 1000, flush all packets.
-		 */
+		//刷新过旧的数据包，如果 HZ < 1000，则刷新所有数据包。
 		napi_gro_flush(n, HZ >= 1000);
 	}
 	gro_normal_list(n);
 
-	/* Some drivers may have called napi_schedule
-	 * prior to exhausting their budget.
-	 */
+	//某些网络驱动可能在还没处理完当前批次的全部数据包（即还没达到 budget 限额）时就调用了 napi_schedule()，意味着它请求再次调度自己。
+	//这可能会导致重复调度或逻辑异常，因此相关的调度机制需要考虑这种行为
 	//当 NAPI poll 完成后，如果发现 napi_struct->poll_list 不为空，说明本次 NAPI 被重新调度了，但 budget 已耗尽，于是记录警告并提前返回
 	if (unlikely(!list_empty(&n->poll_list))) {
 		pr_warn_once("%s: Budget exhausted after napi rescheduled\n",
