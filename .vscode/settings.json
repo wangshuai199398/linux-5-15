@@ -6,6 +6,7 @@
     },
     "files.associations": {
         "typeinfo": "c",
-        "__node_handle": "c"
+        "__node_handle": "c",
+        "if_packet.h": "c"
     }
 }
