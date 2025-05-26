@@ -6702,14 +6702,18 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb)
 	//收到synack包
 	case TCP_SYN_SENT:
 		tp->rx_opt.saw_tstamp = 0;
+		//刷新TCP的“时间戳戳记”（用于 RTT 估算等）
 		tcp_mstamp_refresh(tp);
 		queued = tcp_rcv_synsent_state_process(sk, skb, th);
+		//如果 queued >= 0，表示处理完毕，返回
 		if (queued >= 0)
 			return queued;
 
 		/* Do step6 onward by hand. */
+		//检查TCP报文中是否有紧急数据（URG 标志），如果有就处理
 		tcp_urg(sk, skb, th);
 		__kfree_skb(skb);
+		//检查是否可以发送新的数据,如果拥塞窗口允许，或刚建立连接，可以触发发送流程
 		tcp_data_snd_check(sk);
 		return 0;
 	}
