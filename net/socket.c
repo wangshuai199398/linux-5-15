@@ -1608,6 +1608,7 @@ int __sys_socket(int family, int type, int protocol)
 	return sock_map_fd(sock, flags & (O_CLOEXEC | O_NONBLOCK));
 }
 
+//socket_wangs
 SYSCALL_DEFINE3(socket, int, family, int, type, int, protocol)
 {
 	return __sys_socket(family, type, protocol);
@@ -3103,7 +3104,7 @@ int sock_register(const struct net_proto_family *ops)
 	}
 	spin_unlock(&net_family_lock);
 
-	pr_info("NET: Registered %s protocol family\n", pf_family_names[ops->family]);
+	pr_err("%s: NET: Registered %s protocol family\n", __func__, pf_family_names[ops->family]);
 	return err;
 }
 EXPORT_SYMBOL(sock_register);

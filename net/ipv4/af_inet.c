@@ -1958,18 +1958,22 @@ static int __init inet_init(void)
 	sock_skb_cb_check_size(sizeof(struct inet_skb_parm));
 
 	rc = proto_register(&tcp_prot, 1);
+	pr_err("%s: proto_register %s protocol\n", __func__, tcp_prot.name);
 	if (rc)
 		goto out;
 
 	rc = proto_register(&udp_prot, 1);
+	pr_err("%s: proto_register %s protocol\n", __func__, udp_prot.name);
 	if (rc)
 		goto out_unregister_tcp_proto;
 
 	rc = proto_register(&raw_prot, 1);
+	pr_err("%s: proto_register %s protocol\n", __func__, raw_prot.name);
 	if (rc)
 		goto out_unregister_udp_proto;
 
 	rc = proto_register(&ping_prot, 1);
+	pr_err("%s: proto_register %s protocol\n", __func__, ping_prot.name);
 	if (rc)
 		goto out_unregister_raw_proto;
 
