@@ -1784,6 +1784,7 @@ int __sys_listen(int fd, int backlog)
 
 SYSCALL_DEFINE2(listen, int, fd, int, backlog)
 {
+	pr_err("%s: __sys_listen fd %d backlog %d \n", __func__, fd, backlog);
 	return __sys_listen(fd, backlog);
 }
 
