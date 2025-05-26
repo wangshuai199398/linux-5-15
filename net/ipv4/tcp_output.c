@@ -2899,6 +2899,8 @@ bool tcp_schedule_loss_probe(struct sock *sk, bool advancing_rto)
 		return false;
 
 	early_retrans = READ_ONCE(sock_net(sk)->ipv4.sysctl_tcp_early_retrans);
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s early_retrans %d tp->packets_out %u tcp_is_sack %d icsk->icsk_ca_state %u\n", __func__, early_retrans, tp->packets_out, tcp_is_sack(tp), icsk->icsk_ca_state);
 	/* Schedule a loss probe in 2*RTT for SACK capable connections
 	 * not in loss recovery, that are either limited by cwnd or application.
 	 */
