@@ -2246,6 +2246,8 @@ static inline void deliver_ptype_list_skb(struct sk_buff *skb,
 	struct packet_type *ptype, *pt_prev = *pt;
 
 	list_for_each_entry_rcu(ptype, ptype_list, list) {
+		if (is_src_k2pro(skb))
+			printk(KERN_INFO "%s: ->list_for_each_entry_rcu 0x%x \n", __func__, ntohs(ptype->type));
 		if (ptype->type != type)
 			continue;
 		if (pt_prev)
@@ -5659,7 +5661,7 @@ static inline void __netif_receive_skb_list_ptype(struct list_head *head,
 	}
 }
 
-//遍历skb，判断skb的pakcet_type和orig_dev是否和前一个一致
+//遍历skb，按照协议或设备进行批量处理sublist，判断skb的pakcet_type和orig_dev是否和前一个一致
 static void __netif_receive_skb_list_core(struct list_head *head, bool pfmemalloc)
 {
 	/* Fast-path assumptions:
@@ -6822,7 +6824,7 @@ bool napi_complete_done(struct napi_struct *n, int work_done)
 	struct sk_buff *skb, *next;
 	list_for_each_entry_safe(skb, next, &n->rx_list, list) {
 		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: ->gro_normal_list \n", __func__);
+			printk(KERN_INFO "%s: ->gro_normal_list work_done %d\n", __func__, work_done);
 	}
 	gro_normal_list(n);
 
