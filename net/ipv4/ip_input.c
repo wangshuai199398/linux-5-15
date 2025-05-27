@@ -322,6 +322,8 @@ static bool ip_can_use_hint(const struct sk_buff *skb, const struct iphdr *iph,
 
 int tcp_v4_early_demux(struct sk_buff *skb);
 int udp_v4_early_demux(struct sk_buff *skb);
+
+//为 IP 数据包选择正确的处理路径，做各种安全性与路由相关检查，以及优化性能（比如早期解复用）
 static int ip_rcv_finish_core(struct net *net, struct sock *sk,
 			      struct sk_buff *skb, struct net_device *dev,
 			      const struct sk_buff *hint)
@@ -471,6 +473,7 @@ static int ip_rcv_finish(struct net *net, struct sock *sk, struct sk_buff *skb)
 
 /*
  * 	Main IP Receive routine.
+ *  对ip包进行进行初步验证和处理，检查 IP 包头是否合法，例如版本号、头部长度等，校验头部的校验和（checksum）是否正确
  */
 static struct sk_buff *ip_rcv_core(struct sk_buff *skb, struct net *net)
 {

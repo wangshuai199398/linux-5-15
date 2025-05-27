@@ -1611,7 +1611,7 @@ int __sys_socket(int family, int type, int protocol)
 //socket_wangs
 SYSCALL_DEFINE3(socket, int, family, int, type, int, protocol)
 {
-	pr_err("%s: __sys_socket family %d type 0x%x protocol %d \n", __func__, family, type, protocol);//AF_INET 2 SOCK_STREAM 2 IPPROTO_TCP 6
+	pr_err("%s: %s __sys_socket pid %d family %d type 0x%x protocol %d \n", __func__, current->comm, current->pid, family, type, protocol);//AF_INET 2 SOCK_STREAM 2 IPPROTO_TCP 6
 	return __sys_socket(family, type, protocol);
 }
 
@@ -1751,7 +1751,7 @@ int __sys_bind(int fd, struct sockaddr __user *umyaddr, int addrlen)
 //bind_wangs
 SYSCALL_DEFINE3(bind, int, fd, struct sockaddr __user *, umyaddr, int, addrlen)
 {
-	pr_err("%s: __sys_bind fd %d addrlen %d \n", __func__, fd, addrlen);
+	pr_err("%s: %s __sys_bind pid %d fd %d addrlen %d \n", __func__, current->comm, current->pid, fd, addrlen);
 	return __sys_bind(fd, umyaddr, addrlen);
 }
 
@@ -1784,7 +1784,7 @@ int __sys_listen(int fd, int backlog)
 
 SYSCALL_DEFINE2(listen, int, fd, int, backlog)
 {
-	pr_err("%s: __sys_listen fd %d backlog %d \n", __func__, fd, backlog);
+	pr_err("%s: %s __sys_listen pid %d fd %d backlog %d \n", __func__, current->comm, current->pid, fd, backlog);
 	return __sys_listen(fd, backlog);
 }
 
@@ -1907,7 +1907,7 @@ int __sys_accept4(int fd, struct sockaddr __user *upeer_sockaddr,
 SYSCALL_DEFINE4(accept4, int, fd, struct sockaddr __user *, upeer_sockaddr,
 		int __user *, upeer_addrlen, int, flags)
 {
-	pr_err("%s: __sys_accept4 fd %d flags 0x%x \n", __func__, fd, flags);
+	pr_err("%s: %s __sys_accept4 pid %d fd %d flags 0x%x \n", __func__, current->comm, current->pid, fd, flags);
 	return __sys_accept4(fd, upeer_sockaddr, upeer_addrlen, flags);
 }
 
@@ -1915,7 +1915,7 @@ SYSCALL_DEFINE4(accept4, int, fd, struct sockaddr __user *, upeer_sockaddr,
 SYSCALL_DEFINE3(accept, int, fd, struct sockaddr __user *, upeer_sockaddr,
 		int __user *, upeer_addrlen)
 {
-	pr_err("%s: __sys_accept4 fd %d \n", __func__, fd);
+	pr_err("%s: %s __sys_accept4 pid %d fd %d \n", __func__, current->comm, current->pid, fd);
 	return __sys_accept4(fd, upeer_sockaddr, upeer_addrlen, 0);
 }
 
@@ -1976,7 +1976,7 @@ int __sys_connect(int fd, struct sockaddr __user *uservaddr, int addrlen)
 SYSCALL_DEFINE3(connect, int, fd, struct sockaddr __user *, uservaddr,
 		int, addrlen)
 {
-	pr_err("%s: __sys_connect fd %d addrlen %d \n", __func__, fd, addrlen);
+	pr_err("%s: %s __sys_connect pid %d fd %d addrlen %d \n", __func__, current->comm, current->pid, fd, addrlen);
 	return __sys_connect(fd, uservaddr, addrlen);
 }
 

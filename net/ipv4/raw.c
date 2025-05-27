@@ -160,11 +160,11 @@ static int icmp_filter(const struct sock *sk, const struct sk_buff *skb)
 	return 0;
 }
 
-/* IP input processing comes here for RAW socket delivery.
- * Caller owns SKB, so we must make clones.
- *
- * RFC 1122: SHOULD pass TOS value up to the transport layer.
- * -> It does. And not only TOS, but all IP header.
+/* 调用者拥有这个 skb，所以我们必须对它进行克隆
+ * 因为原始套接字可能有多个接收者（多个监听同一协议的 raw socket），所以：
+ * 不应该直接修改或释放原始 skb；
+ * 需要为每个接收者克隆一份 skb，以避免冲突或破坏
+ * 不只是 TOS，而是整个 IP 头都会传递上去。
  */
 static int raw_v4_input(struct sk_buff *skb, const struct iphdr *iph, int hash)
 {
@@ -204,17 +204,17 @@ out:
 	return delivered;
 }
 
+//判断是否有原始套接字接收该协议的包，如果有，就投递，并返回是否成功
+//原始套接字：一种允许用户程序直接发送和接收 IP 层（或更低）数据包的套接字，绕过了传输层（如 TCP 或 UDP）的封装处理
 int raw_local_deliver(struct sk_buff *skb, int protocol)
 {
 	int hash;
 	struct sock *raw_sk;
-
+	//原始套接字通过协议号哈希到 raw_v4_hashinfo.ht[]表中
 	hash = protocol & (RAW_HTABLE_SIZE - 1);
+	//获取哈希桶中的第一个socket（可能是 NULL，也可能是一条链表）
 	raw_sk = sk_head(&raw_v4_hashinfo.ht[hash]);
-
-	/* If there maybe a raw socket we must check - if not we
-	 * don't care less
-	 */
+	//如果存在raw socket，尝试投递
 	if (raw_sk && !raw_v4_input(skb, ip_hdr(skb), hash))
 		raw_sk = NULL;
 

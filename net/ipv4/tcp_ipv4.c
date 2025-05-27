@@ -1734,13 +1734,13 @@ u16 tcp_v4_get_syncookie(struct sock *sk, struct iphdr *iph,
 
 INDIRECT_CALLABLE_DECLARE(struct dst_entry *ipv4_dst_check(struct dst_entry *,
 							   u32));
-/* The socket must have it's spinlock held when we get
- * here, unless it is a TCP_LISTEN socket.
- *
- * We have a potential double-lock case here, so even when
- * doing backlog processing we use the BH locking scheme.
- * This is because we cannot sleep with the original spinlock
- * held.
+
+/* 在进入这里时，socket 必须已经持有它的自旋锁，除非它是 TCP 的监听套接字
+ * 一般来说，为了线程安全，在操作 socket 状态（如读写、投递数据包）时需要持有 socket 的 spinlock（自旋锁）
+ * 但 TCP_LISTEN 类型的 socket（监听 socket）是个例外，因为它的连接管理方式不同（如通过 accept() 处理）
+ * 
+ * 这里有可能发生双重加锁的情况，因此即使是处理 backlog 时，也使用 BH 锁定机制
+ * backlog 处理：指的是延迟处理接收数据（例如中断上下文中收包，延迟到软中断或进程上下文中处理）
  */
 int tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
 {
@@ -2079,7 +2079,7 @@ int tcp_v4_rcv(struct sk_buff *skb)
 	iph = ip_hdr(skb);
 lookup:
 	//根据收到的TCP报文在内核中查找匹配的 socket（即连接）
-	//在TCP的连接哈希表（tcp_hashinfo）中查找是否有一个已存在的socket匹配当前接收到的TCP报文（skb）的元信息（IP地址、端口号等）
+	//在TCP的连接哈希表（tcp_hashinfo）中查找是否有一个已存在的socket匹配当前接收到的TCP报文的元信息（IP地址、端口号等）
 	sk = __inet_lookup_skb(&tcp_hashinfo, skb, __tcp_hdrlen(th), th->source,
 			       th->dest, sdif, &refcounted);
 	if (!sk)
@@ -2225,7 +2225,7 @@ process:
 		skb_to_free = sk->sk_rx_skb_cache;
 		sk->sk_rx_skb_cache = NULL;
 		if (is_src_k2pro(skb)) {
-			printk(KERN_INFO "%s: ->sock_owned_by_user tcp_v4_do_rcv\n", __func__);
+			printk(KERN_INFO "%s: ->!sock_owned_by_user tcp_v4_do_rcv\n", __func__);
 		}
 		ret = tcp_v4_do_rcv(sk, skb);
 	} else {

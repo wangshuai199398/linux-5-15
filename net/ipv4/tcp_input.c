@@ -3835,7 +3835,24 @@ static u32 tcp_newly_delivered(struct sock *sk, u32 prior_delivered, int flag)
 	return delivered;
 }
 
-/* This routine deals with incoming acks, but not outgoing ones. */
+// 这个函数只处理接收到的 ACK，不处理发送出去的 ACK
+/*
+SACK（Selective Acknowledgment，选择性确认）和 DSACK（Duplicate SACK，重复选择性确认）是 TCP 协议中的两种机制，都是用于更精确和高效地确认数据接收情况，提升丢包恢复和网络性能的技术。
+SACK告诉发送方：“我收到了这些乱序/非连续的数据段”
+DSACK告诉发送方：“你重传的这段其实我早就收到了”（没必要重传）
+
+1. ACK有效性检查，重复ACK、是否ACK了没发送的数据、是否无效过时的ACK
+2. 确认数据是否发送成功，如果ACK推进了snd_una，说明接收端确认了一部分数据，清空重传计数、更新时间戳等状态，更新窗口下界
+3. SACK和DSACK处理，如果SACK标志存在，调用tcp_sacktag_write_queue标记已被确认的数据段，如果是DSACK，判断是否可以撤销cwnd缩减
+4. 窗口更新，使用tcp_ack_update_window判断是否更新对端的接收窗口，更新tcp_wl1,tcp_wl2等关键窗口变量
+5. 拥塞控制事件记录，设置标志 CA_ACK_* 表示窗口更新、拥塞反馈、慢路径；调用tcp_in_ack_event把ACK事件传给拥塞控制模块。
+6. RTT与速率估计，tcp_rtt_estimator和tcp_rate_gen利用ACK时间点、已送达数据等估算网络质量；这些数据供 Cubic、BBR 等算法使用
+7. 快速重传判断，如果出现多个重复 ACK，判断是否触发Fast Retransmit；调用tcp_fastretrans_alert分析网络状态和是否需要立即重传
+8. 清理发送队列，调用 tcp_clean_rtx_queue移除已被ACK或SACK确认的段；避免浪费重传和内存资源。
+9. RACK/TLP处理，处理TLP（Tail Loss Probe）尾部丢包的ACK响应；更新RACK（最近确认的包）窗口。
+10.最终处理，重置计时器（tcp_set_xmit_timer）；如果ACK表明连接活跃，刷新路由确认；通知拥塞控制算法（tcp_cong_control）；如果有必要执行重传（tcp_xmit_recovery）
+11.
+*/
 static int tcp_ack(struct sock *sk, const struct sk_buff *skb, int flag)
 {
 	struct inet_connection_sock *icsk = inet_csk(sk);
