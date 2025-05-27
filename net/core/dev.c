@@ -4134,10 +4134,7 @@ u16 netdev_pick_tx(struct net_device *dev, struct sk_buff *skb,
 	if (is_dst_k2pro(skb)) {
 		printk(KERN_INFO "%s: queue_index %d skb->ooo_okay  dev->real_num_tx_queues %u\n", __func__, queue_index, dev->real_num_tx_queues);
 	}
-	//printk(KERN_INFO "%s: queue_index %d skb->ooo_okay %d dev->real_num_tx_queues %u\n", __func__, queue_index, skb->ooo_okay, dev->real_num_tx_queues);
-
 	sb_dev = sb_dev ? : dev;
-
 	if (queue_index < 0 || skb->ooo_okay ||
 	    queue_index >= dev->real_num_tx_queues) {
 		int new_index = get_xps_queue(dev, sb_dev, skb);

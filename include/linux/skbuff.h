@@ -710,7 +710,7 @@ typedef unsigned char *sk_buff_data_t;
  *		page_pool support on driver)
  *	@active_extensions: active extensions (skb_ext_id types)
  *	@ndisc_nodetype: router type (from link layer)
- *	@ooo_okay: allow the mapping of a socket to a queue to be changed
+ *	@ooo_okay: Out-of-Order 允许socket映射的队列被修改
  *	@l4_hash: indicate hash is a canonical 4-tuple hash over transport
  *		ports.
  *	@sw_hash: indicates hash was computed in software stack
