@@ -1993,10 +1993,13 @@ static int __init inet_init(void)
 
 	if (inet_add_protocol(&icmp_protocol, IPPROTO_ICMP) < 0)
 		pr_crit("%s: Cannot add ICMP protocol\n", __func__);
+	pr_err("%s: inet_add_protocol icmp_protocol to inet_protos\n", __func__);
 	if (inet_add_protocol(&udp_protocol, IPPROTO_UDP) < 0)
 		pr_crit("%s: Cannot add UDP protocol\n", __func__);
+	pr_err("%s: inet_add_protocol udp_protocol to inet_protos\n", __func__);
 	if (inet_add_protocol(&tcp_protocol, IPPROTO_TCP) < 0)
 		pr_crit("%s: Cannot add TCP protocol\n", __func__);
+	pr_err("%s: inet_add_protocol tcp_protocol to inet_protos\n", __func__);
 #ifdef CONFIG_IP_MULTICAST
 	if (inet_add_protocol(&igmp_protocol, IPPROTO_IGMP) < 0)
 		pr_crit("%s: Cannot add IGMP protocol\n", __func__);
@@ -2059,7 +2062,7 @@ static int __init inet_init(void)
 	ipv4_proc_init();
 
 	ipfrag_init();
-
+	pr_err("%s: dev_add_pack ip_packet_type to ptype_base\n", __func__);
 	dev_add_pack(&ip_packet_type);
 
 	ip_tunnel_core_init();
