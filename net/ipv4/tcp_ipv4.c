@@ -1766,6 +1766,8 @@ int tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
 				dst_release(dst);
 			}
 		}
+		if (is_src_k2pro(skb))
+			printk(KERN_ERR "%s: ->tcp_rcv_established\n", __func__);
 		tcp_rcv_established(sk, skb);
 		return 0;
 	}
@@ -1774,13 +1776,13 @@ int tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
 		goto csum_err;
 
 	if (sk->sk_state == TCP_LISTEN) {
-		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: ->TCP_LISTEN\n", __func__);
 		//尝试通过 syncookie 校验机制处理 SYN 报文，防止 SYN Flood 攻击
 		//当服务器监听 socket 的 SYN 接收队列（accept queue）溢出时，也就是 backlog 满了，内核就会启用 SYN cookie
 		//cat /proc/sys/net/ipv4/tcp_syncookies
 		struct sock *nsk = tcp_v4_cookie_check(sk, skb);
 
+		if (is_src_k2pro(skb))
+			printk(KERN_ERR "%s: ->TCP_LISTEN nsk != sk? %d\n", __func__, nsk != sk);
 		if (!nsk)
 			goto discard;
 		if (nsk != sk) {
@@ -2168,6 +2170,8 @@ process:
 		}
 		//清除 netfilter 连接跟踪,因为我们即将把这个 skb 交给新的 socket 使用，因此需要清除之前连接跟踪关联信息
 		nf_reset_ct(skb);
+		if (is_src_k2pro(skb))
+			printk(KERN_ERR "%s: nsk == sk? %d\n", __func__, nsk == sk);
 		//tcp_check_req() 中某些情况不会建立新 socket，而是要求原监听 socket 继续处理，比如 syncookie 验证失败等
 		if (nsk == sk) {
 			reqsk_put(req);
@@ -2206,9 +2210,10 @@ process:
 
 	skb->dev = NULL;
 	//三次握手第一步: SYN 服务端调用了listen
+	//服务端
 	if (sk->sk_state == TCP_LISTEN) {
 		if (is_src_k2pro(skb)) {
-			printk(KERN_INFO "%s: ->TCP_LISTEN tcp_v4_do_rcv\n", __func__);
+			printk(KERN_ERR "%s: ->TCP_LISTEN tcp_v4_do_rcv\n", __func__);
 		}
 		ret = tcp_v4_do_rcv(sk, skb);
 		goto put_and_return;

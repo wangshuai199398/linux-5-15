@@ -7182,9 +7182,9 @@ int tcp_conn_request(struct request_sock_ops *rsk_ops,
 	//cat /proc/sys/net/ipv4/tcp_syncookies
 	syncookies = READ_ONCE(net->ipv4.sysctl_tcp_syncookies);
 
-	/* TW buckets are converted to open requests without
-	 * limitations, they conserve resources and peer is
-	 * evidently real one.
+	/*	TW bucket是处于 TIME_WAIT 状态的 TCP 连接在内核中的简化表示形式；在连接关闭后，内核保留一段时间的 TW 记录，以避免旧连接中的延迟包干扰新连接；每个 TW 连接会占用内核资源（虽然比 full socket 少）
+		open request是TCP 三次握手过程中，收到 SYN 后，内核会创建 struct request_sock 对象，称为 open request；它表示一个半连接（还没完成三次握手）
+		如果一个连接刚刚在 TIME_WAIT 结束前收到了同样地址（IP+Port）的新连接请求：通常会被丢弃或延迟；但如果 TCP 判断对端是可靠的（例如已有 TW 记录），它可以直接：清除TW bucket，创建新的 request_sock（open request），继续新的连接建立流程
 	 */
 	//2：总是启用  判断backlog队列（尚未完成握手的连接队列）是否已满，Initial Sequence Number（初始化序列号），如果为 0，表示我们尚未为这个连接分配 ISN
 	if ((syncookies == 2 || inet_csk_reqsk_queue_is_full(sk)) && !isn) {
@@ -7199,7 +7199,7 @@ int tcp_conn_request(struct request_sock_ops *rsk_ops,
 		goto drop;
 	}
 	if (is_src_k2pro(skb))
-		printk(KERN_ERR "%s: inet_reqsk_alloc isn %u\n", __func__, isn);
+		printk(KERN_ERR "%s: inet_reqsk_alloc isn %u want_cookie %d\n", __func__, isn, want_cookie);
 	//分配一个 request_sock 结构，保存发起连接的客户端状态信息
 	req = inet_reqsk_alloc(rsk_ops, sk, !want_cookie);
 	if (!req)
@@ -7269,7 +7269,7 @@ int tcp_conn_request(struct request_sock_ops *rsk_ops,
 		isn = af_ops->init_seq(skb);
 	}
 	if (is_src_k2pro(skb))
-		printk(KERN_ERR "%s: init_seq isn %u %d\n", __func__, isn, want_cookie);
+		printk(KERN_ERR "%s: init_seq isn %u want_cookie %d\n", __func__, isn, want_cookie);
 	//初始化TCP ECN（显式拥塞通知）能力, 检查 SYN 包是否启用了 ECN；如果支持，则将此能力标记记录到请求结构req中。
 	tcp_ecn_create_request(req, skb, sk, dst);
 
@@ -7298,7 +7298,7 @@ int tcp_conn_request(struct request_sock_ops *rsk_ops,
 	}
 	if (fastopen_sk) {
 		if (is_src_k2pro(skb))
-			printk(KERN_ERR "%s: send_synack\n", __func__);
+			printk(KERN_ERR "%s: send_synack TCP_SYNACK_FASTOPEN\n", __func__);
 		af_ops->send_synack(fastopen_sk, dst, &fl, req,
 				    &foc, TCP_SYNACK_FASTOPEN, skb);
 		/* Add the child socket directly into the accept queue */
@@ -7327,6 +7327,8 @@ int tcp_conn_request(struct request_sock_ops *rsk_ops,
 			}
 		}
 		//发送 SYN+ACK 响应
+		if (is_src_k2pro(skb))
+			printk(KERN_ERR "%s: send_synack TCP_SYNACK_NORMAL\n", __func__);
 		af_ops->send_synack(sk, dst, &fl, req, &foc,
 				    !want_cookie ? TCP_SYNACK_NORMAL :
 						   TCP_SYNACK_COOKIE,
