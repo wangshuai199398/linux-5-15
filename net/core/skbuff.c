@@ -6707,10 +6707,16 @@ int is_dst_k2pro(struct sk_buff *skb)
 	unsigned char *arp_ptr;
 	__be32 dst_ip;
 	__be32 specific_ip;
-	if (skb == NULL)
+	if (skb == NULL || skb->data == NULL)
 		return 0;
 
-	eth = eth_hdr(skb);
+	if (!skb_mac_header_was_set(skb)) {
+    	printk(KERN_ERR "skb_mac_header not set, cannot parse Ethernet Header\n");
+		eth = (struct ethhdr *)skb->data;
+	} else {
+		eth = eth_hdr(skb);
+	}
+
 	specific_ip = in_aton("122.199.77.10");
 	if (ntohs(eth->h_proto) == ETH_P_IP) {
 		iph = ip_hdr(skb);
