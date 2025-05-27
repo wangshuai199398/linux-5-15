@@ -1169,7 +1169,7 @@ int __neigh_event_send(struct neighbour *neigh, struct sk_buff *skb)
 			kfree_skb(skb);
 			return 1;
 		}
-	} else if (neigh->nud_state & NUD_STALE) {
+	} else if (neigh->nud_state & NUD_STALE) {//知道对方的 MAC 地址，但不能确定它还是否在线
 		neigh_dbg(2, "neigh %p is delayed\n", neigh);
 		neigh_del_timer(neigh);
 		//将邻居项从 STALE 转换为 DELAY

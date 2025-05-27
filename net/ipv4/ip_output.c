@@ -459,6 +459,9 @@ int ip_output(struct net *net, struct sock *sk, struct sk_buff *skb)
 	if (is_dst_k2pro(skb))
 		printk(KERN_INFO "%s: ->ip_finish_output skb->protocol 0x%x\n", __func__, ntohs(skb->protocol));
 
+	if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: ->ip_finish_output 2 skb->protocol 0x%x\n", __func__, ntohs(skb->protocol));
+
 	return NF_HOOK_COND(NFPROTO_IPV4, NF_INET_POST_ROUTING,
 			    net, sk, skb, indev, dev,
 			    ip_finish_output,

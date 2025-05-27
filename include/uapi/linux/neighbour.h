@@ -53,16 +53,16 @@ enum {
  *	Neighbor Cache Entry States.
  */
 
-#define NUD_INCOMPLETE	0x01
-#define NUD_REACHABLE	0x02
-#define NUD_STALE	0x04
-#define NUD_DELAY	0x08
-#define NUD_PROBE	0x10
-#define NUD_FAILED	0x20
+#define NUD_INCOMPLETE	0x01//正在解析中(ARP 请求发送)
+#define NUD_REACHABLE	0x02//邻居是可达的，刚验证过
+#define NUD_STALE	0x04//信息可能过期，未确认是否还可达
+#define NUD_DELAY	0x08//延迟确认（等待使用后探测）
+#define NUD_PROBE	0x10//正在重新探测邻居是否可达
+#define NUD_FAILED	0x20//确认失败，邻居不可达
 
 /* Dummy states */
-#define NUD_NOARP	0x40
-#define NUD_PERMANENT	0x80
+#define NUD_NOARP	0x40//不需要 ARP（如 loopback）
+#define NUD_PERMANENT	0x80//永久项，不需要探测
 #define NUD_NONE	0x00
 
 /* NUD_NOARP & NUD_PERMANENT are pseudostates, they never change
