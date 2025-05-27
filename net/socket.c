@@ -2102,6 +2102,7 @@ out:
 	return err;
 }
 
+//sendto_wangs
 SYSCALL_DEFINE6(sendto, int, fd, void __user *, buff, size_t, len,
 		unsigned int, flags, struct sockaddr __user *, addr,
 		int, addr_len)
@@ -2113,6 +2114,7 @@ SYSCALL_DEFINE6(sendto, int, fd, void __user *, buff, size_t, len,
  *	Send a datagram down a socket.
  */
 
+//send_wangs
 SYSCALL_DEFINE4(send, int, fd, void __user *, buff, size_t, len,
 		unsigned int, flags)
 {
@@ -2169,6 +2171,7 @@ SYSCALL_DEFINE6(recvfrom, int, fd, void __user *, ubuf, size_t, size,
 		unsigned int, flags, struct sockaddr __user *, addr,
 		int __user *, addr_len)
 {
+	//pr_err("%s: %s __sys_recvfrom pid %d fd %d size %zu flags 0x%x\n", __func__, current->comm, current->pid, fd, size, flags);
 	return __sys_recvfrom(fd, ubuf, size, flags, addr, addr_len);
 }
 
@@ -2179,6 +2182,7 @@ SYSCALL_DEFINE6(recvfrom, int, fd, void __user *, ubuf, size_t, size,
 SYSCALL_DEFINE4(recv, int, fd, void __user *, ubuf, size_t, size,
 		unsigned int, flags)
 {
+	//pr_err("%s: %s __sys_recvfrom pid %d fd %d size %zu flags 0x%x\n", __func__, current->comm, current->pid, fd, size, flags);
 	return __sys_recvfrom(fd, ubuf, size, flags, NULL, NULL);
 }
 
@@ -2564,6 +2568,7 @@ out:
 
 SYSCALL_DEFINE3(sendmsg, int, fd, struct user_msghdr __user *, msg, unsigned int, flags)
 {
+	pr_err("%s: %s __sys_sendmsg pid %d fd %d flags 0x%x\n", __func__, current->comm, current->pid, fd, flags);
 	return __sys_sendmsg(fd, msg, flags, true);
 }
 
