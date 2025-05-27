@@ -272,7 +272,7 @@ found:
 	flush |= p->decrypted ^ skb->decrypted;
 #endif
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: ->skb_gro_receive %p\n", __func__);
+		printk(KERN_INFO "%s: ->skb_gro_receive \n", __func__);
 	if (flush || skb_gro_receive(p, skb)) {
 		mss = 1;
 		goto out_check_final;
