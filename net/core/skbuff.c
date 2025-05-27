@@ -6701,7 +6701,6 @@ EXPORT_SYMBOL(__skb_ext_put);
 
 int is_dst_k2pro(struct sk_buff *skb)
 {
-	struct ethhdr *eth;
 	struct iphdr *iph;
 	struct arphdr *arph;
 	unsigned char *arp_ptr;
