@@ -911,6 +911,7 @@ void __init softirq_init(void)
 	open_softirq(HI_SOFTIRQ, tasklet_hi_action);
 }
 
+//判断当前 CPU 上是否有待处理的软中断（SoftIRQ），从而决定 ksoftirqd 线程是否应该被唤醒运行
 static int ksoftirqd_should_run(unsigned int cpu)
 {
 	return local_softirq_pending();

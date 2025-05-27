@@ -11909,7 +11909,7 @@ static int __init net_dev_init(void)
 		INIT_CSD(&sd->csd, rps_trigger_softirq, sd);
 		sd->cpu = i;
 #endif
-
+		pr_err("%s: softnet_data: on CPU %d\n", __func__, i);
 		init_gro_hash(&sd->backlog);
 		sd->backlog.poll = process_backlog;
 		sd->backlog.weight = weight_p;
@@ -11931,7 +11931,7 @@ static int __init net_dev_init(void)
 
 	if (register_pernet_device(&default_device_ops))
 		goto out;
-
+	pr_err("%s: NET_TX_SOFTIRQ->net_tx_action NET_RX_SOFTIRQ->net_rx_action\n", __func__);
 	open_softirq(NET_TX_SOFTIRQ, net_tx_action);
 	open_softirq(NET_RX_SOFTIRQ, net_rx_action);
 
