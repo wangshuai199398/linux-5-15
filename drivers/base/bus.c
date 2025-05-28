@@ -526,7 +526,7 @@ void bus_remove_device(struct device *dev)
 	if (klist_node_attached(&dev->p->knode_bus))
 		klist_del(&dev->p->knode_bus);
 
-	pr_debug("bus: '%s': remove device %s\n",
+	pr_err("bus: '%s': remove device %s\n",
 		 dev->bus->name, dev_name(dev));
 	device_release_driver(dev);
 	bus_put(dev->bus);
@@ -599,7 +599,7 @@ int bus_add_driver(struct device_driver *drv)
 	if (!bus)
 		return -EINVAL;
 
-	pr_debug("bus: '%s': add driver %s\n", bus->name, drv->name);
+	pr_err("bus: '%s': add driver %s\n", bus->name, drv->name);
 
 	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
 	if (!priv) {
@@ -610,6 +610,7 @@ int bus_add_driver(struct device_driver *drv)
 	priv->driver = drv;
 	drv->p = priv;
 	priv->kobj.kset = bus->p->drivers_kset;
+	//初始化并向内核注册一个名字为 drv->name 的 kobject，类型为 driver_ktype，最终在 sysfs 中创建对应目录
 	error = kobject_init_and_add(&priv->kobj, &driver_ktype, NULL,
 				     "%s", drv->name);
 	if (error)
@@ -622,7 +623,7 @@ int bus_add_driver(struct device_driver *drv)
 			goto out_del_list;
 	}
 	module_add_driver(drv->owner, drv);
-
+	//向驱动对应的 kobject（通常用于 sysfs）添加属性文件
 	error = driver_create_file(drv, &driver_attr_uevent);
 	if (error) {
 		printk(KERN_ERR "%s: uevent attr (%s) failed\n",

@@ -8,6 +8,7 @@
         "typeinfo": "c",
         "__node_handle": "c",
         "if_packet.h": "c",
-        "netfilter_arp.h": "c"
+        "netfilter_arp.h": "c",
+        "type_traits": "c"
     }
 }

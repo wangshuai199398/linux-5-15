@@ -236,15 +236,17 @@ int driver_register(struct device_driver *drv)
 			"aborting...\n", drv->name);
 		return -EBUSY;
 	}
-
+	pr_err("Driver driver_register '%s'  '%s' \n", drv->name, drv->bus->name);
 	ret = bus_add_driver(drv);
 	if (ret)
 		return ret;
+	//注册驱动的属性组（sysfs 属性）
 	ret = driver_add_groups(drv, drv->groups);
 	if (ret) {
 		bus_remove_driver(drv);
 		return ret;
 	}
+	//发送 KOBJ_ADD 事件，用户空间（如 udev）可以收到通知，执行相应操作
 	kobject_uevent(&drv->p->kobj, KOBJ_ADD);
 
 	return ret;
