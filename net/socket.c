@@ -2569,7 +2569,7 @@ out:
 
 SYSCALL_DEFINE3(sendmsg, int, fd, struct user_msghdr __user *, msg, unsigned int, flags)
 {
-	pr_err("%s: %s __sys_sendmsg pid %d fd %d flags 0x%x\n", __func__, current->comm, current->pid, fd, flags);
+	//pr_err("%s: %s __sys_sendmsg pid %d fd %d flags 0x%x\n", __func__, current->comm, current->pid, fd, flags);
 	return __sys_sendmsg(fd, msg, flags, true);
 }
 
