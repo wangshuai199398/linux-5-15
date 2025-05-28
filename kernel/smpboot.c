@@ -217,6 +217,7 @@ int smpboot_create_threads(unsigned int cpu)
 
 	mutex_lock(&smpboot_threads_lock);
 	list_for_each_entry(cur, &hotplug_threads, list) {
+		pr_err("%s: CONFIG_SMP startup.single Registering ksoftirqd thread on CPU %u\n", __func__, cpu);
 		ret = __smpboot_create_thread(cur, cpu);
 		if (ret)
 			break;
