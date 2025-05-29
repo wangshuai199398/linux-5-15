@@ -1502,7 +1502,7 @@ int __sock_create(struct net *net, int family, int type, int protocol,
 
 	/* Now protected by module ref count */
 	rcu_read_unlock();
-
+	pr_err("%s: %s __sys_socket pid %d family %d type 0x%x protocol %d \n", __func__, current->comm, current->pid, family, type, protocol);//AF_INET 2 SOCK_STREAM 2 IPPROTO_TCP 6
 	err = pf->create(net, sock, protocol, kern);//inet_create
 	if (err < 0) {
 		/* ->create should release the allocated sock->sk object on error
@@ -1611,7 +1611,6 @@ int __sys_socket(int family, int type, int protocol)
 //socket_wangs
 SYSCALL_DEFINE3(socket, int, family, int, type, int, protocol)
 {
-	pr_err("%s: %s __sys_socket pid %d family %d type 0x%x protocol %d \n", __func__, current->comm, current->pid, family, type, protocol);//AF_INET 2 SOCK_STREAM 2 IPPROTO_TCP 6
 	return __sys_socket(family, type, protocol);
 }
 
