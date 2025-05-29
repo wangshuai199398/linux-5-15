@@ -329,7 +329,7 @@ static struct dentry *start_creating(const char *name, struct dentry *parent)
 	if (!debugfs_initialized())
 		return ERR_PTR(-ENOENT);
 
-	pr_err("creating file '%s'\n", name);
+	//pr_err("creating file '%s'\n", name);
 
 	if (IS_ERR(parent))
 		return parent;

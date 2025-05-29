@@ -1502,7 +1502,7 @@ int __sock_create(struct net *net, int family, int type, int protocol,
 
 	/* Now protected by module ref count */
 	rcu_read_unlock();
-	pr_err("%s: %s __sys_socket pid %d family %d type 0x%x protocol %d \n", __func__, current->comm, current->pid, family, type, protocol);//AF_INET 2 SOCK_STREAM 2 IPPROTO_TCP 6
+	//pr_err("%s: %s __sys_socket pid %d family %d type 0x%x protocol %d \n", __func__, current->comm, current->pid, family, type, protocol);//AF_INET 2 SOCK_STREAM 2 IPPROTO_TCP 6
 	err = pf->create(net, sock, protocol, kern);//inet_create
 	if (err < 0) {
 		/* ->create should release the allocated sock->sk object on error
@@ -1737,7 +1737,7 @@ int __sys_bind(int fd, struct sockaddr __user *umyaddr, int addrlen)
 			err = security_socket_bind(sock,
 						   (struct sockaddr *)&address,
 						   addrlen);
-			pr_err("%s: %s __sys_bind pid %d fd %d addrlen %d \n", __func__, current->comm, current->pid, fd, addrlen);
+			//pr_err("%s: %s __sys_bind pid %d fd %d addrlen %d \n", __func__, current->comm, current->pid, fd, addrlen);
 			if (!err)
 				err = sock->ops->bind(sock,
 						      (struct sockaddr *)
@@ -1773,7 +1773,7 @@ int __sys_listen(int fd, int backlog)
 			backlog = somaxconn;
 
 		err = security_socket_listen(sock, backlog);
-		pr_err("%s: %s pid %d fd %d backlog %d \n", __func__, current->comm, current->pid, fd, backlog);
+		//pr_err("%s: %s pid %d fd %d backlog %d \n", __func__, current->comm, current->pid, fd, backlog);
 		if (!err)
 			err = sock->ops->listen(sock, backlog);
 
@@ -1820,7 +1820,7 @@ struct file *do_accept(struct file *file, unsigned file_flags,
 	err = security_socket_accept(sock, newsock);
 	if (err)
 		goto out_fd;
-	pr_err("%s: %s pid %d file_flags 0x%x \n", __func__, current->comm, current->pid, file_flags);
+	//pr_err("%s: %s pid %d file_flags 0x%x \n", __func__, current->comm, current->pid, file_flags);
 	err = sock->ops->accept(sock, newsock, sock->file->f_flags | file_flags,
 					false);
 	if (err < 0)
@@ -1944,7 +1944,7 @@ int __sys_connect_file(struct file *file, struct sockaddr_storage *address,
 	    security_socket_connect(sock, (struct sockaddr *)address, addrlen);
 	if (err)
 		goto out;
-	pr_err("%s: %s __sys_connect pid %d file_flags 0x%x \n", __func__, current->comm, current->pid, file_flags);
+	//pr_err("%s: %s __sys_connect pid %d file_flags 0x%x \n", __func__, current->comm, current->pid, file_flags);
 	err = sock->ops->connect(sock, (struct sockaddr *)address, addrlen,
 				 sock->file->f_flags | file_flags);//inet_stream_connect
 out:
