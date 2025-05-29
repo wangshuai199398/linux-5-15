@@ -229,14 +229,13 @@ static const struct net_proto_family __rcu *net_families[NPROTO] __read_mostly;
  */
 
 /**
- *	move_addr_to_kernel	-	copy a socket address into kernel space
- *	@uaddr: Address in user space
- *	@kaddr: Address in kernel space
- *	@ulen: Length in user space
+ *	将用户空间传入的地址结构（如 struct sockaddr）拷贝到内核空间
+ *	@uaddr: 用户空间中指向地址结构的指针（通常是 struct sockaddr __user *）
+ *	@kaddr: 用于接收地址数据的内核空间结构指针（通常是 struct sockaddr_storage） 
+ *	@ulen:  地址结构的长度（单位：字节）
  *
- *	The address is copied into kernel space. If the provided address is
- *	too long an error code of -EINVAL is returned. If the copy gives
- *	invalid addresses -EFAULT is returned. On a success 0 is returned.
+ *	地址会被复制到内核空间. 如果提供的地址长度过长，则返回错误码 -EINVAL. 
+ *  如果复制过程中出现无效地址，则返回错误码 -EFAULT
  */
 
 int move_addr_to_kernel(void __user *uaddr, int ulen, struct sockaddr_storage *kaddr)
@@ -1739,6 +1738,7 @@ int __sys_bind(int fd, struct sockaddr __user *umyaddr, int addrlen)
 			err = security_socket_bind(sock,
 						   (struct sockaddr *)&address,
 						   addrlen);
+			pr_err("%s: %s __sys_bind pid %d fd %d addrlen %d \n", __func__, current->comm, current->pid, fd, addrlen);
 			if (!err)
 				err = sock->ops->bind(sock,
 						      (struct sockaddr *)
@@ -1752,7 +1752,6 @@ int __sys_bind(int fd, struct sockaddr __user *umyaddr, int addrlen)
 //bind_wangs
 SYSCALL_DEFINE3(bind, int, fd, struct sockaddr __user *, umyaddr, int, addrlen)
 {
-	pr_err("%s: %s __sys_bind pid %d fd %d addrlen %d \n", __func__, current->comm, current->pid, fd, addrlen);
 	return __sys_bind(fd, umyaddr, addrlen);
 }
 
@@ -1775,6 +1774,7 @@ int __sys_listen(int fd, int backlog)
 			backlog = somaxconn;
 
 		err = security_socket_listen(sock, backlog);
+		pr_err("%s: %s pid %d fd %d backlog %d \n", __func__, current->comm, current->pid, fd, backlog);
 		if (!err)
 			err = sock->ops->listen(sock, backlog);
 
@@ -1785,7 +1785,6 @@ int __sys_listen(int fd, int backlog)
 
 SYSCALL_DEFINE2(listen, int, fd, int, backlog)
 {
-	pr_err("%s: %s __sys_listen pid %d fd %d backlog %d \n", __func__, current->comm, current->pid, fd, backlog);
 	return __sys_listen(fd, backlog);
 }
 
@@ -1822,7 +1821,7 @@ struct file *do_accept(struct file *file, unsigned file_flags,
 	err = security_socket_accept(sock, newsock);
 	if (err)
 		goto out_fd;
-
+	pr_err("%s: %s pid %d file_flags 0x%x \n", __func__, current->comm, current->pid, file_flags);
 	err = sock->ops->accept(sock, newsock, sock->file->f_flags | file_flags,
 					false);
 	if (err < 0)
@@ -1908,7 +1907,6 @@ int __sys_accept4(int fd, struct sockaddr __user *upeer_sockaddr,
 SYSCALL_DEFINE4(accept4, int, fd, struct sockaddr __user *, upeer_sockaddr,
 		int __user *, upeer_addrlen, int, flags)
 {
-	pr_err("%s: %s __sys_accept4 pid %d fd %d flags 0x%x \n", __func__, current->comm, current->pid, fd, flags);
 	return __sys_accept4(fd, upeer_sockaddr, upeer_addrlen, flags);
 }
 
@@ -1916,7 +1914,6 @@ SYSCALL_DEFINE4(accept4, int, fd, struct sockaddr __user *, upeer_sockaddr,
 SYSCALL_DEFINE3(accept, int, fd, struct sockaddr __user *, upeer_sockaddr,
 		int __user *, upeer_addrlen)
 {
-	pr_err("%s: %s __sys_accept4 pid %d fd %d \n", __func__, current->comm, current->pid, fd);
 	return __sys_accept4(fd, upeer_sockaddr, upeer_addrlen, 0);
 }
 
@@ -1948,9 +1945,9 @@ int __sys_connect_file(struct file *file, struct sockaddr_storage *address,
 	    security_socket_connect(sock, (struct sockaddr *)address, addrlen);
 	if (err)
 		goto out;
-
+	pr_err("%s: %s __sys_connect pid %d file_flags 0x%x \n", __func__, current->comm, current->pid, file_flags);
 	err = sock->ops->connect(sock, (struct sockaddr *)address, addrlen,
-				 sock->file->f_flags | file_flags);
+				 sock->file->f_flags | file_flags);//inet_stream_connect
 out:
 	return err;
 }
@@ -1977,7 +1974,6 @@ int __sys_connect(int fd, struct sockaddr __user *uservaddr, int addrlen)
 SYSCALL_DEFINE3(connect, int, fd, struct sockaddr __user *, uservaddr,
 		int, addrlen)
 {
-	pr_err("%s: %s __sys_connect pid %d fd %d addrlen %d \n", __func__, current->comm, current->pid, fd, addrlen);
 	return __sys_connect(fd, uservaddr, addrlen);
 }
 

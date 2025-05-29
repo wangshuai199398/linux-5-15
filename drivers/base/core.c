@@ -4143,31 +4143,23 @@ struct device *device_create(struct class *class, struct device *parent,
 EXPORT_SYMBOL_GPL(device_create);
 
 /**
- * device_create_with_groups - creates a device and registers it with sysfs
- * @class: pointer to the struct class that this device should be registered to
- * @parent: pointer to the parent struct device of this new device, if any
- * @devt: the dev_t for the char device to be added
- * @drvdata: the data to be added to the device for callbacks
- * @groups: NULL-terminated list of attribute groups to be created
- * @fmt: string for the device's name
+ * 在设备模型（device model）中创建一个设备节点，并同时为其创建属性组（sysfs 属性组）
+ * @class:  指向 struct class 的指针，新设备将注册到该类中
+ * @parent: 新设备的父设备的指针（如果有的话）
+ * @devt:   要添加的字符设备的设备号（dev_t 类型）
+ * @drvdata: 要附加到设备的数据，可用于回调中使用
+ * @groups:  以NULL结尾的属性组列表（attribute groups），用于创建 sysfs 属性
+ * @fmt:     设备名称的格式字符串
  *
- * This function can be used by char device classes.  A struct device
- * will be created in sysfs, registered to the specified class.
- * Additional attributes specified in the groups parameter will also
- * be created automatically.
+ * 此函数可被字符设备类（char device classes）使用。它会在sysfs中创建一个struct device，并将其注册到指定的类（class）中
+ * 通过 groups 参数指定的附加属性组（attributes）也会被自动创建
  *
- * A "dev" file will be created, showing the dev_t for the device, if
- * the dev_t is not 0,0.
- * If a pointer to a parent struct device is passed in, the newly created
- * struct device will be a child of that device in sysfs.
- * The pointer to the struct device will be returned from the call.
- * Any further sysfs files that might be required can be created using this
- * pointer.
+ * 如果传入的 dev_t 不为 0，则会创建一个名为 "dev" 的文件，用于显示该设备的设备号（dev_t）
+ * 如果传入了一个父设备（struct device *）指针，那么新创建的设备将作为该父设备在 sysfs 中的子设备
+ * 函数返回新创建的 struct device 指针
+ * 如果需要更多的 sysfs 文件（属性），可以通过返回的 struct device * 创建。
  *
- * Returns &struct device pointer on success, or ERR_PTR() on error.
- *
- * Note: the struct class passed to this function must have previously
- * been created with a call to class_create().
+ * 注意: 传入的 struct class 必须是之前通过class_create创建的
  */
 struct device *device_create_with_groups(struct class *class,
 					 struct device *parent, dev_t devt,

@@ -153,21 +153,16 @@ static const struct file_operations misc_fops = {
 };
 
 /**
- *	misc_register	-	register a miscellaneous device
+ *	注册一个混杂设备到内核中
  *	@misc: device structure
  *
- *	Register a miscellaneous device with the kernel. If the minor
- *	number is set to %MISC_DYNAMIC_MINOR a minor number is assigned
- *	and placed in the minor field of the structure. For other cases
- *	the minor number requested is used.
- *
- *	The structure passed is linked into the kernel and may not be
- *	destroyed until it has been unregistered. By default, an open()
- *	syscall to the device sets file->private_data to point to the
- *	structure. Drivers don't need open in fops for this.
- *
- *	A zero is returned on success and a negative errno code for
- *	failure.
+ *	如果minor字段设置为 %MISC_DYNAMIC_MINOR，那么内核会为该设备自动分配一个次设备号（minor number）并将其存放在该结构体的minor字段中
+ *  如果指定了具体的次设备号，则会使用你请求的那个次设备号
+ * 
+ *	传入的结构体会链接到内核中，因此在注销之前不能被销毁或释放
+ *  默认情况下，当设备被 open()（打开）时，内核会自动将 file->private_data 设置为指向该 miscdevice 结构体的指针
+ * 
+ *  这意味着驱动程序不一定需要在 file_operations 中实现open函数，除非有额外的操作需要
  */
 
 int misc_register(struct miscdevice *misc)
