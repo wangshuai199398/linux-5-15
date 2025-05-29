@@ -9,6 +9,7 @@
         "__node_handle": "c",
         "if_packet.h": "c",
         "netfilter_arp.h": "c",
-        "type_traits": "c"
+        "type_traits": "c",
+        "memory_resource": "c"
     }
 }

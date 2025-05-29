@@ -67,6 +67,7 @@ static const struct inode_operations debugfs_symlink_inode_operations = {
 	.setattr	= debugfs_setattr,
 };
 
+//获取一个空闲的 inode（用于代表目录本体）
 static struct inode *debugfs_get_inode(struct super_block *sb)
 {
 	struct inode *inode = new_inode(sb);
@@ -316,6 +317,7 @@ struct dentry *debugfs_lookup(const char *name, struct dentry *parent)
 }
 EXPORT_SYMBOL_GPL(debugfs_lookup);
 
+//创建一个新的 dentry（目录项对象），表示你要创建的目录
 static struct dentry *start_creating(const char *name, struct dentry *parent)
 {
 	struct dentry *dentry;
@@ -327,7 +329,7 @@ static struct dentry *start_creating(const char *name, struct dentry *parent)
 	if (!debugfs_initialized())
 		return ERR_PTR(-ENOENT);
 
-	pr_debug("creating file '%s'\n", name);
+	pr_err("creating file '%s'\n", name);
 
 	if (IS_ERR(parent))
 		return parent;
@@ -427,31 +429,19 @@ static struct dentry *__debugfs_create_file(const char *name, umode_t mode,
 }
 
 /**
- * debugfs_create_file - create a file in the debugfs filesystem
- * @name: a pointer to a string containing the name of the file to create.
- * @mode: the permission that the file should have.
- * @parent: a pointer to the parent dentry for this file.  This should be a
- *          directory dentry if set.  If this parameter is NULL, then the
- *          file will be created in the root of the debugfs filesystem.
- * @data: a pointer to something that the caller will want to get to later
- *        on.  The inode.i_private pointer will point to this value on
- *        the open() call.
- * @fops: a pointer to a struct file_operations that should be used for
- *        this file.
+ * 在 debugfs 文件系统中创建一个文件
+ * @name: 一个字符串指针，表示要创建的文件名
+ * @mode: 设置该文件的访问权限（如 0644）
+ * @parent: 该文件的父目录的 dentry 指针，如果为 NULL，则文件将创建在 debugfs 根目录下
+ * @data: 一个指针，指向调用者想要在将来访问的数据；当用户打开该文件时，这个指针会存储在 inode->i_private 中
+ * @fops: 一个指向 struct file_operations 的指针，用于定义该文件的操作行为（如 read、write 等）
  *
- * This is the basic "create a file" function for debugfs.  It allows for a
- * wide range of flexibility in creating a file, or a directory (if you want
- * to create a directory, the debugfs_create_dir() function is
- * recommended to be used instead.)
+ * 这是 debugfs 中用于创建文件的基本函数。
+ * 
+ * 如果创建成功，该函数会返回一个指向 dentry 的指针。
+ * 在你要删除这个文件时，必须将这个指针传给 debugfs_remove() 函数
  *
- * This function will return a pointer to a dentry if it succeeds.  This
- * pointer must be passed to the debugfs_remove() function when the file is
- * to be removed (no automatic cleanup happens if your module is unloaded,
- * you are responsible here.)  If an error occurs, ERR_PTR(-ERROR) will be
- * returned.
- *
- * If debugfs is not enabled in the kernel, the value -%ENODEV will be
- * returned.
+ * 注意：如果你的模块被卸载，系统不会自动清理这个文件，清理工作由你负责
  */
 struct dentry *debugfs_create_file(const char *name, umode_t mode,
 				   struct dentry *parent, void *data,
@@ -536,23 +526,17 @@ void debugfs_create_file_size(const char *name, umode_t mode,
 EXPORT_SYMBOL_GPL(debugfs_create_file_size);
 
 /**
- * debugfs_create_dir - create a directory in the debugfs filesystem
- * @name: a pointer to a string containing the name of the directory to
- *        create.
- * @parent: a pointer to the parent dentry for this file.  This should be a
- *          directory dentry if set.  If this parameter is NULL, then the
- *          directory will be created in the root of the debugfs filesystem.
+ * 在 debugfs 文件系统中创建一个目录
+ * @name: 一个字符串指针，表示要创建的目录名称
+ * @parent: 父目录的 dentry 指针, 如果设置了，应指向一个目录；如果为 NULL, 则在 debugfs 根目录下创建该目录
  *
- * This function creates a directory in debugfs with the given name.
+ * 该函数会在 debugfs 中创建一个指定名称的目录
  *
- * This function will return a pointer to a dentry if it succeeds.  This
- * pointer must be passed to the debugfs_remove() function when the file is
- * to be removed (no automatic cleanup happens if your module is unloaded,
- * you are responsible here.)  If an error occurs, ERR_PTR(-ERROR) will be
- * returned.
+ * 如果成功，返回一个指向该目录的 dentry 指针，你需要手动调用 debugfs_remove 来清除它
+ * 如果你卸载模块时不手动清除，目录不会自动删除
  *
- * If debugfs is not enabled in the kernel, the value -%ENODEV will be
- * returned.
+ * 如果失败，返回一个错误指针（通过 ERR_PTR(-ERROR)）；
+ * 如果内核未启用 debugfs，返回 ERR_PTR(-ENODEV)
  */
 struct dentry *debugfs_create_dir(const char *name, struct dentry *parent)
 {
@@ -573,15 +557,20 @@ struct dentry *debugfs_create_dir(const char *name, struct dentry *parent)
 		       name);
 		return failed_creating(dentry);
 	}
-
+	//是一个目录（S_IFDIR），权限是：拥有者：可读写执行（0700）,其他用户：可读可执行（0555）
 	inode->i_mode = S_IFDIR | S_IRWXU | S_IRUGO | S_IXUGO;
+	//设置 inode 的操作函数表
 	inode->i_op = &debugfs_dir_inode_operations;
 	inode->i_fop = &simple_dir_operations;
 
 	/* directory inodes start off with i_nlink == 2 (for "." entry) */
+	//增加 inode 的链接数（初始为 2，表示包含 “.” 自身）
 	inc_nlink(inode);
+	//将 inode 实例化到这个 dentry 上（绑定目录结构）
 	d_instantiate(dentry, inode);
+	//父目录链接数加一（表示多了一个子目录）
 	inc_nlink(d_inode(dentry->d_parent));
+	//触发文件系统通知（如 inotify 或 fanotify）：“父目录下新建了子目录”
 	fsnotify_mkdir(d_inode(dentry->d_parent), dentry);
 	return end_creating(dentry);
 }

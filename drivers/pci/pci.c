@@ -1876,32 +1876,36 @@ int __weak pcibios_enable_device(struct pci_dev *dev, int bars)
 	return pci_enable_resources(dev, bars);
 }
 
+//启用一个 PCI 设备的资源、电源状态和中断配置
 static int do_pci_enable_device(struct pci_dev *dev, int bars)
 {
 	int err;
 	struct pci_dev *bridge;
 	u16 cmd;
 	u8 pin;
-
+	//设置设备电源状态为D0（全功率状态）,将设备从挂起状态（如 D3hot/D3cold）恢复到活动状态（D0）
 	err = pci_set_power_state(dev, PCI_D0);
 	if (err < 0 && err != -EIO)
 		return err;
-
+	//如果设备连接在 PCIe 桥后面，尝试配置桥的 ASPM（Active State Power Management）参数以支持省电
 	bridge = pci_upstream_bridge(dev);
 	if (bridge)
 		pcie_aspm_powersave_config_link(bridge);
-
+	//启用设备的 BAR 区域,请求资源（I/O、MEM）,设置 PCI_COMMAND 寄存器中的 IO 和 MEM 位
 	err = pcibios_enable_device(dev, bars);
 	if (err < 0)
 		return err;
+	//一些厂商设备存在特殊行为或 bug，需要驱动或内核特殊处理
 	pci_fixup_device(pci_fixup_enable, dev);
-
+	//如果设备已经启用了 MSI/MSI-X，就不再使用传统的 INTx 中断，也不需要修改它
 	if (dev->msi_enabled || dev->msix_enabled)
 		return 0;
-
+	//检查是否启用了传统中断引脚（INTx）
 	pci_read_config_byte(dev, PCI_INTERRUPT_PIN, &pin);
-	if (pin) {
+	if (pin) {//如果设备声明了使用中断引脚（pin 非 0）
 		pci_read_config_word(dev, PCI_COMMAND, &cmd);
+		//检查是否 INTx 被禁用了（通过 PCI_COMMAND_INTX_DISABLE 位）
+		//如果禁用了，就重新启用 INTx 中断（清除该位）
 		if (cmd & PCI_COMMAND_INTX_DISABLE)
 			pci_write_config_word(dev, PCI_COMMAND,
 					      cmd & ~PCI_COMMAND_INTX_DISABLE);
@@ -1947,6 +1951,7 @@ static void pci_enable_bridge(struct pci_dev *dev)
 	pci_set_master(dev);
 }
 
+//flags：指定要启用哪些资源（如 IORESOURCE_IO 或 IORESOURCE_MEM）
 static int pci_enable_device_flags(struct pci_dev *dev, unsigned long flags)
 {
 	struct pci_dev *bridge;
@@ -1963,7 +1968,7 @@ static int pci_enable_device_flags(struct pci_dev *dev, unsigned long flags)
 
 	if (atomic_inc_return(&dev->enable_cnt) > 1)
 		return 0;		/* already enabled */
-
+	//确保设备上游的桥接器（如 PCI-to-PCI bridge）已经处于启用状态，否则后续访问会失败
 	bridge = pci_upstream_bridge(dev);
 	if (bridge)
 		pci_enable_bridge(bridge);
@@ -3925,23 +3930,17 @@ void pci_release_region(struct pci_dev *pdev, int bar)
 EXPORT_SYMBOL(pci_release_region);
 
 /**
- * __pci_request_region - Reserved PCI I/O and memory resource
- * @pdev: PCI device whose resources are to be reserved
- * @bar: BAR to be reserved
- * @res_name: Name to be associated with resource.
- * @exclusive: whether the region access is exclusive or not
+ * Reserved PCI I/O 和内存资源
+ * @pdev: 要保留资源的 PCI 设备
+ * @bar:  要保留的 BAR（基地址寄存器）编号
+ * @res_name: 与该资源关联的名称
+ * @exclusive: 是否将该区域设置为“独占访问”
  *
- * Mark the PCI region associated with PCI device @pdev BAR @bar as
- * being reserved by owner @res_name.  Do not access any
- * address inside the PCI regions unless this call returns
- * successfully.
+ * 将 PCI 设备 @pdev 的第 @bar 个 BAR 所关联的 PCI 区域标记为由 @res_name 拥有
+ * 除非该函数调用成功，否则不要访问该 PCI 区域中的任何地址
  *
- * If @exclusive is set, then the region is marked so that userspace
- * is explicitly not allowed to map the resource via /dev/mem or
- * sysfs MMIO access.
- *
- * Returns 0 on success, or %EBUSY on error.  A warning
- * message is also printed on failure.
+ * 如果 @exclusive 被设置为 true，那么该资源会被标记为用户空间明确禁止访问，
+ * 包括通过 /dev/mem 或 sysfs 的 MMIO 映射接口访问
  */
 static int __pci_request_region(struct pci_dev *pdev, int bar,
 				const char *res_name, int exclusive)
@@ -4033,10 +4032,10 @@ err_out:
 
 
 /**
- * pci_request_selected_regions - Reserve selected PCI I/O and memory resources
- * @pdev: PCI device whose resources are to be reserved
- * @bars: Bitmask of BARs to be requested
- * @res_name: Name to be associated with resource
+ * Reserve 选定的 PCI I/O 和内存资源
+ * @pdev: 要保留资源的 PCI 设备
+ * @bars: 要请求的 BAR 掩码（位图）
+ * @res_name: 与资源关联的名称（资源拥有者）
  */
 int pci_request_selected_regions(struct pci_dev *pdev, int bars,
 				 const char *res_name)
@@ -4070,17 +4069,15 @@ void pci_release_regions(struct pci_dev *pdev)
 EXPORT_SYMBOL(pci_release_regions);
 
 /**
- * pci_request_regions - Reserve PCI I/O and memory resources
- * @pdev: PCI device whose resources are to be reserved
- * @res_name: Name to be associated with resource.
+ * Reserve PCI I/O 和内存资源
+ * @pdev: 要保留资源的 PCI 设备
+ * @res_name: 与资源关联的名称（资源拥有者名）
  *
- * Mark all PCI regions associated with PCI device @pdev as
- * being reserved by owner @res_name.  Do not access any
- * address inside the PCI regions unless this call returns
- * successfully.
+ * 将与 PCI 设备 @pdev 相关的所有 PCI 区域（regions）标记为由 @res_name 所拥有的资源
+ * 
+ * 除非该函数调用成功，否则不要访问这些 PCI 区域内的任何地址
  *
- * Returns 0 on success, or %EBUSY on error.  A warning
- * message is also printed on failure.
+ * 成功时返回 0，失败时返回错误码 %EBUSY（资源正忙）。如果失败，还会打印一条警告信息
  */
 int pci_request_regions(struct pci_dev *pdev, const char *res_name)
 {
@@ -4362,7 +4359,7 @@ static void __pci_set_master(struct pci_dev *dev, bool enable)
 	else
 		cmd = old_cmd & ~PCI_COMMAND_MASTER;
 	if (cmd != old_cmd) {
-		pci_dbg(dev, "%s bus mastering\n",
+		pci_err(dev, "%s bus mastering\n",
 			enable ? "enabling" : "disabling");
 		pci_write_config_word(dev, PCI_COMMAND, cmd);
 	}
@@ -4382,20 +4379,20 @@ char * __weak __init pcibios_setup(char *str)
 }
 
 /**
- * pcibios_set_master - enable PCI bus-mastering for device dev
- * @dev: the PCI device to enable
+ * 为设备使能 PCI bus-mastering 功能
+ * @dev: 要启用的 PCI 设备
  *
- * Enables PCI bus-mastering for the device.  This is the default
- * implementation.  Architecture specific implementations can override
- * this if necessary.
+ * 允许不同架构（如 x86、ARM）自定义如何设置 bus master，但在大多数情况下默认实现已经足够。
  */
 void __weak pcibios_set_master(struct pci_dev *dev)
 {
 	u8 lat;
 
-	/* The latency timer doesn't apply to PCIe (either Type 0 or Type 1) */
-	if (pci_is_pcie(dev))
+	//延迟计时器不适用于 PCIe（无论是类型 0 还是类型 1）
+	if (pci_is_pcie(dev)) {
+		pci_err(dev, "PCIe devices do not use latency timer\n");
 		return;
+	}
 
 	pci_read_config_byte(dev, PCI_LATENCY_TIMER, &lat);
 	if (lat < 16)
@@ -4409,11 +4406,12 @@ void __weak pcibios_set_master(struct pci_dev *dev)
 }
 
 /**
- * pci_set_master - enables bus-mastering for device dev
- * @dev: the PCI device to enable
+ * 使能设备的 bus-mastering
+ * @dev: 要启用的 PCI 设备
  *
- * Enables bus-mastering on the device and calls pcibios_set_master()
- * to do the needed arch specific settings.
+ * 该函数用于在设备上启用总线主控（bus-mastering）功能，并调用 pcibios_set_master执行所需的体系结构相关设置
+ * 
+ * 总线主控是指设备可以主动发起 DMA 访问主内存，而不仅仅是被动响应 CPU 的访问请求。驱动通常在启用 DMA 之前必须调用此函数。
  */
 void pci_set_master(struct pci_dev *dev)
 {

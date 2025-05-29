@@ -1177,23 +1177,32 @@ struct address_space *iomem_get_mapping(void)
 	return smp_load_acquire(&iomem_inode)->i_mapping;
 }
 
+//在资源树中尝试从 parent 下注册（申请）一个新的资源区域 res，防止冲突，必要时等待共享资源释放
+/*
+res：要申请的资源结构体（目标资源）
+parent：父资源节点
+start：资源起始地址
+n：资源大小（字节）
+name：申请该资源的模块或驱动的名称
+flags：额外标志（如 IORESOURCE_MEM、IORESOURCE_IO）
+*/
 static int __request_region_locked(struct resource *res, struct resource *parent,
 				   resource_size_t start, resource_size_t n,
 				   const char *name, int flags)
 {
 	DECLARE_WAITQUEUE(wait, current);
-
+	//设置资源起止地址和名字
 	res->name = name;
 	res->start = start;
 	res->end = start + n - 1;
 
 	for (;;) {
 		struct resource *conflict;
-
+		//组合资源类型和标志
 		res->flags = resource_type(parent) | resource_ext_type(parent);
 		res->flags |= IORESOURCE_BUSY | flags;
 		res->desc = parent->desc;
-
+		//插入资源树
 		conflict = __request_resource(parent, res);
 		if (!conflict)
 			break;
@@ -1202,16 +1211,19 @@ static int __request_region_locked(struct resource *res, struct resource *parent
 		 * become unavailable to other users.  Conflicts are
 		 * not expected.  Warn to aid debugging if encountered.
 		 */
+		//特殊处理
 		if (conflict->desc == IORES_DESC_DEVICE_PRIVATE_MEMORY) {
 			pr_warn("Unaddressable device %s %pR conflicts with %pR",
 				conflict->name, conflict, res);
 		}
+		//如果冲突但未标记 BUSY，则尝试在其子资源中继续递归申请
 		if (conflict != parent) {
 			if (!(conflict->flags & IORESOURCE_BUSY)) {
 				parent = conflict;
 				continue;
 			}
 		}
+		//如果资源支持多路复用（MUXED），加入等待队列并休眠，等待资源释放
 		if (conflict->flags & flags & IORESOURCE_MUXED) {
 			add_wait_queue(&muxed_resource_wait, &wait);
 			write_unlock(&resource_lock);
@@ -1229,12 +1241,15 @@ static int __request_region_locked(struct resource *res, struct resource *parent
 }
 
 /**
- * __request_region - create a new busy resource region
- * @parent: parent resource descriptor
- * @start: resource start address
- * @n: resource region size
- * @name: reserving caller's ID string
- * @flags: IO resource flags
+ * 创建一个新的“已占用”资源区域（busy resource region）
+ * @parent: 父资源描述符
+ * @start:  资源区域的起始地址
+ * @n:      资源区域的大小
+ * @name:   保留该资源的调用者名称（字符串）
+ * @flags:  I/O 资源标志（如 IORESOURCE_IO、IORESOURCE_MEM 等）
+ * 
+ * 这个函数用于在资源树中从 @parent 下新建一个标记为“busy”（已占用）的子区域，
+ * 表示这段 I/O 或内存区域已被某个驱动或子系统保留，其他设备或驱动不得再使用。
  */
 struct resource *__request_region(struct resource *parent,
 				  resource_size_t start, resource_size_t n,
