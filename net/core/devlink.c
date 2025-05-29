@@ -8898,16 +8898,14 @@ static bool devlink_reload_actions_valid(const struct devlink_ops *ops)
 }
 
 /**
- *	devlink_alloc_ns - Allocate new devlink instance resources
- *	in specific namespace
+ *	在特定命名空间中分配新的 devlink 实例资源
  *
- *	@ops: ops
- *	@priv_size: size of user private data
- *	@net: net namespace
- *	@dev: parent device
+ *	@ops:       操作函数集
+ *	@priv_size: 用户私有数据的大小
+ *	@net:       网络命名空间
+ *	@dev:       父设备
  *
- *	Allocate new devlink instance resources, including devlink index
- *	and name.
+ *	在指定的命名空间中分配一个新的 devlink 实例资源，包括分配 devlink 的索引和名称
  */
 struct devlink *devlink_alloc_ns(const struct devlink_ops *ops,
 				 size_t priv_size, struct net *net,

@@ -1167,16 +1167,13 @@ static int pci_raw_set_power_state(struct pci_dev *dev, pci_power_t state)
 }
 
 /**
- * pci_update_current_state - Read power state of given device and cache it
- * @dev: PCI device to handle.
- * @state: State to cache in case the device doesn't have the PM capability
+ * 读取指定设备的电源状态并进行缓存
+ * @dev: 要处理的PCI设备
+ * @state: 如果设备没有电源管理（PM）能力，则缓存的电源状态
  *
- * The power state is read from the PMCSR register, which however is
- * inaccessible in D3cold.  The platform firmware is therefore queried first
- * to detect accessibility of the register.  In case the platform firmware
- * reports an incorrect state or the device isn't power manageable by the
- * platform at all, we try to detect D3cold by testing accessibility of the
- * vendor ID in config space.
+ * 电源状态是通过读取 PMCSR（电源管理控制/状态寄存器）获取的，但该寄存器在 D3cold 状态下是不可访问的
+ * 因此，首先会查询平台固件以判断寄存器是否可访问。如果平台固件报告的状态不正确，或者设备根本无法由平台进行电源管理，
+ * 则会通过测试配置空间中的 Vendor ID 是否可访问，来尝试检测是否处于 D3cold 状态。
  */
 void pci_update_current_state(struct pci_dev *dev, pci_power_t state)
 {
@@ -2014,15 +2011,16 @@ int pci_enable_device_mem(struct pci_dev *dev)
 EXPORT_SYMBOL(pci_enable_device_mem);
 
 /**
- * pci_enable_device - Initialize device before it's used by a driver.
- * @dev: PCI device to be initialized
+ * 在设备被驱动使用之前进行初始化
+ * @dev: 要初始化的PCI设备
  *
- * Initialize device before it's used by a driver. Ask low-level code
- * to enable I/O and memory. Wake up the device if it was suspended.
- * Beware, this function can fail.
+ * 在设备被驱动使用之前对其进行初始化。
+ * 请求底层代码启用 I/O 和内存访问。
+ * 如果设备处于挂起状态，还会唤醒设备。
  *
- * Note we don't actually enable the device many times if we call
- * this function repeatedly (we just increment the count).
+ * 注意：这个函数可能会失败，调用者需要检查返回值
+ * 
+ * 即使多次调用该函数，我们实际上并不会重复启用设备，而只是增加了一个计数器。
  */
 int pci_enable_device(struct pci_dev *dev)
 {
