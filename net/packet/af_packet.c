@@ -315,6 +315,7 @@ static void __register_prot_hook(struct sock *sk)
 	}
 }
 
+//tcpdump_wangs 注册抓包协议到ptype_all上
 static void register_prot_hook(struct sock *sk)
 {
 	lockdep_assert_held_once(&pkt_sk(sk)->bind_lock);
@@ -3343,6 +3344,7 @@ static struct proto packet_proto = {
 
 /*
  *	Create a packet of type SOCK_PACKET.
+ *  tcpdump抓包函数
  */
 
 static int packet_create(struct net *net, struct socket *sock, int protocol,

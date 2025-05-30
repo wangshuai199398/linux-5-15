@@ -3176,6 +3176,7 @@ void sk_stop_timer_sync(struct sock *sk, struct timer_list *timer)
 }
 EXPORT_SYMBOL(sk_stop_timer_sync);
 
+//设置sock的sk_data_ready为sock_def_readable，这个函数在软中断到来时会调用，以唤醒sock上等到的进程
 void sock_init_data_uid(struct socket *sock, struct sock *sk, kuid_t uid)
 {
 	sk_init_common(sk);

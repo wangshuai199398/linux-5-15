@@ -610,11 +610,11 @@ static const struct inode_operations sockfs_inode_ops = {
 };
 
 /**
- *	sock_alloc - allocate a socket
+ *	分配一个套接字（socket）
  *
- *	Allocate a new inode and socket object. The two are bound together
- *	and initialised. The socket is then returned. If we are out of inodes
- *	NULL is returned. This functions uses GFP_KERNEL internally.
+ *	分配一个新的 inode 和 socket 对象。两者会被绑定在一起并进行初始化。
+ *  然后返回这个套接字对象。如果 inode 已用尽，则返回 NULL。
+ *  此函数内部使用 GFP_KERNEL 进行内存分配。
  */
 
 struct socket *sock_alloc(void)
@@ -1488,6 +1488,7 @@ int __sock_create(struct net *net, int family, int type, int protocol,
 #endif
 
 	rcu_read_lock();
+	//获取协议族操作表
 	pf = rcu_dereference(net_families[family]);
 	err = -EAFNOSUPPORT;
 	if (!pf)
@@ -1503,7 +1504,8 @@ int __sock_create(struct net *net, int family, int type, int protocol,
 	/* Now protected by module ref count */
 	rcu_read_unlock();
 	//pr_err("%s: %s __sys_socket pid %d family %d type 0x%x protocol %d \n", __func__, current->comm, current->pid, family, type, protocol);//AF_INET 2 SOCK_STREAM 2 IPPROTO_TCP 6
-	err = pf->create(net, sock, protocol, kern);//inet_create
+	//调用指定协议族的创建函数，对于AF_INET对应的是 inet_create
+	err = pf->create(net, sock, protocol, kern);
 	if (err < 0) {
 		/* ->create should release the allocated sock->sk object on error
 		 * but it may leave the dangling pointer

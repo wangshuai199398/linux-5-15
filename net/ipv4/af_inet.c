@@ -310,8 +310,9 @@ lookup_protocol:
 	if (sock->type == SOCK_RAW && !kern &&
 	    !ns_capable(net->user_ns, CAP_NET_RAW))
 		goto out_rcu_unlock;
-
+	// inet_stream_ops
 	sock->ops = answer->ops;
+	// tcp_prot
 	answer_prot = answer->prot;
 	answer_flags = answer->flags;
 	rcu_read_unlock();
@@ -319,6 +320,7 @@ lookup_protocol:
 	WARN_ON(!answer_prot->slab);
 
 	err = -ENOMEM;
+	// 分配sock对象，并把 tcp_prot 赋到 sock->sk_prot 上
 	sk = sk_alloc(net, PF_INET, GFP_KERNEL, answer_prot, kern);
 	if (!sk)
 		goto out;
@@ -347,7 +349,7 @@ lookup_protocol:
 		inet->pmtudisc = IP_PMTUDISC_WANT;
 
 	inet->inet_id = 0;
-
+	//初始化sock
 	sock_init_data(sock, sk);
 
 	sk->sk_destruct	   = inet_sock_destruct;
