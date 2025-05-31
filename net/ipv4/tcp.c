@@ -2606,7 +2606,7 @@ static int tcp_recvmsg_locked(struct sock *sk, struct msghdr *msg, size_t len,
 			release_sock(sk);
 			lock_sock(sk);
 		} else {
-			//进入阻塞等待，直到有新数据到来、或者 timeout/signal
+			//没有收到足够数据，阻塞当前进程，直到有新数据到来、或者 timeout/signal
 			sk_wait_data(sk, &timeo, last);
 		}
 		//PEEK 模式下，tp->copied_seq 不应变化（因为不消费数据）；如果变化了，说明 用户进程 race 读写，违反语义
