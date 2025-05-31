@@ -2521,7 +2521,7 @@ static int tcp_recvmsg_locked(struct sock *sk, struct msghdr *msg, size_t len,
 		//取出该队列尾部的skb,（不删除，只是查看）
 		//注意：TCP 是按顺序接收的，所以我们处理的是从队头开始的；但此处是 last，可能用于后续判断是否队列空、判断是否乱序等。
 		last = skb_peek_tail(&sk->sk_receive_queue);
-		//收包，从头到尾遍历
+		//收包，遍历接收队列接收数据，从头到尾遍历
 		skb_queue_walk(&sk->sk_receive_queue, skb) {
 			//用last记录遍历中遇到的最后一个 skb
 			last = skb;
