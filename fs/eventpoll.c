@@ -183,19 +183,21 @@ struct eventpoll {
 	 */
 	struct mutex mtx;
 
-	/* Wait queue used by sys_epoll_wait() */
+	/* sys_epoll_wait() 用到的等待队列 */
 	wait_queue_head_t wq;
 
 	/* Wait queue used by file->poll() */
 	wait_queue_head_t poll_wait;
 
-	/* List of ready file descriptors */
+	/* 接收就绪的描述符都会放到这里 */
 	struct list_head rdllist;
 
 	/* Lock which protects rdllist and ovflist */
 	rwlock_t lock;
 
-	/* RB tree root used to store monitored fd structs */
+	/* RB tree root used to store monitored fd structs 
+	 * 每个epoll对象中都有一颗红黑树
+	 */
 	struct rb_root_cached rbr;
 
 	/*
@@ -2044,6 +2046,7 @@ static int do_epoll_create(int flags)
 	/*
 	 * Creates all the items needed to setup an eventpoll file. That is,
 	 * a file structure and a free file descriptor.
+	 * 创建一个eventpoll对象
 	 */
 	fd = get_unused_fd_flags(O_RDWR | (flags & O_CLOEXEC));
 	if (fd < 0) {
@@ -2072,6 +2075,7 @@ SYSCALL_DEFINE1(epoll_create1, int, flags)
 	return do_epoll_create(flags);
 }
 
+//epoll_create_wangs
 SYSCALL_DEFINE1(epoll_create, int, size)
 {
 	if (size <= 0)
