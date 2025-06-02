@@ -2766,25 +2766,38 @@ void __sk_flush_backlog(struct sock *sk)
 }
 
 /**
- * sk_wait_data - wait for data to arrive at sk_receive_queue
- * @sk:    sock to wait on
- * @timeo: for how long
- * @skb:   last skb seen on sk_receive_queue
+ * 等待数据到达 sk_receive_queue
+ * @sk:    要等待的套接字
+ * @timeo: 等待的时长
+ * @skb:   在 sk_receive_queue 中最后看到的 skb
  *
- * Now socket state including sk->sk_err is changed only under lock,
- * hence we may omit checks after joining wait queue.
- * We check receive queue before schedule() only as optimization;
- * it is very likely that release_sock() added new data.
+ * 现在，套接字状态（包括 sk->sk_err）只会在加锁的情况下被更改，因此在加入等待队列之后我们可以省略这些检查。
+ * 我们在调用 schedule 前检查接收队列，仅作为一种优化；因为极有可能在 release_sock 调用期间，已经有新数据被添加进来了
  */
 int sk_wait_data(struct sock *sk, long *timeo, const struct sk_buff *skb)
 {
+	// 定义一个等待队列项 wait，唤醒时调用 woken_wake_function；
+    // wait->private = current，即当前进程是被唤醒的目标
 	DEFINE_WAIT_FUNC(wait, woken_wake_function);
 	int rc;
 
+	//sk_sleep:获取sock对象所绑定的等待队列头wait，代表sock的睡眠队列，当前socket无数据可读时，进程就会在这个队列中睡眠等待
+	//将当前进程wait添加到socket的等待队列中，以便某个事件(数据包到达)时被唤醒
 	add_wait_queue(sk_sleep(sk), &wait);
+	//设置 socket 等待数据标志，告知 socket 层“我在等数据”，用于异步唤醒
 	sk_set_bit(SOCKWQ_ASYNC_WAITDATA, sk);
+	/*
+     * 开始阻塞等待，直到满足以下任一条件：
+     *  1. 有新的数据加入 sk->sk_receive_queue（即队尾 skb 发生变化）；
+     *  2. 等待超时（由 timeo 控制）；
+     *  3. 当前进程收到信号（如 Ctrl+C）；
+     *
+     *  如果接收队列队尾 skb 仍为原始的 skb，说明没有新数据，继续等待。
+     */
 	rc = sk_wait_event(sk, timeo, skb_peek_tail(&sk->sk_receive_queue) != skb, &wait);
+	// 清除“正在等待数据”的标志
 	sk_clear_bit(SOCKWQ_ASYNC_WAITDATA, sk);
+	// 将当前进程从等待队列中移除
 	remove_wait_queue(sk_sleep(sk), &wait);
 	return rc;
 }
@@ -3112,9 +3125,10 @@ void sock_def_readable(struct sock *sk)
 
 	rcu_read_lock();
 	wq = rcu_dereference(sk->sk_wq);
+	//有进程在此socket的等待队列中
 	if (skwq_has_sleeper(wq))
 		wake_up_interruptible_sync_poll(&wq->wait, EPOLLIN | EPOLLPRI |
-						EPOLLRDNORM | EPOLLRDBAND);
+						EPOLLRDNORM | EPOLLRDBAND);//唤醒等待队列上的进程
 	sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_IN);
 	rcu_read_unlock();
 }

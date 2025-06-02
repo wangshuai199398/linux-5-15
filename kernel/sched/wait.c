@@ -97,7 +97,7 @@ static int __wake_up_common(struct wait_queue_head *wq_head, unsigned int mode,
 
 	if (&curr->entry == &wq_head->head)
 		return nr_exclusive;
-
+	//找出一个等待队列项curr
 	list_for_each_entry_safe_from(curr, next, &wq_head->head, entry) {
 		unsigned flags = curr->flags;
 		int ret;
@@ -105,7 +105,7 @@ static int __wake_up_common(struct wait_queue_head *wq_head, unsigned int mode,
 		if (flags & WQ_FLAG_BOOKMARK)
 			continue;
 
-		ret = curr->func(curr, mode, wake_flags, key);
+		ret = curr->func(curr, mode, wake_flags, key);//在DEFINE_WAIT中设置为 autoremove_wake_function
 		if (ret < 0)
 			break;
 		if (ret && (flags & WQ_FLAG_EXCLUSIVE) && !--nr_exclusive)
@@ -136,7 +136,7 @@ static void __wake_up_common_lock(struct wait_queue_head *wq_head, unsigned int 
 	do {
 		spin_lock_irqsave(&wq_head->lock, flags);
 		nr_exclusive = __wake_up_common(wq_head, mode, nr_exclusive,
-						wake_flags, key, &bookmark);
+						wake_flags, key, &bookmark);//实现唤醒
 		spin_unlock_irqrestore(&wq_head->lock, flags);
 	} while (bookmark.flags & WQ_FLAG_BOOKMARK);
 }
@@ -202,7 +202,7 @@ void __wake_up_sync_key(struct wait_queue_head *wq_head, unsigned int mode,
 	if (unlikely(!wq_head))
 		return;
 
-	__wake_up_common_lock(wq_head, mode, 1, WF_SYNC, key);
+	__wake_up_common_lock(wq_head, mode, 1, WF_SYNC, key);//1表示只唤醒一个进程，为了避免惊群
 }
 EXPORT_SYMBOL_GPL(__wake_up_sync_key);
 
@@ -456,9 +456,9 @@ long wait_woken(struct wait_queue_entry *wq_entry, unsigned mode, long timeout)
 	 * either we see the store to wq_entry->flags in woken_wake_function()
 	 * or woken_wake_function() sees our store to current->state.
 	 */
-	set_current_state(mode); /* A */
+	set_current_state(mode); /* 将进程状态设置为可打断 INTERRUPTIBLE */
 	if (!(wq_entry->flags & WQ_FLAG_WOKEN) && !is_kthread_should_stop())
-		timeout = schedule_timeout(timeout);
+		timeout = schedule_timeout(timeout);//让出CPU，然后进行睡眠
 	__set_current_state(TASK_RUNNING);
 
 	/*

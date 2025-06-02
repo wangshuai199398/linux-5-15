@@ -1931,6 +1931,7 @@ static inline struct sk_buff *skb_peek_next(struct sk_buff *skb,
  *	Returns %NULL for an empty list or a pointer to the tail element.
  *	The reference count is not incremented and the reference is therefore
  *	volatile. Use with caution.
+ *  socket 的接收队列尾部 skb 发生了变化（不再是旧的那个 skb）
  */
 static inline struct sk_buff *skb_peek_tail(const struct sk_buff_head *list_)
 {

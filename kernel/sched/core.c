@@ -6797,6 +6797,8 @@ int default_wake_function(wait_queue_entry_t *curr, unsigned mode, int wake_flag
 			  void *key)
 {
 	WARN_ON_ONCE(IS_ENABLED(CONFIG_SCHED_DEBUG) && wake_flags & ~WF_SYNC);
+	//curr->private是task_struct，这个就是当时因为等待而被阻塞的进程项
+	//这个函数调用完后，在socket上等待而被阻塞的进程就被推入可运行队列里了，花费一次进程上下文切换开销
 	return try_to_wake_up(curr->private, mode, wake_flags);
 }
 EXPORT_SYMBOL(default_wake_function);

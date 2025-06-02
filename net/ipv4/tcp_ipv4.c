@@ -1768,6 +1768,7 @@ int tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
 		}
 		if (is_src_k2pro(skb))
 			printk(KERN_ERR "%s: ->tcp_rcv_established\n", __func__);
+		//执行连接状态下的数据处理
 		tcp_rcv_established(sk, skb);
 		return 0;
 	}
@@ -2080,7 +2081,7 @@ int tcp_v4_rcv(struct sk_buff *skb)
 	th = (const struct tcphdr *)skb->data;
 	iph = ip_hdr(skb);
 lookup:
-	//根据收到的TCP报文在内核中查找匹配的 socket（即连接）
+	//根据收到的TCP头中的ip、port在内核中查找匹配的 socket（即连接）
 	//在TCP的连接哈希表（tcp_hashinfo）中查找是否有一个已存在的socket匹配当前接收到的TCP报文的元信息（IP地址、端口号等）
 	sk = __inet_lookup_skb(&tcp_hashinfo, skb, __tcp_hdrlen(th), th->source,
 			       th->dest, sdif, &refcounted);
@@ -2225,6 +2226,7 @@ process:
 	//增加 sk->tcp_stats.segs_in 计数器，表示收到了一个 TCP 段
 	tcp_segs_in(tcp_sk(sk), skb);
 	ret = 0;
+	//socket未被用户锁定
 	//如果这个socket不在用户态占用中（比如没有被用户进程锁定在read，send，recv()、poll() 等），就可以立即处理数据包
 	if (!sock_owned_by_user(sk)) {
 		skb_to_free = sk->sk_rx_skb_cache;

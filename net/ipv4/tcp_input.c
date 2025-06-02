@@ -5100,7 +5100,7 @@ static int __must_check tcp_queue_rcv(struct sock *sk, struct sk_buff *skb,
 	//rcv_nxt 是 TCP 接收侧最关键的按序指针，永远指向“下一个期望序列号”
 	tcp_rcv_nxt_update(tcp_sk(sk), TCP_SKB_CB(skb)->end_seq);
 	if (!eaten) {
-		//放到接收队列尾部
+		//把接收到的数据放到socket的接收队列的尾部
 		__skb_queue_tail(&sk->sk_receive_queue, skb);
 		//绑定 socket（skb_set_owner_r）用于资源统计和垃圾回收
 		skb_set_owner_r(skb, sk);
@@ -5163,7 +5163,7 @@ err:
 void tcp_data_ready(struct sock *sk)
 {
 	if (tcp_epollin_ready(sk, sk->sk_rcvlowat) || sock_flag(sk, SOCK_DONE))
-		sk->sk_data_ready(sk);
+		sk->sk_data_ready(sk);//sock_def_readable 默认数据就绪处理函数
 }
 
 //判断一个到来的 skb（数据包）是否是按序、乱序、重复、窗口外，并根据情况放入接收队列、乱序队列，或丢包
@@ -6146,6 +6146,7 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 			if (is_src_k2pro(skb)) {
 				printk(KERN_INFO "%s: ->tcp_queue_rcv tcp_event_data_recv\n", __func__);
 			}
+			//接收数据放到队列中
 			eaten = tcp_queue_rcv(sk, skb, &fragstolen);
 			//如更新 rcv_nxt、通知拥塞控制模块、统计数据包到达等
 			tcp_event_data_recv(sk, skb);
@@ -6171,7 +6172,8 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 no_ack:
 			if (eaten)
 				kfree_skb_partial(skb, fragstolen);//skb 释放（如果数据已被“吃掉”）
-			tcp_data_ready(sk);//通知等待在 recv() 或 epoll 的进程，socket 收到了新数据
+			//数据准备好，唤醒socket上阻塞掉的进程
+			tcp_data_ready(sk);//通知等待在 recv() 或 epoll 的进程socket 收到了新数据
 			return;
 		}
 	}
