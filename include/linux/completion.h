@@ -75,11 +75,11 @@ static inline void complete_release(struct completion *x) {}
 #endif
 
 /**
- * init_completion - Initialize a dynamically allocated completion
- * @x:  pointer to completion structure that is to be initialized
+ * 初始化一个 dynamically allocated completion
+ * @x:  指向要初始化的完成量结构的指针
+ * 
+ * 这个内联函数将初始化一个动态创建的完成量结构
  *
- * This inline function will initialize a dynamically created completion
- * structure.
  */
 static inline void init_completion(struct completion *x)
 {

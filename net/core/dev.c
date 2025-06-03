@@ -11022,17 +11022,16 @@ void netdev_freemem(struct net_device *dev)
 }
 
 /**
- * alloc_netdev_mqs - allocate network device
- * @sizeof_priv: size of private data to allocate space for
- * @name: device name format string
- * @name_assign_type: origin of device name
- * @setup: callback to initialize device
- * @txqs: the number of TX subqueues to allocate
- * @rxqs: the number of RX subqueues to allocate
+ * 分配网络设备
+ * @sizeof_priv: 为驱动使用分配的私有数据大小
+ * @name: 设备名称的格式字符串
+ * @name_assign_type: 设备名称的来源类型（用于区分自动/手动命名）
+ * @setup: 用于初始化设备的回调函数
+ * @txqs: 要分配的发送（TX）子队列数量
+ * @rxqs: 要分配的接收（RX）子队列数量
  *
- * Allocates a struct net_device with private data area for driver use
- * and performs basic initialization.  Also allocates subqueue structs
- * for each queue on the device.
+ * 该函数用于分配一个 struct net_device 对象，并附带一个私有数据区供驱动使用，
+ * 同时进行基础初始化，还会为设备的每个队列分配子队列结构体（即多队列支持）
  */
 struct net_device *alloc_netdev_mqs(int sizeof_priv, const char *name,
 		unsigned char name_assign_type,

@@ -2859,24 +2859,18 @@ static void klist_children_put(struct klist_node *n)
 }
 
 /**
- * device_initialize - init device structure.
+ * 初始化设备结构体
  * @dev: device.
  *
- * This prepares the device for use by other layers by initializing
- * its fields.
- * It is the first half of device_register(), if called by
- * that function, though it can also be called separately, so one
- * may use @dev's fields. In particular, get_device()/put_device()
- * may be used for reference counting of @dev after calling this
- * function.
+ * 该函数通过初始化设备结构体中的字段，为其他层使用该设备做准备
+ * 
+ * 它是 device_register() 的第一部分（如果由该函数调用的话），但也可以单独调用，这样就可以使用 @dev 的各个字段了
+ * 特别地，在调用此函数之后，可以使用 get_device() / put_device() 对 @dev 进行引用计数管理
+ * 在调用此函数之前，@dev 中的所有字段都必须由调用者初始化为 0，除非某些字段需要显式地设置为其他值。
+ * 最简单的做法是使用 kzalloc() 分配包含 @dev 的结构体，这样可以确保其字段初始化为 0。
  *
- * All fields in @dev must be initialized by the caller to 0, except
- * for those explicitly set to some other value.  The simplest
- * approach is to use kzalloc() to allocate the structure containing
- * @dev.
- *
- * NOTE: Use put_device() to give up your reference instead of freeing
- * @dev directly once you have called this function.
+ * 在调用此函数之前，@dev 中的所有字段都必须由调用者初始化为 0，除非某些字段需要显式地设置为其他值。
+ * 最简单的做法是使用 kzalloc() 分配包含 @dev 的结构体，这样可以确保其字段初始化为 0。
  */
 void device_initialize(struct device *dev)
 {
@@ -3187,9 +3181,9 @@ static void device_remove_class_symlinks(struct device *dev)
 }
 
 /**
- * dev_set_name - set a device name
- * @dev: device
- * @fmt: format string for the device's name
+ * 设置设备名称
+ * @dev: 设备结构体
+ * @fmt: 设备名称的格式字符串
  */
 int dev_set_name(struct device *dev, const char *fmt, ...)
 {
@@ -3264,31 +3258,21 @@ static int device_private_init(struct device *dev)
 }
 
 /**
- * device_add - add device to device hierarchy.
+ * 将设备添加到设备层级中
  * @dev: device.
  *
- * This is part 2 of device_register(), though may be called
- * separately _iff_ device_initialize() has been called separately.
+ * 这是 device_register() 的第二部分，不过如果已单独调用了 device_initialize()，也可以单独调用该函数
  *
- * This adds @dev to the kobject hierarchy via kobject_add(), adds it
- * to the global and sibling lists for the device, then
- * adds it to the other relevant subsystems of the driver model.
+ * 此函数通过 kobject_add 将 @dev 添加到 kobject 层级结构中，并将其添加到设备的全局列表和同级设备列表中，然后再将其添加到驱动模型中相关的其他子系统中
  *
- * Do not call this routine or device_register() more than once for
- * any device structure.  The driver model core is not designed to work
- * with devices that get unregistered and then spring back to life.
- * (Among other things, it's very hard to guarantee that all references
- * to the previous incarnation of @dev have been dropped.)  Allocate
- * and register a fresh new struct device instead.
+ * 不要对同一个设备结构调用 device_add() 或 device_register() 超过一次！
+ * 驱动模型核心不支持设备注销后再次被“复活”的情况（例如，难以保证对 @dev 之前实例的所有引用都已被释放）应该分配并注册一个全新的 struct device
  *
- * NOTE: _Never_ directly free @dev after calling this function, even
- * if it returned an error! Always use put_device() to give up your
- * reference instead.
+ * 注意： 调用此函数后，_绝不要_直接释放 @dev，即使函数返回了错误！必须使用 put_device() 来释放引用
  *
- * Rule of thumb is: if device_add() succeeds, you should call
- * device_del() when you want to get rid of it. If device_add() has
- * *not* succeeded, use *only* put_device() to drop the reference
- * count.
+ * 一个经验法则是：
+	如果 device_add() 成功了，你应该在不再需要时调用 device_del() 来注销设备；
+	如果 device_add() 没有成功，只调用 put_device() 来减少引用计数即可。
  */
 int device_add(struct device *dev)
 {

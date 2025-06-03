@@ -281,10 +281,10 @@ static int kobject_add_internal(struct kobject *kobj)
 }
 
 /**
- * kobject_set_name_vargs() - Set the name of a kobject.
- * @kobj: struct kobject to set the name of
- * @fmt: format string used to build the name
- * @vargs: vargs to format the string.
+ * 设置 kobject 的名称
+ * @kobj: 要设置名称的 kobject 结构体
+ * @fmt: 用于构建名称的格式字符串
+ * @vargs: 用于格式化字符串的可变参数列表（va_list 类型）
  */
 int kobject_set_name_vargs(struct kobject *kobj, const char *fmt,
 				  va_list vargs)

@@ -1714,11 +1714,11 @@ enum netdev_ml_priv_type {
 };
 
 /**
- *	struct net_device - The DEVICE structure.
+ *	网络设备结构体
  *
- *	Actually, this whole structure is a big mistake.  It mixes I/O
- *	data with strictly "high-level" data, and it has to know about
- *	almost every data structure used in the INET module.
+ *	实际上，这整个结构体设计得并不理想。
+ *  它将 I/O 相关的数据 与纯粹的高层数据混合在一起，
+ *  并且它必须了解 INET 模块中使用的几乎每一个数据结构
  *
  *	@name:	This is the first field of the "visible" part of this structure
  *		(i.e. as seen by users in the "Space.c" file).  It is the name
@@ -2464,18 +2464,18 @@ void dev_net_set(struct net_device *dev, struct net *net)
 }
 
 /**
- *	netdev_priv - access network device private data
+ *	访问网络设备的私有数据
  *	@dev: network device
  *
- * Get network device private data
+ * 用于获取网络设备的私有数据区域
  */
 static inline void *netdev_priv(const struct net_device *dev)
 {
 	return (char *)dev + ALIGN(sizeof(struct net_device), NETDEV_ALIGN);
 }
 
-/* Set the sysfs physical device reference for the network logical device
- * if set prior to registration will cause a symlink during initialization.
+/* 为网络逻辑设备设置 sysfs 的物理设备引用
+ * 如果在注册之前设置该引用，会在初始化过程中创建一个符号链接（symlink）。
  */
 #define SET_NETDEV_DEV(net, pdev)	((net)->dev.parent = (pdev))
 

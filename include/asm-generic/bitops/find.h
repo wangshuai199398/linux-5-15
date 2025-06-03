@@ -69,13 +69,13 @@ unsigned long find_next_and_bit(const unsigned long *addr1,
 
 #ifndef find_next_zero_bit
 /**
- * find_next_zero_bit - find the next cleared bit in a memory region
- * @addr: The address to base the search on
- * @offset: The bitnumber to start searching at
- * @size: The bitmap size in bits
+ * 查找内存区域中下一个为0的位
+ * @addr: 用于搜索的基地址
+ * @offset: 开始搜索的位编号
+ * @size: 位图的大小（以位为单位）
  *
- * Returns the bit number of the next zero bit
- * If no bits are zero, returns @size.
+ * 返回下一个为0的位的编号。
+ * 如果所有位都为1（即没有为0的位），则返回 @size
  */
 static inline
 unsigned long find_next_zero_bit(const unsigned long *addr, unsigned long size,

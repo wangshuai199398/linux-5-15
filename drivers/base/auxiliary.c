@@ -114,21 +114,15 @@ static struct bus_type auxiliary_bus_type = {
 };
 
 /**
- * auxiliary_device_init - check auxiliary_device and initialize
- * @auxdev: auxiliary device struct
+ * 检查并初始化 auxiliary_device
+ * @auxdev: auxiliary_device 结构体
  *
- * This is the first step in the two-step process to register an
- * auxiliary_device.
+ * 这是注册一个 auxiliary_device 的两步流程中的第一步
  *
- * When this function returns an error code, then the device_initialize will
- * *not* have been performed, and the caller will be responsible to free any
- * memory allocated for the auxiliary_device in the error path directly.
+ * 当该函数返回错误码时，device_initialize 不会被执行，此时调用者需要自行在错误处理路径中释放为 auxiliary_device 分配的内存。
  *
- * It returns 0 on success.  On success, the device_initialize has been
- * performed.  After this point any error unwinding will need to include a call
- * to auxiliary_device_uninit().  In this post-initialize error scenario, a call
- * to the device's .release callback will be triggered, and all memory clean-up
- * is expected to be handled there.
+ * 成功时返回0。成功的情况下，device_initialize 已经完成。此后如果出现错误并需要回滚操作，必须调用 auxiliary_device_uninit()
+ * 在这种初始化完成后的错误处理场景中，设备的 .release 回调将会被触发，而所有内存的清理工作也应在 .release 回调中完成
  */
 int auxiliary_device_init(struct auxiliary_device *auxdev)
 {

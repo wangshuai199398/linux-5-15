@@ -338,10 +338,10 @@ const struct header_ops eth_header_ops ____cacheline_aligned = {
 };
 
 /**
- * ether_setup - setup Ethernet network device
+ * 设置以太网网络设备
  * @dev: network device
  *
- * Fill in the fields of the device structure with Ethernet-generic values.
+ * 使用以太网通用的默认值填充该设备结构体中的相关字段
  */
 void ether_setup(struct net_device *dev)
 {
@@ -363,18 +363,16 @@ void ether_setup(struct net_device *dev)
 EXPORT_SYMBOL(ether_setup);
 
 /**
- * alloc_etherdev_mqs - Allocates and sets up an Ethernet device
- * @sizeof_priv: Size of additional driver-private structure to be allocated
- *	for this Ethernet device
- * @txqs: The number of TX queues this device has.
- * @rxqs: The number of RX queues this device has.
+ * 分配并设置一个以太网设备
+ * @sizeof_priv: 为该以太网设备分配的额外驱动私有结构的大小
+ * @txqs: 为该以太网设备分配的额外驱动私有结构的大小
+ * @rxqs: 该设备具有的接收（RX）队列数量
  *
- * Fill in the fields of the device structure with Ethernet-generic
- * values. Basically does everything except registering the device.
+ * 该函数会用以太网通用值填充设备结构的字段。
+ * 基本上，它完成了除注册设备外的所有工作。
  *
- * Constructs a new net device, complete with a private data area of
- * size (sizeof_priv).  A 32-byte (not bit) alignment is enforced for
- * this private data area.
+ * 它构造了一个新的网络设备（net_device），并附带一个大小为 sizeof_priv 的私有数据区。
+ * 这个私有数据区会强制按照 32 字节（Byte）对齐 分配，而不是按位（bit）对齐。
  */
 
 struct net_device *alloc_etherdev_mqs(int sizeof_priv, unsigned int txqs,

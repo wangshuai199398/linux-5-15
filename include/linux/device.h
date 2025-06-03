@@ -372,13 +372,12 @@ struct dev_links_info {
 };
 
 /**
- * struct device - The basic device structure
- * @parent:	The device's "parent" device, the device to which it is attached.
- * 		In most cases, a parent device is some sort of bus or host
- * 		controller. If parent is NULL, the device, is a top-level device,
- * 		which is not usually what you want.
- * @p:		Holds the private data of the driver core portions of the device.
- * 		See the comment of the struct device_private for detail.
+ * 基本的设备结构体
+ * @parent:	该设备的“父设备”，即它所附着的设备
+ * 在大多数情况下，父设备是某种总线（bus）或主控制器（host controller）
+ * 如果 parent 为 NULL，则该设备被视为顶层设备——这通常不是你想要的行为
+ * @p:		保存设备驱动核心部分的私有数据。
+ *          详细内容请参阅 struct device_private 的注释。
  * @kobj:	A top-level, abstract class from which other classes are derived.
  * @init_name:	Initial name of the device.
  * @type:	The type of device.
