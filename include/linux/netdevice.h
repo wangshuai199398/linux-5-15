@@ -1818,7 +1818,8 @@ enum netdev_ml_priv_type {
  *	@lower_level:		Maximum depth level of lower devices.
  *	@neigh_priv_len:	Used in neigh_alloc()
  * 	@dev_id:		    用于区分具有相同链路层（如 MAC 地址）的多个网络设备
- * 	@dev_port:		    用于区分共享同一个function的设备
+ * 	@dev_port:		    用于区分共享同一个function的设备, 多个 net_device 实例可能共用同一个底层功能单元（function）
+ * 						例如共用一个 PCI 函数、DMA 通道、或驱动上下文。这些设备是逻辑上的多个接口，但物理上是一个设备的不同端口
  *	@addr_list_lock:	XXX: need comments on this one
  *	@name_assign_type:	network interface name assignment type
  *	@uc_promisc:		Counter that indicates promiscuous mode
