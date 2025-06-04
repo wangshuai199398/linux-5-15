@@ -1732,10 +1732,11 @@ enum netdev_ml_priv_type {
  *	@irq:		Device IRQ number
  *
  *	@state:		Generic network queuing layer state, see netdev_state_t
- *	@dev_list:	The global list of network devices
- *	@napi_list:	List entry used for polling NAPI devices
- *	@unreg_list:	List entry  when we are unregistering the
- *			device; see the function unregister_netdev
+ *	@dev_list:	 全局网络设备链表（即所有网络设备的全局链表）
+ *               这是一个全局链表，用来把所有注册的 net_device 设备连接起来。内核模块可以遍历这个链表来查看当前系统中存在的所有网络设备
+ *	@napi_list:	 用于 NAPI 轮询的链表节点, 设备如果启用了 NAPI，就会被挂入这个链表等待轮询处理
+ *	@unreg_list:	当设备被注销（unregister_netdev()）时，内核会把设备放入一个“待删除链表”中，这个字段就是用于这个目的的链表节点
+ *			        see the function unregister_netdev
  *	@close_list:	List entry used when we are closing the device
  *	@ptype_all:     Device-specific packet handlers for all protocols
  *	@ptype_specific: Device-specific, protocol-specific packet handlers
@@ -1816,10 +1817,8 @@ enum netdev_ml_priv_type {
  *	@upper_level:		Maximum depth level of upper devices.
  *	@lower_level:		Maximum depth level of lower devices.
  *	@neigh_priv_len:	Used in neigh_alloc()
- * 	@dev_id:		Used to differentiate devices that share
- * 				the same link layer address
- * 	@dev_port:		Used to differentiate devices that share
- * 				the same function
+ * 	@dev_id:		    用于区分具有相同链路层（如 MAC 地址）的多个网络设备
+ * 	@dev_port:		    用于区分共享同一个function的设备
  *	@addr_list_lock:	XXX: need comments on this one
  *	@name_assign_type:	network interface name assignment type
  *	@uc_promisc:		Counter that indicates promiscuous mode
