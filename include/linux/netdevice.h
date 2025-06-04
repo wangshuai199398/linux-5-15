@@ -466,10 +466,10 @@ static inline void napi_schedule(struct napi_struct *n)
 }
 
 /**
- *	napi_schedule_irqoff - schedule NAPI poll
+ *	调度 NAPI 轮询（poll）
  *	@n: NAPI context
  *
- * Variant of napi_schedule(), assuming hard irqs are masked.
+ * napi_schedule() 的一个变体，假设当前硬件中断（hard IRQs）已被屏蔽
  */
 static inline void napi_schedule_irqoff(struct napi_struct *n)
 {

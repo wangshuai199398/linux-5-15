@@ -194,22 +194,23 @@ void *dma_direct_alloc(struct device *dev, size_t size,
 {
 	struct page *page;
 	void *ret;
-
+	//将请求大小按页对齐
 	size = PAGE_ALIGN(size);
+	//如果不希望打印分配失败警告，添加 __GFP_NOWARN
 	if (attrs & DMA_ATTR_NO_WARN)
 		gfp |= __GFP_NOWARN;
-
+	//如果不需要内核映射（比如设备自己控制，不需要内核访问）,走特殊分支,避免 remap，适用于某些高性能或安全场景
 	if ((attrs & DMA_ATTR_NO_KERNEL_MAPPING) &&
 	    !force_dma_unencrypted(dev) && !is_swiotlb_for_alloc(dev))
 		return dma_direct_alloc_no_mapping(dev, size, dma_handle, gfp);
-
+	//如果不能缓存一致（non-coherent）+ 没有 DMA_REMAP，全交给架构特定代码处理
 	if (!IS_ENABLED(CONFIG_ARCH_HAS_DMA_SET_UNCACHED) &&
 	    !IS_ENABLED(CONFIG_DMA_DIRECT_REMAP) &&
 	    !IS_ENABLED(CONFIG_DMA_GLOBAL_POOL) &&
 	    !dev_is_dma_coherent(dev) &&
 	    !is_swiotlb_for_alloc(dev))
 		return arch_dma_alloc(dev, size, dma_handle, gfp, attrs);
-
+	//从全局 coherent 池中分配, 某些非缓存一致设备可从全局共享的 DMA 池分配
 	if (IS_ENABLED(CONFIG_DMA_GLOBAL_POOL) &&
 	    !dev_is_dma_coherent(dev))
 		return dma_alloc_from_global_coherent(dev, size, dma_handle);
@@ -221,6 +222,7 @@ void *dma_direct_alloc(struct device *dev, size_t size,
 	 * set up another device coherent pool by shared-dma-pool and use
 	 * dma_alloc_from_dev_coherent instead.
 	 */
+	//分配需要解密或 remap，但不能阻塞的情况（如原子上下文）如果当前 GFP 标志不能阻塞，则使用预先分配好的 atomic DMA 池
 	if (IS_ENABLED(CONFIG_DMA_COHERENT_POOL) &&
 	    !gfpflags_allow_blocking(gfp) &&
 	    (force_dma_unencrypted(dev) ||
@@ -230,10 +232,11 @@ void *dma_direct_alloc(struct device *dev, size_t size,
 		return dma_direct_alloc_from_pool(dev, size, dma_handle, gfp);
 
 	/* we always manually zero the memory once we are done */
+	//常规分配页面, 从内核页分配器分配实际页面
 	page = __dma_direct_alloc_pages(dev, size, gfp & ~__GFP_ZERO, true);
 	if (!page)
 		return NULL;
-
+	//如果需要 remap 或 page 是高端内存，做 remap + memset, 这里是标准的 non-coherent remap 逻辑：先准备，再映射，再清零
 	if ((IS_ENABLED(CONFIG_DMA_DIRECT_REMAP) &&
 	     !dev_is_dma_coherent(dev)) ||
 	    (IS_ENABLED(CONFIG_DMA_REMAP) && PageHighMem(page))) {
@@ -249,7 +252,7 @@ void *dma_direct_alloc(struct device *dev, size_t size,
 		memset(ret, 0, size);
 		goto done;
 	}
-
+	//如果是高端内存页但不能 remap，则无法访问，直接失败
 	if (PageHighMem(page)) {
 		/*
 		 * Depending on the cma= arguments and per-arch setup
@@ -260,20 +263,21 @@ void *dma_direct_alloc(struct device *dev, size_t size,
 		dev_info(dev, "Rejecting highmem page from CMA.\n");
 		goto out_free_pages;
 	}
-
+	//获取虚拟地址、清空内容、必要时设置 uncached,最后得到可访问的虚拟地址，确保清零，并根据设备是否 coherent 做缓存设置
 	ret = page_address(page);
-	if (dma_set_decrypted(dev, ret, size))
+	if (dma_set_decrypted(dev, ret, size))// 设置 memory decrypted（SEV 相关）
 		goto out_free_pages;
 	memset(ret, 0, size);
 
 	if (IS_ENABLED(CONFIG_ARCH_HAS_DMA_SET_UNCACHED) &&
 	    !dev_is_dma_coherent(dev)) {
 		arch_dma_prep_coherent(page, size);
-		ret = arch_dma_set_uncached(ret, size);
+		ret = arch_dma_set_uncached(ret, size);//标记成不可缓存
 		if (IS_ERR(ret))
 			goto out_encrypt_pages;
 	}
 done:
+	//设置 DMA 地址并返回
 	*dma_handle = phys_to_dma_direct(dev, page_to_phys(page));
 	return ret;
 

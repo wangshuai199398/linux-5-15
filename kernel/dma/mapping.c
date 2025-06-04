@@ -123,9 +123,8 @@ static bool dma_go_direct(struct device *dev, dma_addr_t mask,
 
 
 /*
- * Check if the devices uses a direct mapping for streaming DMA operations.
- * This allows IOMMU drivers to set a bypass mode if the DMA mask is large
- * enough.
+ * 检查设备在流式 DMA 操作中是否使用直接映射。
+ * 如果 DMA 掩码（DMA mask）足够大，IOMMU 驱动可以启用旁路（bypass）模式
  */
 static inline bool dma_alloc_direct(struct device *dev,
 		const struct dma_map_ops *ops)
@@ -488,24 +487,26 @@ EXPORT_SYMBOL_GPL(dma_get_required_mask);
 void *dma_alloc_attrs(struct device *dev, size_t size, dma_addr_t *dma_handle,
 		gfp_t flag, unsigned long attrs)
 {
+	//当前设备的 DMA 操作函数表（例如是 direct DMA 还是 iommu DMA）
 	const struct dma_map_ops *ops = get_dma_ops(dev);
 	void *cpu_addr;
-
+	//检查设备是否设置了 coherent_dma_mask。如果没有，打印一次警告。该 mask 决定了设备可以访问的物理地址范围（用于 coherent DMA）
 	WARN_ON_ONCE(!dev->coherent_dma_mask);
-
+	//检查是否可以从设备私有的 coherent memory pool 中分配（用于一些架构特定实现）如果可以直接分配，就返回了
 	if (dma_alloc_from_dev_coherent(dev, size, dma_handle, &cpu_addr))
 		return cpu_addr;
 
 	/* let the implementation decide on the zone to allocate from: */
+	//清除用户设置的 zone 限定，避免干扰后续的分配策略。这些 GFP flags 控制内存从哪个 zone 分配（如 DMA32 区域），但此处交由实现决定
 	flag &= ~(__GFP_DMA | __GFP_DMA32 | __GFP_HIGHMEM);
-
+	//如果是 direct DMA 模式（最常见，如 ARM/x86 默认模式），使用标准的 dma_direct_alloc 分配
 	if (dma_alloc_direct(dev, ops))
 		cpu_addr = dma_direct_alloc(dev, size, dma_handle, flag, attrs);
-	else if (ops->alloc)
+	else if (ops->alloc)//否则，如果 dma_map_ops 提供了自定义 alloc 方法（例如 IOMMU 分配），就调用它
 		cpu_addr = ops->alloc(dev, size, dma_handle, flag, attrs);
 	else
 		return NULL;
-
+	//用于调试目的的记录（宏函数），用于记录分配信息到 trace 或 debugfs 中
 	debug_dma_alloc_coherent(dev, size, *dma_handle, cpu_addr, attrs);
 	return cpu_addr;
 }

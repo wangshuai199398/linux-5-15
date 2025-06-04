@@ -16,7 +16,10 @@
                 "CONFIG_IP_ROUTE_CLASSID",
                 "CONFIG_SOCK_CGROUP_DATA",
                 "CONFIG_CGROUPS",
-                "CONFIG_SECURITY_NETWORK"
+                "CONFIG_SECURITY_NETWORK",
+                "CONFIG_HAS_DMA",
+                "CONFIG_DMA_DECLARE_COHERENT",
+                "CONFIG_DMA_OPS"
             ],
             "compilerPath": "/usr/bin/clang",
             "cStandard": "c17",

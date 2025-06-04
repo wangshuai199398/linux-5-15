@@ -3165,10 +3165,10 @@ void netif_device_detach(struct net_device *dev)
 EXPORT_SYMBOL(netif_device_detach);
 
 /**
- * netif_device_attach - mark device as attached
+ * 标记设备为已连接（attached）
  * @dev: network device
  *
- * Mark device as attached from system and restart if needed.
+ * 将设备标记为已重新连接到系统，并在需要时重新启动设备
  */
 void netif_device_attach(struct net_device *dev)
 {
@@ -6733,13 +6733,12 @@ void __napi_schedule(struct napi_struct *n)
 EXPORT_SYMBOL(__napi_schedule);
 
 /**
- *	napi_schedule_prep - check if napi can be scheduled
+ *	检查 NAPI 是否可以被调度
  *	@n: napi context
  *
- * Test if NAPI routine is already running, and if not mark
- * it as running.  This is used as a condition variable to
- * insure only one NAPI poll instance runs.  We also make
- * sure there is no pending NAPI disable.
+ * 检测 NAPI 处理函数是否已经在运行，如果没有，则将其标记为正在运行。
+ * 这相当于一个条件变量，用于确保同一时间只运行一个 NAPI poll 实例。
+ * 同时也会确保没有待处理的 NAPI 禁用操作。
  */
 bool napi_schedule_prep(struct napi_struct *n)
 {
@@ -6766,14 +6765,14 @@ bool napi_schedule_prep(struct napi_struct *n)
 EXPORT_SYMBOL(napi_schedule_prep);
 
 /**
- * __napi_schedule_irqoff - schedule for receive
+ * 用于接收路径的调度
  * @n: entry to schedule
  *
- * Variant of __napi_schedule() assuming hard irqs are masked.
+ * 这是 __napi_schedule() 的一个变体，**假设当前已屏蔽硬件中断（IRQs）**
  *
- * On PREEMPT_RT enabled kernels this maps to __napi_schedule()
- * because the interrupt disabled assumption might not be true
- * due to force-threaded interrupts and spinlock substitution.
+ * 在启用了 PREEMPT_RT（实时内核） 的系统中，它会映射为 __napi_schedule()，
+ * 因为在这种内核中，中断可能被强制线程化、spinlock 可能被替代，
+ * 因此“中断已关闭”的假设可能不再成立。
  */
 void __napi_schedule_irqoff(struct napi_struct *n)
 {
@@ -7190,11 +7189,11 @@ void napi_disable(struct napi_struct *n)
 EXPORT_SYMBOL(napi_disable);
 
 /**
- *	napi_enable - enable NAPI scheduling
+ *	启用 NAPI 调度
  *	@n: NAPI context
  *
- * Resume NAPI from being scheduled on this context.
- * Must be paired with napi_disable.
+ * 从暂停状态中恢复 NAPI，使其可以被调度执行。
+ * 必须与 napi_disable 配对使用。
  */
 void napi_enable(struct napi_struct *n)
 {
@@ -10457,20 +10456,19 @@ void netif_tx_stop_all_queues(struct net_device *dev)
 EXPORT_SYMBOL(netif_tx_stop_all_queues);
 
 /**
- *	register_netdevice	- register a network device
+ *	注册一个网络设备
  *	@dev: device to register
  *
- *	Take a completed network device structure and add it to the kernel
- *	interfaces. A %NETDEV_REGISTER message is sent to the netdev notifier
- *	chain. 0 is returned on success. A negative errno code is returned
- *	on a failure to set up the device, or if the name is a duplicate.
+ *	将一个已完成初始化的网络设备结构体添加到内核的网络接口中
+ *	同时会向 netdev 通知链发送一个 %NETDEV_REGISTER 消息
+ *	如果注册成功，返回 0
+ *	如果设备设置失败或设备名重复，则返回一个负的 errno 错误码
  *
- *	Callers must hold the rtnl semaphore. You may want
- *	register_netdev() instead of this.
+ *	调用者必须持有 rtnl 信号量（rtnl_lock）
+ *	你可能更应该使用 register_netdev()，它会自动处理加锁
  *
  *	BUGS:
- *	The locking appears insufficient to guarantee two parallel registers
- *	will not get the same name.
+ *	当前的加锁机制可能不足，**无法保证两个并行注册操作不会获得相同的设备名**
  */
 
 int register_netdevice(struct net_device *dev)
@@ -10683,22 +10681,21 @@ EXPORT_SYMBOL_GPL(init_dummy_netdev);
 
 
 /**
- *	register_netdev	- register a network device
- *	@dev: device to register
+ *	注册一个网络设备
+ *	@dev: 要注册的网络设备
  *
- *	Take a completed network device structure and add it to the kernel
- *	interfaces. A %NETDEV_REGISTER message is sent to the netdev notifier
- *	chain. 0 is returned on success. A negative errno code is returned
- *	on a failure to set up the device, or if the name is a duplicate.
+ *	将一个已初始化完成的网络设备结构体添加到内核的网络接口系统中
+ *	会向 netdev 通知链发送一个 %NETDEV_REGISTER 消息
+ *	成功时返回 0；如果设备设置失败，或设备名重复，则返回负的 errno 错误码
  *
- *	This is a wrapper around register_netdevice that takes the rtnl semaphore
- *	and expands the device name if you passed a format string to
- *	alloc_netdev.
+ *	这是对 register_netdevice 的封装，会自动获取 rtnl 信号量（rtnl_lock）
+ *	并在你使用 alloc_netdev 时传入了格式化字符串的情况下，扩展设备名
+ *
  */
 int register_netdev(struct net_device *dev)
 {
 	int err;
-
+	//是一种全局网络锁，用于序列化网络设备操作（通过 rtnl_lock() 实现）
 	if (rtnl_lock_killable())
 		return -EINTR;
 	err = register_netdevice(dev);

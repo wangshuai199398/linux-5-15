@@ -2241,29 +2241,26 @@ int pskb_trim_rcsum_slow(struct sk_buff *skb, unsigned int len)
 EXPORT_SYMBOL(pskb_trim_rcsum_slow);
 
 /**
- *	__pskb_pull_tail - advance tail of skb header
+ *	推进 skb 头部的 tail 指针
  *	@skb: buffer to reallocate
- *	@delta: number of bytes to advance tail
+ *	@delta: 希望将 tail 向后推进的字节数
  *
- *	The function makes a sense only on a fragmented &sk_buff,
- *	it expands header moving its tail forward and copying necessary
- *	data from fragmented part.
+ *	这个函数**仅适用于带有分页数据（fragmented）的 skb**。
+ *	它通过从分页部分复制必要的数据，将 skb 的头部空间扩展，即将 tail 向后移动。
  *
- *	&sk_buff MUST have reference count of 1.
+ *	调用该函数时，&sk_buff 的引用计数必须为 1（不能被多个地方引用）
  *
- *	Returns %NULL (and &sk_buff does not change) if pull failed
- *	or value of new tail of skb in the case of success.
+ *	如果推进失败（如内存分配失败），返回 %NULL，且 skb 不发生任何变化；
+ *	如果成功，则返回新的 tail 指针地址
  *
- *	All the pointers pointing into skb header may change and must be
- *	reloaded after call to this function.
+ *	注意：调用后所有指向 skb 头部数据的指针都可能会改变，必须重新获取。
  */
 
-/* Moves tail of skb head forward, copying data from fragmented part,
- * when it is necessary.
- * 1. It may fail due to malloc failure.
- * 2. It may change skb pointers.
+/* 在必要时，将 skb 头部的 tail 指针向后推进，并从分页区域中复制数据到主线性区
+ * 1. 该操作可能因内存分配失败而失败。
+ * 2. 它可能会改变 skb 内部的指针（例如 skb->data、skb->tail 等）。
  *
- * It is pretty complicated. Luckily, it is called only in exceptional cases.
+ * 这个过程相当复杂，幸运的是，它通常只在一些异常情况下才会被调用。
  */
 void *__pskb_pull_tail(struct sk_buff *skb, int delta)
 {

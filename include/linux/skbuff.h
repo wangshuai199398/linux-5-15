@@ -717,7 +717,7 @@ typedef unsigned char *sk_buff_data_t;
  *	@wifi_acked_valid: wifi_acked was set
  *	@wifi_acked: whether frame was acked on wifi or not
  *	@no_fcs:  Request NIC to treat last 4 bytes as Ethernet FCS
- *	@encapsulation: indicates the inner headers in the skbuff are valid
+ *	@encapsulation: 表示skb中的内部协议头（inner headers）是有效的
  *	@encap_hdr_csum: software checksum is needed
  *	@csum_valid: checksum is already valid
  *	@csum_not_inet: use CRC32c to resolve CHECKSUM_PARTIAL
@@ -3073,24 +3073,22 @@ void napi_skb_free_stolen_head(struct sk_buff *skb);
 void __kfree_skb_defer(struct sk_buff *skb);
 
 /**
- * __dev_alloc_pages - allocate page for network Rx
- * @gfp_mask: allocation priority. Set __GFP_NOMEMALLOC if not for network Rx
- * @order: size of the allocation
+ * 为网络接收（Rx）分配内存页
+ * @gfp_mask: 分配优先级标志。如果不是用于网络接收，应设置 __GFP_NOMEMALLOC
+ * @order: 分配页的大小（以 2 的幂为单位，比如 order=0 表示 1 页，order=1 表示 2 页）
  *
- * Allocate a new page.
+ * 分配一个新的页面
  *
- * %NULL is returned if there is no free memory.
+ * 如果没有可用内存，返回 %NULL
 */
 static inline struct page *__dev_alloc_pages(gfp_t gfp_mask,
 					     unsigned int order)
 {
-	/* This piece of code contains several assumptions.
-	 * 1.  This is for device Rx, therefor a cold page is preferred.
-	 * 2.  The expectation is the user wants a compound page.
-	 * 3.  If requesting a order 0 page it will not be compound
-	 *     due to the check to see if order has a value in prep_new_page
-	 * 4.  __GFP_MEMALLOC is ignored if __GFP_NOMEMALLOC is set due to
-	 *     code in gfp_to_alloc_flags that should be enforcing this.
+	/* 这段代码包含几个前提假设
+	 * 1. 用于设备接收（Rx），因此更倾向于分配“冷页”（即较少被 CPU 缓存使用的页面）
+	 * 2. 预期调用者希望获得一个复合页（compound page）
+	 * 3. 如果请求的是 order 为 0 的页面，则不会是复合页，因为在 prep_new_page 中会检查 order 是否大于 0。
+	 * 4. 如果设置了 __GFP_NOMEMALLOC，则 __GFP_MEMALLOC 会被忽略，这是由 gfp_to_alloc_flags 中的逻辑所强制执行的。
 	 */
 	gfp_mask |= __GFP_COMP | __GFP_MEMALLOC;
 
@@ -3519,11 +3517,11 @@ static inline int __skb_linearize(struct sk_buff *skb)
 }
 
 /**
- *	skb_linearize - convert paged skb to linear one
+ *	将分页 skb 转换为线性 skb
  *	@skb: buffer to linarize
  *
- *	If there is no free memory -ENOMEM is returned, otherwise zero
- *	is returned and the old skb data released.
+ *	如果内存不足，返回 -ENOMEM；
+ *	否则返回 0，并释放旧的 skb 数据。
  */
 static inline int skb_linearize(struct sk_buff *skb)
 {
