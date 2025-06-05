@@ -128,14 +128,12 @@ struct eppoll_entry {
 };
 
 /*
- * Each file descriptor added to the eventpoll interface will
- * have an entry of this type linked to the "rbr" RB tree.
- * Avoid increasing the size of this struct, there can be many thousands
- * of these on a server and we do not want this to take another cache line.
+ * 每个添加到 eventpoll 接口的文件描述符，都会在 “rbr” 红黑树（RB tree）中关联一个此类型的条目。
+ * 请避免增加该结构体的大小，因为服务器上可能会有成千上万个这样的条目，我们不希望它们占用额外的缓存行。
  */
 struct epitem {
 	union {
-		/* RB tree node links this structure to the eventpoll RB tree */
+		/* RB tree node links this structure to the eventpoll RB tree 红黑树节点 */
 		struct rb_node rbn;
 		/* Used to free the struct epitem */
 		struct rcu_head rcu;
@@ -150,13 +148,13 @@ struct epitem {
 	 */
 	struct epitem *next;
 
-	/* The file descriptor information this item refers to */
+	/* The file descriptor information this item refers to. socket文件描述符信息 */
 	struct epoll_filefd ffd;
 
-	/* List containing poll wait queues */
+	/* List containing poll wait queues 等待队列 */
 	struct eppoll_entry *pwqlist;
 
-	/* The "container" of this item */
+	/* The "container" of this item 所归属的eventpoll对象 */
 	struct eventpoll *ep;
 
 	/* List header used to link this item to the "struct file" items list */
@@ -183,20 +181,20 @@ struct eventpoll {
 	 */
 	struct mutex mtx;
 
-	/* sys_epoll_wait() 用到的等待队列 */
+	/* sys_epoll_wait 用到的等待队列链表 软中断数据就绪的时候会通过wq来找到阻塞在epoll对象上的用户进程 */
 	wait_queue_head_t wq;
 
 	/* Wait queue used by file->poll() */
 	wait_queue_head_t poll_wait;
 
-	/* 接收就绪的描述符都会放到这里 */
+	/* 就绪的描述符链表，当有连接就绪时，内核会把就绪的连接放到这里，这样只需要判断链表就能找出就绪连接 */
 	struct list_head rdllist;
 
 	/* Lock which protects rdllist and ovflist */
 	rwlock_t lock;
 
 	/* RB tree root used to store monitored fd structs 
-	 * 每个epoll对象中都有一颗红黑树
+	 * 红黑树 为了支持对海量连接的高效查找、插入和删除，通过红黑树来管理用户进程下添加进来的所有socket连接
 	 */
 	struct rb_root_cached rbr;
 
@@ -975,15 +973,19 @@ static int ep_alloc(struct eventpoll **pep)
 
 	user = get_current_user();
 	error = -ENOMEM;
+	//申请event_poll内存
 	ep = kzalloc(sizeof(*ep), GFP_KERNEL);
 	if (unlikely(!ep))
 		goto free_uid;
 
 	mutex_init(&ep->mtx);
 	rwlock_init(&ep->lock);
+	//初始化等待队列头
 	init_waitqueue_head(&ep->wq);
 	init_waitqueue_head(&ep->poll_wait);
+	//初始化就绪链表
 	INIT_LIST_HEAD(&ep->rdllist);
+	//初始化红黑树指针
 	ep->rbr = RB_ROOT_CACHED;
 	ep->ovflist = EP_UNACTIVE_PTR;
 	ep->user = user;
@@ -1270,8 +1272,8 @@ out_unlock:
 }
 
 /*
- * This is the callback that is used to add our wait queue to the
- * target file wakeup lists.
+ * 这是用于将我们的等待队列添加到目标文件唤醒列表中的回调函数
+ * 新建一个等待队列项，并注册其回调函数为ep_poll_callback，然后将这个等待项添加到socket的等待队列中
  */
 static void ep_ptable_queue_proc(struct file *file, wait_queue_head_t *whead,
 				 poll_table *pt)
@@ -1288,14 +1290,14 @@ static void ep_ptable_queue_proc(struct file *file, wait_queue_head_t *whead,
 		epq->epi = NULL;
 		return;
 	}
-
+	//初始化回调方法
 	init_waitqueue_func_entry(&pwq->wait, ep_poll_callback);
 	pwq->whead = whead;
 	pwq->base = epi;
 	if (epi->event.events & EPOLLEXCLUSIVE)
 		add_wait_queue_exclusive(whead, &pwq->wait);
 	else
-		add_wait_queue(whead, &pwq->wait);
+		add_wait_queue(whead, &pwq->wait);//将ep_poll_callback放入socket的等待队列whead（注意不是epoll的等待队列）
 	pwq->next = epi->pwqlist;
 	epi->pwqlist = pwq;
 }
@@ -1497,7 +1499,7 @@ static int ep_insert(struct eventpoll *ep, const struct epoll_event *event,
 					    max_user_watches) >= 0))
 		return -ENOSPC;
 	percpu_counter_inc(&ep->user->epoll_watches);
-
+	//分配并初始化epitem
 	if (!(epi = kmem_cache_zalloc(epi_cache, GFP_KERNEL))) {
 		percpu_counter_dec(&ep->user->epoll_watches);
 		return -ENOMEM;
@@ -1505,6 +1507,7 @@ static int ep_insert(struct eventpoll *ep, const struct epoll_event *event,
 
 	/* Item initialization follow here ... */
 	INIT_LIST_HEAD(&epi->rdllink);
+	//epi初始化，epi->ffd中保存了句柄号和struct file对象地址
 	epi->ep = ep;
 	ep_set_ffd(&epi->ffd, tfile, fd);
 	epi->event = *event;
@@ -1528,6 +1531,7 @@ static int ep_insert(struct eventpoll *ep, const struct epoll_event *event,
 	 * Add the current item to the RB tree. All RB tree operations are
 	 * protected by "mtx", and ep_insert() is called with "mtx" held.
 	 */
+	//将epi插入eventpoll对象的红黑树中
 	ep_rbtree_insert(ep, epi);
 	if (tep)
 		mutex_unlock(&tep->mtx);
@@ -1547,6 +1551,7 @@ static int ep_insert(struct eventpoll *ep, const struct epoll_event *event,
 	}
 
 	/* Initialize the poll table using the queue callback */
+	//设置ep_pqueue
 	epq.epi = epi;
 	init_poll_funcptr(&epq.pt, ep_ptable_queue_proc);
 
@@ -1557,6 +1562,7 @@ static int ep_insert(struct eventpoll *ep, const struct epoll_event *event,
 	 * this operation completes, the poll callback can start hitting
 	 * the new item.
 	 */
+	//调用ep_ptable_queue_proc注册回调函数，实际注入的函数为ep_poll_callback
 	revents = ep_item_poll(epi, &epq.pt, 1);
 
 	/*
@@ -2107,11 +2113,13 @@ int do_epoll_ctl(int epfd, int op, int fd, struct epoll_event *epds,
 	struct eventpoll *tep = NULL;
 
 	error = -EBADF;
+	//根据epfd找到eventpoll内核对象
 	f = fdget(epfd);
 	if (!f.file)
 		goto error_return;
 
 	/* Get the "struct file *" for the target file */
+	//根据socket句柄号，找到其file内核对象
 	tf = fdget(fd);
 	if (!tf.file)
 		goto error_fput;
@@ -2242,9 +2250,7 @@ error_return:
 }
 
 /*
- * The following function implements the controller interface for
- * the eventpoll file that enables the insertion/removal/change of
- * file descriptors inside the interest set.
+ * 以下函数实现了 eventpoll 文件的控制器接口，该接口允许在兴趣集（interest set）中插入、移除或更改文件描述符
  */
 SYSCALL_DEFINE4(epoll_ctl, int, epfd, int, op, int, fd,
 		struct epoll_event __user *, event)

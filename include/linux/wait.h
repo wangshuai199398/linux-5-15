@@ -91,6 +91,7 @@ init_waitqueue_func_entry(struct wait_queue_entry *wq_entry, wait_queue_func_t f
 {
 	wq_entry->flags		= 0;
 	wq_entry->private	= NULL;
+	//将ep_poll_callback注册到wait_queue_entry对象上，有数据到来的时候调用q->func
 	wq_entry->func		= func;
 }
 

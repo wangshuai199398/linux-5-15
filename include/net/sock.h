@@ -2314,9 +2314,9 @@ static inline bool skwq_has_sleeper(struct socket_wq *wq)
 }
 
 /**
- * sock_poll_wait - place memory barrier behind the poll_wait call.
+ * 在 poll_wait 调用之后放置内存屏障
  * @filp:           file
- * @sock:           socket to wait on
+ * @sock:           要等待的套接字
  * @p:              poll_table
  *
  * See the comments in the wq_has_sleeper function.

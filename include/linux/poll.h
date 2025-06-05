@@ -44,7 +44,7 @@ typedef struct poll_table_struct {
 static inline void poll_wait(struct file * filp, wait_queue_head_t * wait_address, poll_table *p)
 {
 	if (p && p->_qproc && wait_address) {
-		p->_qproc(filp, wait_address, p);
+		p->_qproc(filp, wait_address, p);//ep_ptable_queue_proc
 		/*
 		 * This memory barrier is paired in the wq_has_sleeper().
 		 * See the comment above prepare_to_wait(), we need to
@@ -91,7 +91,7 @@ static inline __poll_t vfs_poll(struct file *file, struct poll_table_struct *pt)
 {
 	if (unlikely(!file->f_op->poll))
 		return DEFAULT_POLLMASK;
-	return file->f_op->poll(file, pt);
+	return file->f_op->poll(file, pt);//sock_poll
 }
 
 struct poll_table_entry {

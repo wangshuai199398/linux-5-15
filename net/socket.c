@@ -1341,7 +1341,7 @@ static __poll_t sock_poll(struct file *file, poll_table *wait)
 		flag = POLL_BUSY_LOOP;
 	}
 
-	return sock->ops->poll(file, sock, wait) | flag;
+	return sock->ops->poll(file, sock, wait) | flag;//tcp_poll
 }
 
 static int sock_mmap(struct file *file, struct vm_area_struct *vma)
