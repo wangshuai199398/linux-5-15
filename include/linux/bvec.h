@@ -18,16 +18,16 @@
 struct page;
 
 /**
- * struct bio_vec - a contiguous range of physical memory addresses
- * @bv_page:   First page associated with the address range.
- * @bv_len:    Number of bytes in the address range.
- * @bv_offset: Start of the address range relative to the start of @bv_page.
+ * 表示一段连续的物理内存地址范围
+ * @bv_page:   与该地址范围关联的第一页
+ * @bv_len:    地址范围内的字节数
+ * @bv_offset: 地址范围的起始位置，相对于 @bv_page 页的起始位置的偏移
  *
- * The following holds for a bvec if n * PAGE_SIZE < bv_offset + bv_len:
+ * 如果满足 n * PAGE_SIZE < bv_offset + bv_len，则对一个 bvec 成立以下关系：
  *
  *   nth_page(@bv_page, n) == @bv_page + n
  *
- * This holds because page_is_mergeable() checks the above property.
+ * 这条性质成立是因为 page_is_mergeable() 函数会检查这个属性。
  */
 struct bio_vec {
 	struct page	*bv_page;//数据所在物理页
