@@ -19,7 +19,8 @@
                 "CONFIG_SECURITY_NETWORK",
                 "CONFIG_HAS_DMA",
                 "CONFIG_DMA_DECLARE_COHERENT",
-                "CONFIG_DMA_OPS"
+                "CONFIG_DMA_OPS",
+                "CONFIG_NEED_DMA_MAP_STATE"
             ],
             "compilerPath": "/usr/bin/clang",
             "cStandard": "c17",
