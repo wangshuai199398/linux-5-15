@@ -3128,7 +3128,7 @@ void sock_def_readable(struct sock *sk)
 	//有进程在此socket的等待队列中
 	if (skwq_has_sleeper(wq))
 		wake_up_interruptible_sync_poll(&wq->wait, EPOLLIN | EPOLLPRI |
-						EPOLLRDNORM | EPOLLRDBAND);//唤醒等待队列上的进程
+						EPOLLRDNORM | EPOLLRDBAND);//执行等待队列项上的回调函数，唤醒等待队列上的进程
 	sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_IN);
 	rcu_read_unlock();
 }

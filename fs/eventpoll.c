@@ -362,7 +362,7 @@ static inline struct epitem *ep_item_from_wait(wait_queue_entry_t *p)
 }
 
 /**
- * ep_events_available - Checks if ready events might be available.
+ * 判断就绪链表是否有可处理的事件
  *
  * @ep: Pointer to the eventpoll context.
  *
@@ -1170,8 +1170,8 @@ static inline bool chain_epi_lockless(struct epitem *epi)
 static int ep_poll_callback(wait_queue_entry_t *wait, unsigned mode, int sync, void *key)
 {
 	int pwake = 0;
-	struct epitem *epi = ep_item_from_wait(wait);
-	struct eventpoll *ep = epi->ep;
+	struct epitem *epi = ep_item_from_wait(wait);//获取wait对应的epitem
+	struct eventpoll *ep = epi->ep;//获取epitem对应的eventpoll
 	__poll_t pollflags = key_to_poll(key);
 	unsigned long flags;
 	int ewake = 0;
@@ -1209,13 +1209,14 @@ static int ep_poll_callback(wait_queue_entry_t *wait, unsigned mode, int sync, v
 			ep_pm_stay_awake_rcu(epi);
 	} else if (!ep_is_linked(epi)) {
 		/* In the usual case, add event to ready list. */
-		if (list_add_tail_lockless(&epi->rdllink, &ep->rdllist))
+		if (list_add_tail_lockless(&epi->rdllink, &ep->rdllist))//将当前epitem添加到eventpoll的就绪队列中
 			ep_pm_stay_awake_rcu(epi);
 	}
 
 	/*
 	 * Wake up ( if active ) both the eventpoll wait list and the ->poll()
 	 * wait list.
+	 * 查看eventpoll的等待队列上是否有等待的进程，如果有则唤醒它们
 	 */
 	if (waitqueue_active(&ep->wq)) {
 		if ((epi->event.events & EPOLLEXCLUSIVE) &&
@@ -1792,10 +1793,8 @@ static struct timespec64 *ep_timeout_to_timespec(struct timespec64 *to, long ms)
 }
 
 /*
- * autoremove_wake_function, but remove even on failure to wake up, because we
- * know that default_wake_function/ttwu will only fail if the thread is already
- * woken, and in that case the ep_poll loop will remove the entry anyways, not
- * try to reuse it.
+ * autoremove_wake_function，即使唤醒失败也会将其移除，因为我们知道 default_wake_function / ttwu（尝试唤醒线程）
+ * 只有在线程已经被唤醒的情况下才会失败。而在那种情况下，ep_poll 循环本身也会移除该等待队列项，而不会尝试重用它
  */
 static int ep_autoremove_wake_function(struct wait_queue_entry *wq_entry,
 				       unsigned int mode, int sync, void *key)
@@ -1866,7 +1865,7 @@ static int ep_poll(struct eventpoll *ep, struct epoll_event __user *events,
 			 * 0 events and there's still timeout left over, we go
 			 * trying again in search of more luck.
 			 */
-			res = ep_send_events(ep, events, maxevents);
+			res = ep_send_events(ep, events, maxevents);//给用护进程返回就绪事件
 			if (res)
 				return res;//有事件可以返回
 		}
@@ -1925,7 +1924,7 @@ static int ep_poll(struct eventpoll *ep, struct epoll_event __user *events,
 
 		if (!eavail)
 			timed_out = !schedule_hrtimeout_range(to, slack,
-							      HRTIMER_MODE_ABS);//进入休眠等待事件或超时
+							      HRTIMER_MODE_ABS);//让出cpu，主动进入睡眠状态，进入休眠等待事件或超时
 		__set_current_state(TASK_RUNNING);//被唤醒后设置任务状态为运行
 
 		/*

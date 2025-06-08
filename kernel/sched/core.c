@@ -6345,7 +6345,7 @@ static void __sched notrace __schedule(unsigned int sched_mode)
 		switch_count = &prev->nvcsw;
 	}
 
-	next = pick_next_task(rq, prev, &rf);
+	next = pick_next_task(rq, prev, &rf);//选择下一个要运行的进程
 	clear_tsk_need_resched(prev);
 	clear_preempt_need_resched();
 #ifdef CONFIG_SCHED_DEBUG
@@ -6381,7 +6381,7 @@ static void __sched notrace __schedule(unsigned int sched_mode)
 		trace_sched_switch(sched_mode & SM_MASK_PREEMPT, prev, next);
 
 		/* Also unlocks the rq: */
-		rq = context_switch(rq, prev, next, &rf);
+		rq = context_switch(rq, prev, next, &rf);//切换到下一个进程
 	} else {
 		rq->clock_update_flags &= ~(RQCF_ACT_SKIP|RQCF_REQ_SKIP);
 
@@ -6457,6 +6457,7 @@ static void sched_update_worker(struct task_struct *tsk)
 	}
 }
 
+//选择下一个进程调度
 asmlinkage __visible void __sched schedule(void)
 {
 	struct task_struct *tsk = current;
