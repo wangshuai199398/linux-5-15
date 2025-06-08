@@ -1811,21 +1811,16 @@ static int ep_autoremove_wake_function(struct wait_queue_entry *wq_entry,
 }
 
 /**
- * ep_poll - Retrieves ready events, and delivers them to the caller-supplied
- *           event buffer.
+ * 获取就绪事件，并将其传递到调用者提供的事件缓冲区
+ * 从内核的 epoll 实例中获取就绪事件，并将它们传递给用户空间
+ * @ep: 指向 eventpoll 上下文的指针
+ * @events: 指向用户空间缓冲区的指针，用于存储就绪事件
+ * @maxevents: 调用者事件缓冲区的大小（以事件数量计）
+ * @timeout: 用于获取就绪事件操作的最大超时时间，以 timespec 表示。
+ * 			 如果超时时间为零，函数将不会阻塞
+ * 			 如果 @timeout 指针为 NULL，函数将一直阻塞，直到至少有一个事件被检索到（或发生错误）
  *
- * @ep: Pointer to the eventpoll context.
- * @events: Pointer to the userspace buffer where the ready events should be
- *          stored.
- * @maxevents: Size (in terms of number of events) of the caller event buffer.
- * @timeout: Maximum timeout for the ready events fetch operation, in
- *           timespec. If the timeout is zero, the function will not block,
- *           while if the @timeout ptr is NULL, the function will block
- *           until at least one event has been retrieved (or an error
- *           occurred).
- *
- * Return: the number of ready events which have been fetched, or an
- *          error code, in case of error.
+ * Return: 返回已获取的就绪事件数量；如发生错误，则返回错误码
  */
 static int ep_poll(struct eventpoll *ep, struct epoll_event __user *events,
 		   int maxevents, struct timespec64 *timeout)
@@ -1837,7 +1832,10 @@ static int ep_poll(struct eventpoll *ep, struct epoll_event __user *events,
 
 	lockdep_assert_irqs_enabled();
 
+	// 如果 timeout 有效，设置超时时间 to。
+	// 如果为零，设置为非阻塞模式。
 	if (timeout && (timeout->tv_sec | timeout->tv_nsec)) {
+		//有非0超时时间
 		slack = select_estimate_accuracy(timeout);
 		to = &expires;
 		*to = timespec64_to_ktime(*timeout);
@@ -1846,6 +1844,7 @@ static int ep_poll(struct eventpoll *ep, struct epoll_event __user *events,
 		 * Avoid the unnecessary trip to the wait queue loop, if the
 		 * caller specified a non blocking operation.
 		 */
+		//timeout 不为 NULL，但值为 0，非阻塞
 		timed_out = 1;
 	}
 
@@ -1857,6 +1856,7 @@ static int ep_poll(struct eventpoll *ep, struct epoll_event __user *events,
 	 * timeout, the user by definition should not care and will have to
 	 * recheck again.
 	 */
+	//检查是否已有就绪事件（比如设备或文件描述符已经准备好）。
 	eavail = ep_events_available(ep);
 
 	while (1) {
@@ -1868,18 +1868,18 @@ static int ep_poll(struct eventpoll *ep, struct epoll_event __user *events,
 			 */
 			res = ep_send_events(ep, events, maxevents);
 			if (res)
-				return res;
+				return res;//有事件可以返回
 		}
 
 		if (timed_out)
-			return 0;
+			return 0;//没有事件+非阻塞，直接返回
 
-		eavail = ep_busy_loop(ep, timed_out);
+		eavail = ep_busy_loop(ep, timed_out);//自旋等待，检查是否有事件准备好
 		if (eavail)
-			continue;
+			continue;//忙等时有事件，继续收集
 
 		if (signal_pending(current))
-			return -EINTR;
+			return -EINTR;//有信号中断，比如ctrl+c
 
 		/*
 		 * Internally init_wait() uses autoremove_wake_function(),
@@ -1898,8 +1898,8 @@ static int ep_poll(struct eventpoll *ep, struct epoll_event __user *events,
 		 * performance issue if a process is killed, causing all of its
 		 * threads to wake up without being removed normally.
 		 */
-		init_wait(&wait);
-		wait.func = ep_autoremove_wake_function;
+		init_wait(&wait);//初始化等待队列项
+		wait.func = ep_autoremove_wake_function;//
 
 		write_lock_irq(&ep->lock);
 		/*
@@ -1907,7 +1907,7 @@ static int ep_poll(struct eventpoll *ep, struct epoll_event __user *events,
 		 * the same lock on wakeup ep_poll_callback() side, so it
 		 * is safe to avoid an explicit barrier.
 		 */
-		__set_current_state(TASK_INTERRUPTIBLE);
+		__set_current_state(TASK_INTERRUPTIBLE);//让出CPU，主动进入睡眠状态
 
 		/*
 		 * Do the final check under the lock. ep_scan_ready_list()
@@ -1916,16 +1916,17 @@ static int ep_poll(struct eventpoll *ep, struct epoll_event __user *events,
 		 * period of time although events are pending, so lock is
 		 * important.
 		 */
+		//再次判断就绪队列上有没有事件就绪
 		eavail = ep_events_available(ep);
 		if (!eavail)
-			__add_wait_queue_exclusive(&ep->wq, &wait);
+			__add_wait_queue_exclusive(&ep->wq, &wait);//如果没有事件把新waitqueue当前进程添加到epoll->wq链表等待队列
 
 		write_unlock_irq(&ep->lock);
 
 		if (!eavail)
 			timed_out = !schedule_hrtimeout_range(to, slack,
-							      HRTIMER_MODE_ABS);
-		__set_current_state(TASK_RUNNING);
+							      HRTIMER_MODE_ABS);//进入休眠等待事件或超时
+		__set_current_state(TASK_RUNNING);//被唤醒后设置任务状态为运行
 
 		/*
 		 * We were woken up, thus go and try to harvest some events.
@@ -1933,7 +1934,7 @@ static int ep_poll(struct eventpoll *ep, struct epoll_event __user *events,
 		 * carefully under lock, below.
 		 */
 		eavail = 1;
-
+		//如果 wait.entry 仍在等待队列中，说明线程是被主动唤醒的（还未被事件或 timeout 移除）。
 		if (!list_empty_careful(&wait.entry)) {
 			write_lock_irq(&ep->lock);
 			/*
@@ -1943,8 +1944,11 @@ static int ep_poll(struct eventpoll *ep, struct epoll_event __user *events,
 			 * Thus, when wait.entry is empty, it needs to harvest
 			 * events.
 			 */
+			//如果超时了，但 wait.entry 已经被移除（为空），说明我们醒来时确实有事件到达，所以需要处理事件
+			//如果 wait.entry 还在等待队列中，说明是真正的超时，没有事件，就没必要处理
 			if (timed_out)
-				eavail = list_empty(&wait.entry);
+				eavail = list_empty(&wait.entry);//如果队列已清空，说明需要处理事件
+			//安全地从 ep->wq 中移除当前线程的等待项，防止残留导致内存泄漏或未来错误唤醒。
 			__remove_wait_queue(&ep->wq, &wait);
 			write_unlock_irq(&ep->lock);
 		}
@@ -2249,7 +2253,7 @@ error_return:
 	return error;
 }
 
-/*
+/* epoll_ctl_wangs
  * 以下函数实现了 eventpoll 文件的控制器接口，该接口允许在兴趣集（interest set）中插入、移除或更改文件描述符
  */
 SYSCALL_DEFINE4(epoll_ctl, int, epfd, int, op, int, fd,
@@ -2310,6 +2314,7 @@ error_fput:
 	return error;
 }
 
+//epoll_wait_wangs
 SYSCALL_DEFINE4(epoll_wait, int, epfd, struct epoll_event __user *, events,
 		int, maxevents, int, timeout)
 {
