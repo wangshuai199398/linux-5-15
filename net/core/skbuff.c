@@ -799,6 +799,10 @@ EXPORT_SYMBOL(kfree_skb_list);
  * 
  * 按照小端打印出来，即使ip是大端的变量，但是打印出来还是小端的，因为这个机器是小端的
  * 
+ *                                                 TCI(2B)  
+ * vlan    TPID(2B)                       PRI(3bits) | CFI(1bit) | ID(12bits)
+ *       802.1Q 0x8100 802.1AD 0x88A8       优先级       通常为0      0-4095
+ * 
  * mac     6B	    6B       2B
  *      源mac地址 目的mac地址 协议类型
  *  

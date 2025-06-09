@@ -4413,12 +4413,13 @@ int dev_tx_weight __read_mostly = 64;
 int gro_normal_batch __read_mostly = 8;
 
 /* Called with irq disabled */
+//将 napi 对象加入调度队列，让它稍后由软中断（softirq）处理，或者由线程处理（threaded NAPI）
 static inline void ____napi_schedule(struct softnet_data *sd,
 				     struct napi_struct *napi)
 {
 	struct task_struct *thread;
 
-	if (test_bit(NAPI_STATE_THREADED, &napi->state)) {
+	if (test_bit(NAPI_STATE_THREADED, &napi->state)) {//检查该 napi 是否被设置为线程化处理模式（threaded NAPI），即由内核线程处理，而不是软中断上下文
 		/* Paired with smp_mb__before_atomic() in
 		 * napi_enable()/dev_set_threaded().
 		 * Use READ_ONCE() to guarantee a complete
@@ -4432,15 +4433,17 @@ static inline void ____napi_schedule(struct softnet_data *sd,
 			 * makes sure to proceed with napi polling
 			 * if the thread is explicitly woken from here.
 			 */
+			//如果线程当前不是 TASK_INTERRUPTIBLE（睡眠），就设置调度标志位
+			//如果线程处于 TASK_INTERRUPTIBLE，表示它已经在等着被唤醒，此时可以跳过 set_bit()，避免不必要的写内存
 			if (READ_ONCE(thread->__state) != TASK_INTERRUPTIBLE)
 				set_bit(NAPI_STATE_SCHED_THREADED, &napi->state);
-			wake_up_process(thread);
+			wake_up_process(thread);//唤醒 NAPI 线程来执行 poll 操作
 			return;
 		}
 	}
 
-	list_add_tail(&napi->poll_list, &sd->poll_list);
-	//触发软中断
+	list_add_tail(&napi->poll_list, &sd->poll_list);//将该 napi 对象加入当前 CPU 的 sd->poll_list 队列中
+	//触发 接收软中断（NET_RX_SOFTIRQ），它稍后会运行对应的 poll 回调函数。
 	__raise_softirq_irqoff(NET_RX_SOFTIRQ);
 }
 
@@ -7253,7 +7256,8 @@ static int __napi_poll(struct napi_struct *n, bool *repoll)
 	// NAPI_STATE_SCHED的测试是为了避免与netpoll的poll_napi函数之间的竞争条件
 	work = 0;
 	if (test_bit(NAPI_STATE_SCHED, &n->state)) {
-		//驱动注册的软中断处理函数netif_napi_add添加的
+		//调用驱动poll函数，驱动注册的软中断处理函数netif_napi_add添加的
+		//传递一个 预算（budget） 参数，限制处理的最大包数，以保证系统响应性
 		work = n->poll(n, weight);
 		trace_napi_poll(n, work, weight);
 	}
