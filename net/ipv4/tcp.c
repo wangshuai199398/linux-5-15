@@ -653,7 +653,7 @@ void tcp_mark_push(struct tcp_sock *tp, struct sk_buff *skb)
 	TCP_SKB_CB(skb)->tcp_flags |= TCPHDR_PSH;
 	tp->pushed_seq = tp->write_seq;
 }
-
+//未发送的的数据是否已经超过最大窗口的一半
 static inline bool forced_push(const struct tcp_sock *tp)
 {
 	return after(tp->write_seq, tp->pushed_seq + (tp->max_window >> 1));
@@ -1530,7 +1530,7 @@ new_segment:
 
 		if (skb->len < size_goal || (flags & MSG_OOB) || unlikely(tp->repair))
 			continue;
-
+		//发送判断
 		if (forced_push(tp)) {
 			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
 				printk(KERN_INFO "%s: __tcp_push_pending_frames write_seq %u, pushed_seq %u max_window %u\n", __func__, tp->write_seq, tp->pushed_seq, tp->max_window);

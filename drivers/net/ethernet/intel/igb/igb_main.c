@@ -969,7 +969,7 @@ static int igb_request_msix(struct igb_adapter *adapter)
 				q_vector->rx.ring->queue_index);
 		else
 			sprintf(q_vector->name, "%s-unused", netdev->name);
-
+		//硬中断处理函数igb_msix_ring
 		err = request_irq(adapter->msix_entries[vector].vector,
 				  igb_msix_ring, 0, q_vector->name,
 				  q_vector);
@@ -4079,11 +4079,13 @@ static int __igb_open(struct net_device *netdev, bool resuming)
 	netif_carrier_off(netdev);
 
 	/* allocate transmit descriptors */
+	//分配传输描述符数组
 	err = igb_setup_all_tx_resources(adapter);
 	if (err)
 		goto err_setup_tx;
 
 	/* allocate receive descriptors */
+	//分配接收描述符数组
 	err = igb_setup_all_rx_resources(adapter);
 	if (err)
 		goto err_setup_rx;
@@ -4096,7 +4098,7 @@ static int __igb_open(struct net_device *netdev, bool resuming)
 	 * clean_rx handler before we do so.
 	 */
 	igb_configure(adapter);
-
+	//请求中断
 	err = igb_request_irq(adapter);
 	if (err)
 		goto err_req_irq;
@@ -4131,7 +4133,7 @@ static int __igb_open(struct net_device *netdev, bool resuming)
 		reg_data |= E1000_CTRL_EXT_PFRSTD;
 		wr32(E1000_CTRL_EXT, reg_data);
 	}
-
+	//开启全部队列
 	netif_tx_start_all_queues(netdev);
 
 	if (!resuming)
@@ -4216,12 +4218,13 @@ int igb_setup_tx_resources(struct igb_ring *tx_ring)
 	int size;
 
 	size = sizeof(struct igb_tx_buffer) * tx_ring->count;
-
+	//申请igb_tx_buffer数组，内核使用的
 	tx_ring->tx_buffer_info = vmalloc(size);
 	if (!tx_ring->tx_buffer_info)
 		goto err;
 
 	/* round up to nearest 4K */
+	//申请e1000_adv_tx_desc数组，网卡硬件使用的 DMA数组内存
 	tx_ring->size = tx_ring->count * sizeof(union e1000_adv_tx_desc);
 	tx_ring->size = ALIGN(tx_ring->size, 4096);
 
@@ -4229,7 +4232,7 @@ int igb_setup_tx_resources(struct igb_ring *tx_ring)
 					   &tx_ring->dma, GFP_KERNEL);
 	if (!tx_ring->desc)
 		goto err;
-
+	//初始化队列成员
 	tx_ring->next_to_use = 0;
 	tx_ring->next_to_clean = 0;
 

@@ -2070,10 +2070,11 @@ int __sys_sendto(int fd, void __user *buff, size_t len, unsigned int flags,
 	err = import_single_range(WRITE, buff, len, &iov, &msg.msg_iter);
 	if (unlikely(err))
 		return err;
+	//根据fd找到socket
 	sock = sockfd_lookup_light(fd, &err, &fput_needed);
 	if (!sock)
 		goto out;
-
+	//构造msghdr
 	msg.msg_name = NULL;
 	msg.msg_control = NULL;
 	msg.msg_controllen = 0;
@@ -2091,7 +2092,7 @@ int __sys_sendto(int fd, void __user *buff, size_t len, unsigned int flags,
 
 	if (inet_sk(sock->sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
 		printk(KERN_INFO "__sys_sendto -> __sock_sendmsg \n");
-
+	//发送数据
 	err = __sock_sendmsg(sock, &msg);
 
 out_put:
