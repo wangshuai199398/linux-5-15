@@ -118,7 +118,7 @@ int __ip_local_out(struct net *net, struct sock *sk, struct sk_buff *skb)
 
 	if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
 		printk(KERN_INFO "%s: ->ip_local_out iph->tot_len %u nf_hook\n", __func__, ntohs(iph->tot_len));
-
+	//netfilter过滤
 	return nf_hook(NFPROTO_IPV4, NF_INET_LOCAL_OUT,
 		       net, sk, skb, NULL, skb_dst(skb)->dev,
 		       dst_output);
@@ -328,7 +328,7 @@ static int __ip_finish_output(struct net *net, struct sock *sk, struct sk_buff *
 			printk(KERN_INFO "%s: ->ip_finish_output_gso skb->len %d mtu %d\n", __func__, skb->len, mtu);
 		return ip_finish_output_gso(net, sk, skb, mtu);
 	}
-
+	//大于mtu进行分片
 	if (skb->len > mtu || IPCB(skb)->frag_max_size)
 		return ip_fragment(net, sk, skb, mtu, ip_finish_output2);
 
@@ -461,7 +461,7 @@ int ip_output(struct net *net, struct sock *sk, struct sk_buff *skb)
 
 	if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
 		printk(KERN_INFO "%s: ->ip_finish_output 2 skb->protocol 0x%x\n", __func__, ntohs(skb->protocol));
-
+	//netfilter过滤
 	return NF_HOOK_COND(NFPROTO_IPV4, NF_INET_POST_ROUTING,
 			    net, sk, skb, indev, dev,
 			    ip_finish_output,
@@ -506,7 +506,7 @@ int __ip_queue_xmit(struct sock *sk, struct sk_buff *skb, struct flowi *fl,
 	if (rt)
 		goto packet_routed;
 
-	/* Make sure we can route this packet. */
+	/* 检查socket中是否有缓冲的路由表 */
 	rt = (struct rtable *)__sk_dst_check(sk, 0);
 	
 	if (!rt) {
@@ -524,6 +524,7 @@ int __ip_queue_xmit(struct sock *sk, struct sk_buff *skb, struct flowi *fl,
 		 * keep trying until route appears or the connection times
 		 * itself out.
 		 */
+		//没有缓冲的路由表则展开查找，查到路由项，并缓冲到socket中
 		rt = ip_route_output_ports(net, fl4, sk,
 					   daddr, inet->inet_saddr,
 					   inet->inet_dport,
@@ -535,7 +536,7 @@ int __ip_queue_xmit(struct sock *sk, struct sk_buff *skb, struct flowi *fl,
 			goto no_route;
 		sk_setup_caps(sk, &rt->dst);
 	}
-
+	//为skb设置路由表
 	skb_dst_set_noref(skb, &rt->dst);
 
 packet_routed:
@@ -552,7 +553,7 @@ packet_routed:
 	skb_reset_network_header(skb);
 	if (fl->u.ip4.daddr == 0xa4dc77a)
 		printk(KERN_INFO "%s: ->skb->network_header %hu\n", __func__, skb->network_header);
-
+	//设置ip头
 	iph = ip_hdr(skb);
 	*((__be16 *)iph) = htons((4 << 12) | (5 << 8) | (tos & 0xff));
 	if (ip_dont_fragment(sk, &rt->dst) && !skb->ignore_df)
@@ -589,7 +590,7 @@ packet_routed:
 		}
 		printk(KERN_INFO "%s: ->ip_local_out skb->priority %u skb->mark %u\n", __func__, skb->priority, skb->mark);
 	}
-
+	//发送
 	res = ip_local_out(net, sk, skb);
 	rcu_read_unlock();
 	return res;

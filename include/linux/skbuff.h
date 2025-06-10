@@ -793,7 +793,7 @@ struct sk_buff {
 
 	union {
 		struct {
-			unsigned long	_skb_refdst;
+			unsigned long	_skb_refdst;//保存路由相关信息
 			void		(*destructor)(struct sk_buff *skb);
 		};
 		struct list_head	tcp_tsorted_anchor;

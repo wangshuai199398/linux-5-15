@@ -1271,6 +1271,7 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	skb->skb_mstamp_ns = tp->tcp_wstamp_ns;
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
 		printk(KERN_INFO "%s: ->clone_it %d prior_wstamp %llu tp->tcp_wstamp_ns %llu skb->skb_mstamp_ns %llu\n", __func__, clone_it, prior_wstamp, tp->tcp_wstamp_ns, skb->skb_mstamp_ns);
+	//克隆新skb
 	if (clone_it) {
 		TCP_SKB_CB(skb)->tx.in_flight = TCP_SKB_CB(skb)->end_seq
 			- tp->snd_una;
@@ -1468,7 +1469,7 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 
 	if (inet->cork.fl.u.ip4.daddr == 0xa4dc77a)
 		printk(KERN_INFO "%s: ->ip_queue_xmit skb->skb_mstamp_ns %llu\n", __func__, skb->skb_mstamp_ns);
-
+	//调用网络层发送接口
 	err = INDIRECT_CALL_INET(icsk->icsk_af_ops->queue_xmit,
 				 inet6_csk_xmit, ip_queue_xmit,
 				 sk, skb, &inet->cork.fl);
@@ -2704,19 +2705,15 @@ void tcp_chrono_stop(struct sock *sk, const enum tcp_chrono type)
 		tcp_chrono_set(tp, TCP_CHRONO_BUSY);
 }
 
-/* This routine writes packets to the network.  It advances the
- * send_head.  This happens as incoming acks open up the remote
- * window for us.
+/* 将数据包写入网络。它会推进 send_head 指针。这个过程通常发生在接收到 ACK 时，对方的接收窗口变大了
  *
- * LARGESEND note: !tcp_urg_mode is overkill, only frames between
- * snd_up-64k-mss .. snd_up cannot be large. However, taking into
- * account rare use of URG, this is not a big flaw.
+ * 关于大报文发送（LARGESEND）的说明：!tcp_urg_mode 的判断有些保守，实际上只有 snd_up - 64k - mss 
+ * 到 snd_up 之间的报文不能被合并成大帧。不过考虑到 URG（紧急指针）使用很少，这么处理也问题不大。
  *
- * Send at most one packet when push_one > 0. Temporarily ignore
- * cwnd limit to force at most one packet out when push_one == 2.
+ * 当 push_one > 0 时，最多只发送一个包。当 push_one == 2 时，为了强制只发一个包，会暂时忽略拥塞窗口（cwnd）的限制
 
- * Returns true, if no segments are in flight and we have queued segments,
- * but cannot send anything now because of SWS or another problem.
+ * 如果当前没有在传输中的段，而且发送队列中还有待发送的数据段，但由于 SWS（Silly Window Syndrome）或其他原因 无法发送，
+ * 那么这个函数会返回 true
  */
 static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 			   int push_one, gfp_t gfp)
@@ -2747,7 +2744,7 @@ static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 	max_segs = tcp_tso_segs(sk, mss_now);
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
 		printk(KERN_INFO "%s: ->gfp 0x%x max_segs %u sk->sk_gso_max_segs %u\n", __func__, gfp, max_segs, sk->sk_gso_max_segs);
-	//TCP 发送队列中的第一个尚未完全发送的报文段
+	//循环获取待发送skb，发送队列中的第一个尚未发送的报文段
 	while ((skb = tcp_send_head(sk))) {
 		unsigned int limit;
 
@@ -2838,7 +2835,7 @@ static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 		
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
 			printk(KERN_INFO "%s ->tcp_transmit_skb: skb->len = %d TCP_SKB_CB(skb)->end_seq %u TCP_SKB_CB(skb)->seq %u\n", __func__, skb->len, TCP_SKB_CB(skb)->end_seq, TCP_SKB_CB(skb)->seq);
-
+		//真正开启发送
 		if (unlikely(tcp_transmit_skb(sk, skb, 1, gfp)))
 			break;
 

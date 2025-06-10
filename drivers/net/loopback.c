@@ -74,7 +74,7 @@ static netdev_tx_t loopback_xmit(struct sk_buff *skb,
 
 	/* do not fool net_timestamp_check() with various clock bases */
 	skb->tstamp = 0;
-
+	//剥离和原 socket 的联系
 	skb_orphan(skb);
 
 	/* Before queueing this packet to netif_rx(),
@@ -85,6 +85,7 @@ static netdev_tx_t loopback_xmit(struct sk_buff *skb,
 	skb->protocol = eth_type_trans(skb, dev);
 
 	len = skb->len;
+	//调用 netif_rx
 	if (likely(netif_rx(skb) == NET_RX_SUCCESS))
 		dev_lstats_add(dev, len);
 

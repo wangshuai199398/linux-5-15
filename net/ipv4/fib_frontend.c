@@ -1111,7 +1111,7 @@ void fib_add_ifaddr(struct in_ifaddr *ifa)
 		}
 	}
 
-	fib_magic(RTM_NEWROUTE, RTN_LOCAL, addr, 32, prim, 0);
+	fib_magic(RTM_NEWROUTE, RTN_LOCAL, addr, 32, prim, 0);//local路由都设置成 RTN_LOCAL
 
 	if (!(dev->flags & IFF_UP))
 		return;
@@ -1506,7 +1506,7 @@ static int fib_netdev_event(struct notifier_block *this, unsigned long event, vo
 	}
 	return NOTIFY_DONE;
 }
-
+//设置本机ip，把local路由表里所有的路由项都设置成了 RTN_LOCAL
 static struct notifier_block fib_inetaddr_notifier = {
 	.notifier_call = fib_inetaddr_event,
 };

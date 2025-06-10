@@ -376,7 +376,7 @@ static inline struct neighbour *ip_neigh_gw4(struct net_device *dev,
 					     __be32 daddr)
 {
 	struct neighbour *neigh;
-
+	//根据下一跳IP地址查找邻居项，找不到就创建一个
 	neigh = __ipv4_neigh_lookup_noref(dev, (__force u32)daddr);
 	if (unlikely(!neigh))
 		neigh = __neigh_create(&arp_tbl, &daddr, dev, false);

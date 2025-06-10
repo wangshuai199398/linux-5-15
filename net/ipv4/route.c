@@ -2686,6 +2686,7 @@ struct rtable *ip_route_output_key_hash_rcu(struct net *net, struct flowi4 *fl4,
 		    (ipv4_is_multicast(fl4->daddr) ||
 		     ipv4_is_lbcast(fl4->daddr))) {
 			/* It is equivalent to inet_addr_type(saddr) == RTN_LOCAL */
+			//查找 RT_TABLE_LOCAL 路由表，查看是不是 lookback 设备
 			dev_out = __ip_dev_find(net, fl4->saddr, false);
 			if (!dev_out)
 				goto out;

@@ -591,7 +591,7 @@ ___neigh_create(struct neigh_table *tbl, const void *pkey,
 	struct neighbour *n1, *rc, *n;
 	struct neigh_hash_table *nht;
 	int error;
-
+	//申请邻居表项
 	n = neigh_alloc(tbl, dev, flags, exempt_from_gc);
 	trace_neigh_create(tbl, dev, pkey, n, exempt_from_gc);
 	if (!n) {
@@ -659,6 +659,7 @@ ___neigh_create(struct neigh_table *tbl, const void *pkey,
 
 	if (want_ref)
 		neigh_hold(n);
+	//添加到邻居哈希表中
 	rcu_assign_pointer(n->next,
 			   rcu_dereference_protected(nht->hash_buckets[hash_val],
 						     lockdep_is_held(&tbl->lock)));
@@ -1522,6 +1523,7 @@ int neigh_resolve_output(struct neighbour *neigh, struct sk_buff *skb)
 	int rc = 0;
 	if (skb_network_header(skb) && ((const struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
 		printk(KERN_ERR "%s: ->neigh_event_send\n", __func__);
+	//这里可能会触发arp请求
 	if (!neigh_event_send(neigh, skb)) {
 		int err;
 		struct net_device *dev = neigh->dev;
@@ -1538,7 +1540,7 @@ int neigh_resolve_output(struct neighbour *neigh, struct sk_buff *skb)
 			if (skb_network_header(skb) && ((const struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
 				printk(KERN_ERR "%s: -> dev_hard_header\n", __func__);
 				
-			//真正调用设备的硬件头部构造函数
+			//真正调用设备的硬件头部构造函数，neigh->ha是MAC地址
 			err = dev_hard_header(skb, dev, ntohs(skb->protocol),
 					      neigh->ha, NULL, skb->len);
 		} while (read_seqretry(&neigh->ha_lock, seq));//结束 seqlock 保护，如果期间ha被修改过，自动重试一遍 保障读取邻居MAC地址时的一致性
@@ -1546,6 +1548,7 @@ int neigh_resolve_output(struct neighbour *neigh, struct sk_buff *skb)
 		if (err >= 0) {
 			if (skb_network_header(skb) && ((const struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
 				printk(KERN_ERR "%s: -> dev_queue_xmit\n", __func__);
+			//发送
 			rc = dev_queue_xmit(skb);
 		} 
 		else

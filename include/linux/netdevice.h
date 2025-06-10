@@ -5021,7 +5021,7 @@ static inline netdev_tx_t __netdev_start_xmit(const struct net_device_ops *ops,
 {
 	//设置当前 CPU 的 softnet_data 结构中的 xmit.more 字段,表示“是否还有更多包要发送”
 	__this_cpu_write(softnet_data.xmit.more, more);
-	return ops->ndo_start_xmit(skb, dev);
+	return ops->ndo_start_xmit(skb, dev);//igb_xmit_frame 回环: loopback_xmit
 }
 
 static inline bool netdev_xmit_more(void)
@@ -5032,6 +5032,7 @@ static inline bool netdev_xmit_more(void)
 static inline netdev_tx_t netdev_start_xmit(struct sk_buff *skb, struct net_device *dev,
 					    struct netdev_queue *txq, bool more)
 {
+	//获取设备的回调函数集合 ops
 	const struct net_device_ops *ops = dev->netdev_ops;
 	netdev_tx_t rc;
 

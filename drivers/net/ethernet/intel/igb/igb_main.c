@@ -6134,7 +6134,8 @@ static inline int igb_maybe_stop_tx(struct igb_ring *tx_ring, const u16 size)
 		return 0;
 	return __igb_maybe_stop_tx(tx_ring, size);
 }
-
+//从网卡的发送队列的RingBuffer中取下来一个元素，并将skb挂到元素上
+//igb_tx_map将skb数据映射到网卡可访问的内存DMA区域
 static int igb_tx_map(struct igb_ring *tx_ring,
 		      struct igb_tx_buffer *first,
 		      const u8 hdr_len)
@@ -6148,18 +6149,18 @@ static int igb_tx_map(struct igb_ring *tx_ring,
 	u32 tx_flags = first->tx_flags;
 	u32 cmd_type = igb_tx_cmd_type(skb, tx_flags);
 	u16 i = tx_ring->next_to_use;
-
+	//获取下一个可用描述符指针
 	tx_desc = IGB_TX_DESC(tx_ring, i);
 
 	igb_tx_olinfo_status(tx_ring, tx_desc, tx_flags, skb->len - hdr_len);
 
 	size = skb_headlen(skb);
 	data_len = skb->data_len;
-
+	//为skb->data构造内存映射，以允许设备通过DMA从RAM中读取数据
 	dma = dma_map_single(tx_ring->dev, skb->data, size, DMA_TO_DEVICE);
 
 	tx_buffer = first;
-
+	//遍历该数据包的所有分片，为skb的每个分片生成有效映射
 	for (frag = &skb_shinfo(skb)->frags[0];; frag++) {
 		if (dma_mapping_error(tx_ring->dev, dma))
 			goto dma_error;
@@ -6211,6 +6212,7 @@ static int igb_tx_map(struct igb_ring *tx_ring,
 	}
 
 	/* write last descriptor with RS and EOP bits */
+	//设置最后一个descriptor
 	cmd_type |= size | IGB_TXD_DCMD;
 	tx_desc->read.cmd_type_len = cpu_to_le32(cmd_type);
 
@@ -6381,6 +6383,7 @@ netdev_tx_t igb_xmit_frame_ring(struct sk_buff *skb,
 	}
 
 	/* record the location of the first descriptor for this packet */
+	//获取TX Queue中下一个可用缓冲区信息
 	first = &tx_ring->tx_buffer_info[tx_ring->next_to_use];
 	first->type = IGB_TYPE_SKB;
 	first->skb = skb;
@@ -6419,7 +6422,7 @@ netdev_tx_t igb_xmit_frame_ring(struct sk_buff *skb,
 		goto out_drop;
 	else if (!tso)
 		igb_tx_csum(tx_ring, first);
-
+	//准备给设备发送数据
 	if (igb_tx_map(tx_ring, first, hdr_len))
 		goto cleanup_tx_tstamp;
 
@@ -8115,11 +8118,12 @@ static bool igb_clean_tx_irq(struct igb_q_vector *q_vector, int napi_budget)
 
 		/* free the skb */
 		if (tx_buffer->type == IGB_TYPE_SKB)
-			napi_consume_skb(tx_buffer->skb, napi_budget);
+			napi_consume_skb(tx_buffer->skb, napi_budget);//释放skb
 		else
 			xdp_return_frame(tx_buffer->xdpf);
 
 		/* unmap skb header data */
+		//清除tx_buffer数据
 		dma_unmap_single(tx_ring->dev,
 				 dma_unmap_addr(tx_buffer, dma),
 				 dma_unmap_len(tx_buffer, len),
@@ -8129,6 +8133,7 @@ static bool igb_clean_tx_irq(struct igb_q_vector *q_vector, int napi_budget)
 		dma_unmap_len_set(tx_buffer, len, 0);
 
 		/* clear last DMA location and unmap remaining buffers */
+		//清除最后的DMA位置，解除映射
 		while (tx_desc != eop_desc) {
 			tx_buffer++;
 			tx_desc++;

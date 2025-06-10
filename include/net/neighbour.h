@@ -288,7 +288,7 @@ static inline struct neighbour *___neigh_lookup_noref(
 	struct neigh_hash_table *nht = rcu_dereference_bh(tbl->nht);
 	struct neighbour *n;
 	u32 hash_val;
-
+	//计算hash值，加速查找
 	hash_val = hash(pkey, dev, nht->hash_rnd) >> (32 - nht->hash_shift);
 	for (n = rcu_dereference_bh(nht->hash_buckets[hash_val]);
 	     n != NULL;
