@@ -60,8 +60,8 @@ static void mlx5e_get_drvinfo(struct net_device *dev,
 }
 
 struct ptys2ethtool_config {
-	__ETHTOOL_DECLARE_LINK_MODE_MASK(supported);
-	__ETHTOOL_DECLARE_LINK_MODE_MASK(advertised);
+	__ETHTOOL_DECLARE_LINK_MODE_MASK(supported);//硬件支持的链路模式（比特位形式）
+	__ETHTOOL_DECLARE_LINK_MODE_MASK(advertised);//主动通告的链路模式（ethtool 可视）
 };
 
 static

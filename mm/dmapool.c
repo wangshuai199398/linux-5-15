@@ -302,14 +302,13 @@ void dma_pool_destroy(struct dma_pool *pool)
 EXPORT_SYMBOL(dma_pool_destroy);
 
 /**
- * dma_pool_alloc - get a block of consistent memory
+ * 获取一块一致性内存（consistent memory）
  * @pool: dma pool that will produce the block
  * @mem_flags: GFP_* bitmask
  * @handle: pointer to dma address of block
  *
- * Return: the kernel virtual address of a currently unused block,
- * and reports its dma address through the handle.
- * If such a memory block can't be allocated, %NULL is returned.
+ * 返回值：返回一块当前未使用的内核虚拟地址，同时通过 handle 参数返回对应的 DMA 地址。
+ * 如果无法分配到这样的内存块，则返回 %NULL。
  */
 void *dma_pool_alloc(struct dma_pool *pool, gfp_t mem_flags,
 		     dma_addr_t *handle)

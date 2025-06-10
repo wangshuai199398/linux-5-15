@@ -1431,7 +1431,7 @@ int mlx5_mdev_init(struct mlx5_core_dev *dev, int profile_idx)
 	spin_lock_init(&priv->ctx_lock);
 	lockdep_register_key(&dev->lock_key);
 	mutex_init(&dev->intf_state_mutex);
-	lockdep_set_class(&dev->intf_state_mutex, &dev->lock_key);
+	lockdep_set_class(&dev->intf_state_mutex, &dev->lock_key);//为其分配 lockdep 调试键。便于内核检测死锁问题
 
 	mutex_init(&priv->bfregs.reg_head.lock);
 	mutex_init(&priv->bfregs.wc_head.lock);
@@ -1442,24 +1442,24 @@ int mlx5_mdev_init(struct mlx5_core_dev *dev, int profile_idx)
 	mutex_init(&priv->pgdir_mutex);
 	INIT_LIST_HEAD(&priv->pgdir_list);
 
-	priv->numa_node = dev_to_node(mlx5_core_dma_dev(dev));
+	priv->numa_node = dev_to_node(mlx5_core_dma_dev(dev));//设置设备所属的 NUMA 节点（优化内存分配）
 	priv->dbg_root = debugfs_create_dir(dev_name(dev->device),
-					    mlx5_debugfs_root);
+					    mlx5_debugfs_root);// 创建 /sys/kernel/debug/mlx5/0000:01:00.0
 	INIT_LIST_HEAD(&priv->traps);
 
-	err = mlx5_health_init(dev);
+	err = mlx5_health_init(dev);//初始化健康监测模块（可能监控芯片状态、温度等）
 	if (err)
 		goto err_health_init;
 
-	err = mlx5_pagealloc_init(dev);
+	err = mlx5_pagealloc_init(dev);//初始化页分配模块，负责管理设备使用的 DMA 页
 	if (err)
 		goto err_pagealloc_init;
 
-	err = mlx5_adev_init(dev);
+	err = mlx5_adev_init(dev);//初始化 auxiliary 设备系统（用于动态加载不同功能，如 rdma）
 	if (err)
 		goto err_adev_init;
 
-	err = mlx5_hca_caps_alloc(dev);
+	err = mlx5_hca_caps_alloc(dev);//获取并初始化 HCA（Host Channel Adapter）硬件能力信息
 	if (err)
 		goto err_hca_caps;
 
@@ -1786,7 +1786,7 @@ static const struct pci_device_id mlx5_core_pci_table[] = {
 	{ PCI_VDEVICE(MELLANOX, 0x1014), MLX5_PCI_DEV_IS_VF},	/* ConnectX-4 VF */
 	{ PCI_VDEVICE(MELLANOX, PCI_DEVICE_ID_MELLANOX_CONNECTX4_LX) },
 	{ PCI_VDEVICE(MELLANOX, 0x1016), MLX5_PCI_DEV_IS_VF},	/* ConnectX-4LX VF */
-	{ PCI_VDEVICE(MELLANOX, 0x1017) },			/* ConnectX-5, PCIe 3.0 */
+	{ PCI_VDEVICE(MELLANOX, 0x1017) },			/* ConnectX-5, PCIe 3.0 88 */
 	{ PCI_VDEVICE(MELLANOX, 0x1018), MLX5_PCI_DEV_IS_VF},	/* ConnectX-5 VF */
 	{ PCI_VDEVICE(MELLANOX, 0x1019) },			/* ConnectX-5 Ex */
 	{ PCI_VDEVICE(MELLANOX, 0x101a), MLX5_PCI_DEV_IS_VF},	/* ConnectX-5 Ex VF */
@@ -1859,8 +1859,8 @@ static int __init mlx5_init(void)
 	get_random_bytes(&sw_owner_id, sizeof(sw_owner_id));//生产随机数放到sw_owner_id
 
 	mlx5_core_verify_params();
-	mlx5_fpga_ipsec_build_fs_cmds();
-	mlx5_register_debugfs();
+	mlx5_fpga_ipsec_build_fs_cmds();//为 FPGA IPsec 功能构建"Flow Steering Command（流转发命令）"
+	mlx5_register_debugfs();//创建/sys/kernel/debug/mlx5
 
 	err = mlx5e_init();
 	if (err)

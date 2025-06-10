@@ -2040,13 +2040,13 @@ int mlx5_cmd_init(struct mlx5_core_dev *dev)
 
 	memset(cmd, 0, sizeof(*cmd));
 	cmd_if_rev = cmdif_rev(dev);
-	if (cmd_if_rev != CMD_IF_REV) {
+	if (cmd_if_rev != CMD_IF_REV) {//驱动和固件的 command interface 版本不一致会直接返回错误
 		mlx5_core_err(dev,
 			      "Driver cmdif rev(%d) differs from firmware's(%d)\n",
 			      CMD_IF_REV, cmd_if_rev);
 		return -EINVAL;
 	}
-
+	//分配统计结构 & DMA Pool,这些结构用于记录命令操作的统计信息、命令缓冲区的分配等
 	cmd->stats = kvzalloc(MLX5_CMD_OP_MAX * sizeof(*cmd->stats), GFP_KERNEL);
 	if (!cmd->stats)
 		return -ENOMEM;
@@ -2056,12 +2056,13 @@ int mlx5_cmd_init(struct mlx5_core_dev *dev)
 		err = -ENOMEM;
 		goto dma_pool_err;
 	}
-
+	//分配命令页,这是和固件通信用的主要内存区域，分配失败将中止初始化
 	err = alloc_cmd_page(dev, cmd);
 	if (err)
 		goto err_free_pool;
-
+	//从硬件寄存器中读取命令队列参数
 	cmd_l = ioread32be(&dev->iseg->cmdq_addr_l_sz) & 0xff;
+	//这是从设备寄存器中解析出命令队列的大小和步进
 	cmd->log_sz = cmd_l >> 4 & 0xf;
 	cmd->log_stride = cmd_l & 0xf;
 	if (1 << cmd->log_sz > MLX5_MAX_COMMANDS) {
@@ -2079,6 +2080,7 @@ int mlx5_cmd_init(struct mlx5_core_dev *dev)
 
 	cmd->state = MLX5_CMDIF_STATE_DOWN;
 	cmd->checksum_disabled = 1;
+	//驱动最多能同时发送这么多个命令而不会阻塞
 	cmd->max_reg_cmds = (1 << cmd->log_sz) - 1;
 	cmd->bitmask = (1UL << cmd->max_reg_cmds) - 1;
 
@@ -2095,7 +2097,7 @@ int mlx5_cmd_init(struct mlx5_core_dev *dev)
 	for (i = 0; i < MLX5_CMD_OP_MAX; i++)
 		spin_lock_init(&cmd->stats[i].lock);
 
-	sema_init(&cmd->sem, cmd->max_reg_cmds);
+	sema_init(&cmd->sem, cmd->max_reg_cmds);//初始化信号量
 	sema_init(&cmd->pages_sem, 1);
 
 	cmd_h = (u32)((u64)(cmd->dma) >> 32);
@@ -2105,21 +2107,22 @@ int mlx5_cmd_init(struct mlx5_core_dev *dev)
 		err = -ENOMEM;
 		goto err_free_page;
 	}
-
+	//写入命令队列地址,这一步是关键，它告诉固件命令缓冲区在系统内存中的物理地址
 	iowrite32be(cmd_h, &dev->iseg->cmdq_addr_h);
 	iowrite32be(cmd_l, &dev->iseg->cmdq_addr_l_sz);
 
 	/* Make sure firmware sees the complete address before we proceed */
 	wmb();
 
-	mlx5_core_dbg(dev, "descriptor at dma 0x%llx\n", (unsigned long long)(cmd->dma));
+	mlx5_core_info(dev, "descriptor at dma 0x%llx\n", (unsigned long long)(cmd->dma));
 
-	cmd->mode = CMD_MODE_POLLING;
-	cmd->allowed_opcode = CMD_ALLOWED_OPCODE_ALL;
+	cmd->mode = CMD_MODE_POLLING;//设置命令接口的工作模式为 轮询模式, 意味着驱动会主动不断检查命令是否完成，而不是使用中断机制（Interrupt）来通知
+	cmd->allowed_opcode = CMD_ALLOWED_OPCODE_ALL;//允许驱动执行所有类型的命令
 
 	create_msg_cache(dev);
 
 	set_wqname(dev);
+	//创建内核工作队列和 DebugFS 节点,用于后台任务处理和调试支持
 	cmd->wq = create_singlethread_workqueue(cmd->wq_name);
 	if (!cmd->wq) {
 		mlx5_core_err(dev, "failed to create command workqueue\n");
@@ -2127,7 +2130,7 @@ int mlx5_cmd_init(struct mlx5_core_dev *dev)
 		goto err_cache;
 	}
 
-	create_debugfs_files(dev);
+	create_debugfs_files(dev);//创建 /sys/kernel/debug/mlx5/0000:01:00.0//cmd
 
 	return 0;
 

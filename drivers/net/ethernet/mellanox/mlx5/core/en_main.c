@@ -5257,7 +5257,7 @@ int mlx5e_init(void)
 	int ret;
 
 	mlx5e_ipsec_build_inverse_table();
-	mlx5e_build_ptys2ethtool_map();
+	mlx5e_build_ptys2ethtool_map();//将设备的 PTYS 寄存器中支持的链路模式（例如 10G、40G、100G）构建成 ethtool 可识别的 supported/advertised 表
 	ret = auxiliary_driver_register(&mlx5e_driver);
 	if (ret)
 		return ret;
