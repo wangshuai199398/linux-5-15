@@ -425,14 +425,9 @@ static void _get_random_bytes(void *buf, size_t len)
 }
 
 /*
- * This function is the exported kernel interface.  It returns some
- * number of good random numbers, suitable for key generation, seeding
- * TCP sequence numbers, etc.  It does not rely on the hardware random
- * number generator.  For random bytes direct from the hardware RNG
- * (when available), use get_random_bytes_arch(). In order to ensure
- * that the randomness provided by this function is okay, the function
- * wait_for_random_bytes() should be called and return 0 at least once
- * at any point prior.
+ * 这个函数是对外导出的内核接口。它返回一些高质量的随机数，适合用于密钥生成、TCP 序列号初始化等用途。它不依赖于硬件随机数生成器。
+ * 如果你希望直接使用来自硬件 RNG 的随机字节（如果硬件支持），请使用 get_random_bytes_arch() 函数。
+ * 为了确保这个函数提供的随机性是可靠的，应在任意时间点至少调用一次 wait_for_random_bytes() 并且返回值为 0，以确保系统的随机数子系统已经准备就绪。
  */
 void get_random_bytes(void *buf, size_t len)
 {

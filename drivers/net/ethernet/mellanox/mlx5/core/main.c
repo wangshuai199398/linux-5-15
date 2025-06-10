@@ -1856,7 +1856,7 @@ static int __init mlx5_init(void)
 	WARN_ONCE(strcmp(MLX5_ADEV_NAME, KBUILD_MODNAME),
 		  "mlx5_core name not in sync with kernel module name");
 
-	get_random_bytes(&sw_owner_id, sizeof(sw_owner_id));
+	get_random_bytes(&sw_owner_id, sizeof(sw_owner_id));//生产随机数放到sw_owner_id
 
 	mlx5_core_verify_params();
 	mlx5_fpga_ipsec_build_fs_cmds();
