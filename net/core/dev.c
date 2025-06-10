@@ -6674,7 +6674,7 @@ static bool sd_has_rps_ipi_waiting(struct softnet_data *sd)
 	return false;
 #endif
 }
-
+// lookback 设备收包
 static int process_backlog(struct napi_struct *napi, int quota)
 {
 	struct softnet_data *sd = container_of(napi, struct softnet_data, backlog);
@@ -6692,7 +6692,7 @@ static int process_backlog(struct napi_struct *napi, int quota)
 	napi->weight = READ_ONCE(dev_rx_weight);
 	while (again) {
 		struct sk_buff *skb;
-
+		//发送过程是把包放到了input_pkt_queue队列中，这里从sd->process_queue取下来包进行处理
 		while ((skb = __skb_dequeue(&sd->process_queue))) {
 			rcu_read_lock();
 			__netif_receive_skb(skb);
@@ -6717,6 +6717,8 @@ static int process_backlog(struct napi_struct *napi, int quota)
 			napi->state = 0;
 			again = false;
 		} else {
+			//将链表a连接到链表b上，形成一个新的链表b，并将原来a的头变成空链表
+			//将sd->input_pkt_queue里的skb链到到sd->process_queue链表上
 			skb_queue_splice_tail_init(&sd->input_pkt_queue,
 						   &sd->process_queue);
 		}
