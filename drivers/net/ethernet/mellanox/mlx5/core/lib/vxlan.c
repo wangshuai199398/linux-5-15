@@ -109,7 +109,7 @@ int mlx5_vxlan_add_port(struct mlx5_vxlan *vxlan, u16 port)
 		return -ENOMEM;
 	vxlanp->udp_port = port;
 
-	ret = mlx5_vxlan_core_add_port_cmd(vxlan->mdev, port);
+	ret = mlx5_vxlan_core_add_port_cmd(vxlan->mdev, port);//将该端口注册到硬件隧道配置中，使其能被卸载到硬件处理
 	if (ret) {
 		kfree(vxlanp);
 		return ret;
@@ -145,6 +145,7 @@ out_unlock:
 	return ret;
 }
 
+//这个函数会为 MLX5 网卡设备创建一个用于管理 VXLAN（虚拟扩展局域网）端口的结构，并初始化相关数据结构。如果硬件支持 VXLAN 隧道卸载，就会注册默认的 VXLAN 端口号 4789
 struct mlx5_vxlan *mlx5_vxlan_create(struct mlx5_core_dev *mdev)
 {
 	struct mlx5_vxlan *vxlan;
@@ -161,7 +162,7 @@ struct mlx5_vxlan *mlx5_vxlan_create(struct mlx5_core_dev *mdev)
 	hash_init(vxlan->htable);
 
 	/* Hardware adds 4789 (IANA_VXLAN_UDP_PORT) by default */
-	mlx5_vxlan_add_port(vxlan, IANA_VXLAN_UDP_PORT);
+	mlx5_vxlan_add_port(vxlan, IANA_VXLAN_UDP_PORT);//添加默认 VXLAN 端口（4789）
 
 	return vxlan;
 }

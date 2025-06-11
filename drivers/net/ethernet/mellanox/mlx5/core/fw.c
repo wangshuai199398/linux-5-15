@@ -144,84 +144,84 @@ int mlx5_query_hca_caps(struct mlx5_core_dev *dev)
 {
 	int err;
 
-	err = mlx5_core_get_caps(dev, MLX5_CAP_GENERAL);
+	err = mlx5_core_get_caps(dev, MLX5_CAP_GENERAL);//通用能力（页大小、EQ数目、缓存行大小等）
 	if (err)
 		return err;
-
+	//如果设备的 MLX5_CAP_GENERAL 中指明它支持第二组 HCA 能力（general_2）
 	if (MLX5_CAP_GEN(dev, hca_cap_2)) {
-		err = mlx5_core_get_caps(dev, MLX5_CAP_GENERAL_2);
+		err = mlx5_core_get_caps(dev, MLX5_CAP_GENERAL_2);//获取
 		if (err)
 			return err;
 	}
-
+	//检查是否支持以太网 offload 能力
 	if (MLX5_CAP_GEN(dev, eth_net_offloads)) {
-		err = mlx5_core_get_caps(dev, MLX5_CAP_ETHERNET_OFFLOADS);
+		err = mlx5_core_get_caps(dev, MLX5_CAP_ETHERNET_OFFLOADS);//如支持，则获取 MLX5_CAP_ETHERNET_OFFLOADS（比如 TSO, VLAN filtering, LRO, etc.）
 		if (err)
 			return err;
 	}
-
+	//检查是否支持 InfiniBand 上的增强型 offload
 	if (MLX5_CAP_GEN(dev, ipoib_enhanced_offloads)) {
-		err = mlx5_core_get_caps(dev, MLX5_CAP_IPOIB_ENHANCED_OFFLOADS);
+		err = mlx5_core_get_caps(dev, MLX5_CAP_IPOIB_ENHANCED_OFFLOADS);//获取对应能力集（用于 IP-over-IB 加速）
 		if (err)
 			return err;
 	}
 
 	if (MLX5_CAP_GEN(dev, pg)) {
-		err = mlx5_core_get_caps(dev, MLX5_CAP_ODP);
+		err = mlx5_core_get_caps(dev, MLX5_CAP_ODP);//按需分页（On-Demand Paging）
 		if (err)
 			return err;
 	}
 
 	if (MLX5_CAP_GEN(dev, atomic)) {
-		err = mlx5_core_get_caps(dev, MLX5_CAP_ATOMIC);
+		err = mlx5_core_get_caps(dev, MLX5_CAP_ATOMIC);//原子操作能力（用于 RDMA）
 		if (err)
 			return err;
 	}
 
 	if (MLX5_CAP_GEN(dev, roce)) {
-		err = mlx5_core_get_caps(dev, MLX5_CAP_ROCE);
+		err = mlx5_core_get_caps(dev, MLX5_CAP_ROCE);//RDMA over Converged Ethernet
 		if (err)
 			return err;
 	}
-
+	//nic_flow_table：普通网卡场景，ipoib_enhanced_offloads：用于 IPoIB 模式的 flow offload
 	if (MLX5_CAP_GEN(dev, nic_flow_table) ||
-	    MLX5_CAP_GEN(dev, ipoib_enhanced_offloads)) {
+	    MLX5_CAP_GEN(dev, ipoib_enhanced_offloads)) {//查询 Flow Table 能力（比如用于 packet steering / flow rule ）
 		err = mlx5_core_get_caps(dev, MLX5_CAP_FLOW_TABLE);
 		if (err)
 			return err;
 	}
-
+	//判断当前是否为 ESwitch 管理器（通常是 PF）
 	if (MLX5_CAP_GEN(dev, vport_group_manager) &&
 	    MLX5_ESWITCH_MANAGER(dev)) {
 		err = mlx5_core_get_caps(dev, MLX5_CAP_ESWITCH_FLOW_TABLE);
 		if (err)
 			return err;
 	}
-
+	//获取虚拟交换机（ESW）和其 flow table 的能力
 	if (MLX5_ESWITCH_MANAGER(dev)) {
 		err = mlx5_core_get_caps(dev, MLX5_CAP_ESWITCH);
 		if (err)
 			return err;
 	}
-
+	//Vector Calc（用于某些 AI/加速场景）
 	if (MLX5_CAP_GEN(dev, vector_calc)) {
 		err = mlx5_core_get_caps(dev, MLX5_CAP_VECTOR_CALC);
 		if (err)
 			return err;
 	}
-
+	//查询是否支持流量调度、QoS、带宽管理等功能
 	if (MLX5_CAP_GEN(dev, qos)) {
 		err = mlx5_core_get_caps(dev, MLX5_CAP_QOS);
 		if (err)
 			return err;
 	}
-
+	//DEBUG能力，支持调试寄存器访问、诊断指令等
 	if (MLX5_CAP_GEN(dev, debug))
 		mlx5_core_get_caps(dev, MLX5_CAP_DEBUG);
-
+	//PCAM：硬件寄存器 capability 映射
 	if (MLX5_CAP_GEN(dev, pcam_reg))
 		mlx5_get_pcam_reg(dev);
-
+	//MCAM/QCAM：寄存器组的详细结构，设备内部控制
 	if (MLX5_CAP_GEN(dev, mcam_reg)) {
 		mlx5_get_mcam_access_reg_group(dev, MLX5_MCAM_REGS_FIRST_128);
 		mlx5_get_mcam_access_reg_group(dev, MLX5_MCAM_REGS_0x9080_0x90FF);
@@ -230,32 +230,32 @@ int mlx5_query_hca_caps(struct mlx5_core_dev *dev)
 
 	if (MLX5_CAP_GEN(dev, qcam_reg))
 		mlx5_get_qcam_reg(dev);
-
+	//设备内存（Device Memory），某些功能（如 ODP, KTLS, DPA）依赖于内置高速内存支持
 	if (MLX5_CAP_GEN(dev, device_memory)) {
 		err = mlx5_core_get_caps(dev, MLX5_CAP_DEV_MEM);
 		if (err)
 			return err;
 	}
-
+	//事件通知机制 查询是否支持扩展事件模型，比如 context-aware events
 	if (MLX5_CAP_GEN(dev, event_cap)) {
 		err = mlx5_core_get_caps(dev, MLX5_CAP_DEV_EVENT);
 		if (err)
 			return err;
 	}
-
+	// KTLS（Kernel TLS Offload） 如果检测到 KTLS 功能支持（基于 TLS kernel hooks），则获取 TLS offload 能力
 	if (mlx5_accel_is_ktls_tx(dev) || mlx5_accel_is_ktls_rx(dev)) {
 		err = mlx5_core_get_caps(dev, MLX5_CAP_TLS);
 		if (err)
 			return err;
 	}
-
+	//VDPA/Virtio 加速支持，判断是否支持 virtio-net 的 VDPA 模拟（用于 KVM 或 DPDK 的加速虚拟化 I/O）
 	if (MLX5_CAP_GEN_64(dev, general_obj_types) &
 		MLX5_GENERAL_OBJ_TYPES_CAP_VIRTIO_NET_Q) {
 		err = mlx5_core_get_caps(dev, MLX5_CAP_VDPA_EMULATION);
 		if (err)
 			return err;
 	}
-
+	//IPsec Offload 能力，判断并获取 IPsec 加速 offload 能力（加密、ESP、GCM-AES）
 	if (MLX5_CAP_GEN(dev, ipsec_offload)) {
 		err = mlx5_core_get_caps(dev, MLX5_CAP_IPSEC);
 		if (err)
@@ -265,11 +265,12 @@ int mlx5_query_hca_caps(struct mlx5_core_dev *dev)
 	return 0;
 }
 
+//该函数通过向设备发送 INIT_HCA 命令，通知设备固件完成 HCA 的初始化。这是在设置完启动页、控制寄存器、功能能力等配置后，真正启动设备逻辑功能的命令
 int mlx5_cmd_init_hca(struct mlx5_core_dev *dev, uint32_t *sw_owner_id)
 {
 	u32 in[MLX5_ST_SZ_DW(init_hca_in)] = {};
 	int i;
-
+	//构造 INIT_HCA 命令结构体
 	MLX5_SET(init_hca_in, in, opcode, MLX5_CMD_OP_INIT_HCA);
 
 	if (MLX5_CAP_GEN(dev, sw_owner_id)) {
@@ -277,7 +278,7 @@ int mlx5_cmd_init_hca(struct mlx5_core_dev *dev, uint32_t *sw_owner_id)
 			MLX5_ARRAY_SET(init_hca_in, in, sw_owner_id, i,
 				       sw_owner_id[i]);
 	}
-
+	//向设备固件发送命令
 	return mlx5_cmd_exec_in(dev, init_hca, in);
 }
 

@@ -596,6 +596,8 @@ static int handle_hca_cap_roce(struct mlx5_core_dev *dev, void *set_ctx)
 	return err;
 }
 
+//	向固件报告驱动支持的功能能力（如哪些 feature 启用、最大队列数、RSS、RDMA 等）。
+//	通过 MLX5_CMD_OP_SET_HCA_CAP 命令完成。
 static int set_hca_cap(struct mlx5_core_dev *dev)
 {
 	int set_sz = MLX5_ST_SZ_BYTES(set_hca_cap_in);
@@ -638,6 +640,8 @@ out:
 	return err;
 }
 
+//	通过命令通道设置 HCA 控制属性（比如大页支持、page size、IOMMU 设置等）。
+//	这一步通常调用 MLX5_CMD_OP_MODIFY_HCA 命令。
 static int set_hca_ctrl(struct mlx5_core_dev *dev)
 {
 	struct mlx5_reg_host_endianness he_in;
@@ -666,6 +670,7 @@ static int mlx5_core_set_hca_defaults(struct mlx5_core_dev *dev)
 	return ret;
 }
 
+// HCA(Host Channel Adapter)是设备的核心硬件引擎，处理数据包的发送、接收、加速操作（如 RDMA、RoCE）
 int mlx5_core_enable_hca(struct mlx5_core_dev *dev, u16 func_id)
 {
 	u32 in[MLX5_ST_SZ_DW(enable_hca_in)] = {};
@@ -688,33 +693,35 @@ int mlx5_core_disable_hca(struct mlx5_core_dev *dev, u16 func_id)
 	return mlx5_cmd_exec_in(dev, disable_hca, in);
 }
 
+//ISSI（Internal Software Supported Interface）是 Mellanox 网卡驱动和设备固件之间的一种“版本协商机制”。它用于标识当前驱动希望使用哪一套命令集/接口协议。
 static int mlx5_core_set_issi(struct mlx5_core_dev *dev)
 {
+	//构造命令和接收结果
 	u32 query_out[MLX5_ST_SZ_DW(query_issi_out)] = {};
 	u32 query_in[MLX5_ST_SZ_DW(query_issi_in)] = {};
 	u32 sup_issi;
 	int err;
-
+	//向固件发送 QUERY_ISSI 命令，询问固件支持哪些版本的接口
 	MLX5_SET(query_issi_in, query_in, opcode, MLX5_CMD_OP_QUERY_ISSI);
 	err = mlx5_cmd_exec_inout(dev, query_issi, query_in, query_out);
 	if (err) {
 		u32 syndrome;
 		u8 status;
-
+		//获取命令执行状态码
 		mlx5_cmd_mbox_status(query_out, &status, &syndrome);
 		if (!status || syndrome == MLX5_DRIVER_SYND) {
 			mlx5_core_err(dev, "Failed to query ISSI err(%d) status(%d) synd(%d)\n",
 				      err, status, syndrome);
 			return err;
 		}
-
+		//某些老版本固件不支持 QUERY_ISSI 命令
 		mlx5_core_warn(dev, "Query ISSI is not supported by FW, ISSI is 0\n");
-		dev->issi = 0;
+		dev->issi = 0;//某些固件不支持 QUERY_ISSI，但可以默认为 ISSI = 0
 		return 0;
 	}
-
+	//读取固件返回的支持位图，例如，如果 sup_issi = 0x3，代表支持 ISSI 0 和 1
 	sup_issi = MLX5_GET(query_issi_out, query_out, supported_issi_dw0);
-
+	//如果支持ISSI 1，尝试设置为1
 	if (sup_issi & (1 << 1)) {
 		u32 set_in[MLX5_ST_SZ_DW(set_issi_in)] = {};
 
@@ -727,10 +734,10 @@ static int mlx5_core_set_issi(struct mlx5_core_dev *dev)
 			return err;
 		}
 
-		dev->issi = 1;
+		dev->issi = 1;//如果设置成功，驱动记录下当前使用的版本1
 
 		return 0;
-	} else if (sup_issi & (1 << 0) || !sup_issi) {
+	} else if (sup_issi & (1 << 0) || !sup_issi) {//仅支持 ISSI 0 或 sup_issi == 0（即默认），直接返回成功
 		return 0;
 	}
 
@@ -780,7 +787,7 @@ static int mlx5_pci_init(struct mlx5_core_dev *dev, struct pci_dev *pdev,
 		goto err_clr_master;
 	}
 
-	mlx5_pci_vsc_init(dev);
+	mlx5_pci_vsc_init(dev);//初始化 PCI VSC（Vendor Specific Capability）扩展功能
 	return 0;
 
 err_clr_master:
@@ -831,23 +838,23 @@ static int mlx5_init_once(struct mlx5_core_dev *dev)
 		goto err_irq_cleanup;
 	}
 
-	err = mlx5_events_init(dev);
+	err = mlx5_events_init(dev);//初始化设备的事件处理子系统 
 	if (err) {
 		mlx5_core_err(dev, "failed to initialize events\n");
 		goto err_eq_cleanup;
 	}
 
-	err = mlx5_fw_reset_init(dev);
+	err = mlx5_fw_reset_init(dev);//初始化固件重置（FW Reset）机制
 	if (err) {
 		mlx5_core_err(dev, "failed to initialize fw reset events\n");
 		goto err_events_cleanup;
 	}
 
-	mlx5_cq_debugfs_init(dev);
+	mlx5_cq_debugfs_init(dev);//创建CQs
 
-	mlx5_init_reserved_gids(dev);
+	mlx5_init_reserved_gids(dev);//gid保留位初始化
 
-	mlx5_init_clock(dev);
+	mlx5_init_clock(dev);//初始化网卡硬件时钟
 
 	dev->vxlan = mlx5_vxlan_create(dev);
 	dev->geneve = mlx5_geneve_create(dev);
@@ -1005,53 +1012,53 @@ static int mlx5_function_setup(struct mlx5_core_dev *dev, bool boot)
 	dev->caps.embedded_cpu = mlx5_read_embedded_cpu(dev);
 	mlx5_cmd_set_state(dev, MLX5_CMDIF_STATE_UP);
 
-	err = mlx5_core_enable_hca(dev, 0);
+	err = mlx5_core_enable_hca(dev, 0);//Host Channel Adapter
 	if (err) {
 		mlx5_core_err(dev, "enable hca failed\n");
 		goto err_cmd_cleanup;
 	}
 
-	err = mlx5_core_set_issi(dev);
+	err = mlx5_core_set_issi(dev);//Internal Software Supported Interface
 	if (err) {
 		mlx5_core_err(dev, "failed to set issi\n");
 		goto err_disable_hca;
 	}
 
-	err = mlx5_satisfy_startup_pages(dev, 1);
+	err = mlx5_satisfy_startup_pages(dev, 1);//预启动阶段页分配，给设备提供最初启动所需的一部分内存页（startup pages），固件需要这部分页来完成基本初始化（例如用于加载配置、基本数据结构等）。
 	if (err) {
 		mlx5_core_err(dev, "failed to allocate boot pages\n");
 		goto err_disable_hca;
 	}
 
-	err = set_hca_ctrl(dev);
+	err = set_hca_ctrl(dev);//设置 HCA 控制参数
 	if (err) {
 		mlx5_core_err(dev, "set_hca_ctrl failed\n");
 		goto reclaim_boot_pages;
 	}
 
-	err = set_hca_cap(dev);
+	err = set_hca_cap(dev);//设置 HCA 的能力参数
 	if (err) {
 		mlx5_core_err(dev, "set_hca_cap failed\n");
 		goto reclaim_boot_pages;
 	}
 
-	err = mlx5_satisfy_startup_pages(dev, 0);
+	err = mlx5_satisfy_startup_pages(dev, 0);//正式启动页分配，现在设备已经基本初始化，驱动需要提供剩余的 startup pages，固件可能在第一阶段只要求了基础页，第二阶段才真正要求全部启动资源
 	if (err) {
 		mlx5_core_err(dev, "failed to allocate init pages\n");
 		goto reclaim_boot_pages;
 	}
 
-	err = mlx5_cmd_init_hca(dev, sw_owner_id);
+	err = mlx5_cmd_init_hca(dev, sw_owner_id);//初始化HCA
 	if (err) {
 		mlx5_core_err(dev, "init hca failed\n");
 		goto reclaim_boot_pages;
 	}
 
-	mlx5_set_driver_version(dev);
+	mlx5_set_driver_version(dev);//向固件写入当前驱动的版本信息字符串
 
 	mlx5_start_health_poll(dev);
 
-	err = mlx5_query_hca_caps(dev);
+	err = mlx5_query_hca_caps(dev);//查询HCA设备能力，即询问网卡支持哪些功能、资源大小等配置
 	if (err) {
 		mlx5_core_err(dev, "query hca failed\n");
 		goto stop_health;
@@ -1101,16 +1108,16 @@ static int mlx5_load(struct mlx5_core_dev *dev)
 		return err;
 	}
 
-	mlx5_events_start(dev);
-	mlx5_pagealloc_start(dev);
+	mlx5_events_start(dev);//启动异步事件处理机制
+	mlx5_pagealloc_start(dev);//动态页分配机制
 
-	err = mlx5_irq_table_create(dev);
+	err = mlx5_irq_table_create(dev);//中断表
 	if (err) {
 		mlx5_core_err(dev, "Failed to alloc IRQs\n");
 		goto err_irq_table;
 	}
 
-	err = mlx5_eq_table_create(dev);
+	err = mlx5_eq_table_create(dev);//创建 EQs（Event Queues），用于处理设备事件和中断
 	if (err) {
 		mlx5_core_err(dev, "Failed to create EQs\n");
 		goto err_eq_table;

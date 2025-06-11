@@ -38,6 +38,7 @@ struct mlx5_hv_vhca_agent {
 	void (*cleanup)(struct mlx5_hv_vhca_agent *agent);
 };
 
+//创建一个结构体 mlx5_hv_vhca，为驱动中虚拟化相关的 VHCA 管理逻辑提供基础结构，初始化锁和工作队列以支持异步管理
 struct mlx5_hv_vhca *mlx5_hv_vhca_create(struct mlx5_core_dev *dev)
 {
 	struct mlx5_hv_vhca *hv_vhca = NULL;
@@ -198,6 +199,8 @@ static void mlx5_hv_vhca_control_agent_destroy(struct mlx5_hv_vhca_agent *agent)
 	mlx5_hv_vhca_agent_destroy(agent);
 }
 
+//初始化 Hyper-V 虚拟 HCA (Host Channel Adapter) 支持模块中的 mlx5_hv_vhca
+//用于 Mellanox MLX5 驱动在 Microsoft Hyper-V 虚拟化环境下的集成，尤其是为 guest VM 提供虚拟 HCA 通道支持
 int mlx5_hv_vhca_init(struct mlx5_hv_vhca *hv_vhca)
 {
 	struct mlx5_hv_vhca_agent *agent;
@@ -205,12 +208,14 @@ int mlx5_hv_vhca_init(struct mlx5_hv_vhca *hv_vhca)
 
 	if (IS_ERR_OR_NULL(hv_vhca))
 		return IS_ERR_OR_NULL(hv_vhca);
-
+	//登记一个回调：当 Hyper‑V 侧 VHCA 配置失效或被 Host 重新初始化时，内核会调用 mlx5_hv_vhca_invalidate(context, block_mask)。这里的 context 是我们的 hv_vhca 结构。
+	//处理失效事件：回调中会创建一个异步任务（work item）：在工作队列 (hv_vhca->work_queue) 中执行 mlx5_hv_vhca_invalidate_work()；该函数会遍历所有已注册的 hv_vhca_agent（如控制 agent），
+	//并调用对应 agent 的 invalidate() 方法；然后 agent 根据 block_mask 清理、重建配置块，重新建立通信渠道
 	err = mlx5_hv_register_invalidate(hv_vhca->dev, hv_vhca,
 					  mlx5_hv_vhca_invalidate);
 	if (err)
 		return err;
-
+	//创建 Hyper‑V VHCA 控制代理的函数,它将一个管理 “control block” 的代理对象注册到 hv_vhca 结构中，以实现虚拟 HCA 在 Hyper‑V 下的能力协商与控制消息处理
 	agent = mlx5_hv_vhca_control_agent_create(hv_vhca);
 	if (IS_ERR_OR_NULL(agent)) {
 		mlx5_hv_unregister_invalidate(hv_vhca->dev);

@@ -126,6 +126,10 @@ void mlx5_vhca_state_cap_handle(struct mlx5_core_dev *dev, void *set_hca_cap)
 	MLX5_SET(cmd_hca_cap, set_hca_cap, event_on_vhca_state_teardown_request, 1);
 }
 
+//为设备注册一个用于接收 VHCA_STATE_CHANGE 类型事件的 通知回调机制，以便内核在 VHCA 状态（如重启、恢复）发生变化时执行相应处理
+//VHCA（Virtual Host Channel Adapter） 是 Mellanox 架构下用于表示一个逻辑功能单元的实体，通常与 VF、SF、PF 一一对应
+//	每个 VF 或 SF 都有一个 VHCA ID
+//	VHCA 状态表示这个功能是否有效、是否重启等
 int mlx5_vhca_event_init(struct mlx5_core_dev *dev)
 {
 	struct mlx5_vhca_state_notifier *notifier;
@@ -139,7 +143,10 @@ int mlx5_vhca_event_init(struct mlx5_core_dev *dev)
 
 	dev->priv.vhca_state_notifier = notifier;
 	notifier->dev = dev;
-	BLOCKING_INIT_NOTIFIER_HEAD(&notifier->n_head);
+	BLOCKING_INIT_NOTIFIER_HEAD(&notifier->n_head);//初始化一个阻塞型 notifier chain（通知链）
+	//使用 MLX5_NB_INIT() 宏注册一个 notifier_block
+	//	对应的回调函数是 mlx5_vhca_state_change_notifier
+	//	当收到 VHCA_STATE_CHANGE 事件时，会调用这个回调
 	MLX5_NB_INIT(&notifier->nb, mlx5_vhca_state_change_notifier, VHCA_STATE_CHANGE);
 	return 0;
 }

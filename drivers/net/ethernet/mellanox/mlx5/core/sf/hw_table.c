@@ -239,11 +239,12 @@ static void mlx5_sf_hw_table_hwc_cleanup(struct mlx5_sf_hwc_table *hwc)
 	kfree(hwc->sfs);
 }
 
+//为当前设备分配并初始化一个用于管理 本地 SF（SubFunctions）和外部 HPF-SF（Host PF 的 SF） 的硬件控制表结构，为 SF 的启用、事件监听、状态同步等功能提供底层支撑。
 int mlx5_sf_hw_table_init(struct mlx5_core_dev *dev)
 {
 	struct mlx5_sf_hw_table *table;
-	u16 max_ext_fn = 0;
-	u16 ext_base_id;
+	u16 max_ext_fn = 0;//PF 分配的 SF 个数（用于 host function）
+	u16 ext_base_id;//ext_base_id 是这类 SF 的起始 Function ID
 	u16 max_fn = 0;
 	u16 base_id;
 	int err;
@@ -252,34 +253,35 @@ int mlx5_sf_hw_table_init(struct mlx5_core_dev *dev)
 		return 0;
 
 	if (mlx5_sf_supported(dev))
-		max_fn = mlx5_sf_max_functions(dev);
+		max_fn = mlx5_sf_max_functions(dev);//max_fn 是当前设备支持的本地 SF 数量
 
-	err = mlx5_esw_sf_max_hpf_functions(dev, &max_ext_fn, &ext_base_id);
+	err = mlx5_esw_sf_max_hpf_functions(dev, &max_ext_fn, &ext_base_id);//获取 Host PF 拥有的 SF 个数（external SF）,
 	if (err)
 		return err;
 
 	if (!max_fn && !max_ext_fn)
 		return 0;
 
-	table = kzalloc(sizeof(*table), GFP_KERNEL);
+	table = kzalloc(sizeof(*table), GFP_KERNEL);//分配 struct mlx5_sf_hw_table 结构
 	if (!table)
 		return -ENOMEM;
 
 	mutex_init(&table->table_lock);
 	table->dev = dev;
 	dev->priv.sf_hw_table = table;
-
+	//初始化两个硬件控制子表（HWC）
 	base_id = mlx5_sf_start_function_id(dev);
+	//初始化本地 SF 控制表，起始 ID 是 base_id
 	err = mlx5_sf_hw_table_hwc_init(&table->hwc[MLX5_SF_HWC_LOCAL], max_fn, base_id);
 	if (err)
 		goto table_err;
-
+	//初始化 PF 扩展出的 SF（HPF-SF）控制表
 	err = mlx5_sf_hw_table_hwc_init(&table->hwc[MLX5_SF_HWC_EXTERNAL],
 					max_ext_fn, ext_base_id);
 	if (err)
 		goto ext_err;
 
-	mlx5_core_dbg(dev, "SF HW table: max sfs = %d, ext sfs = %d\n", max_fn, max_ext_fn);
+	mlx5_core_info(dev, "SF HW table: max sfs = %d, ext sfs = %d\n", max_fn, max_ext_fn);
 	return 0;
 
 ext_err:

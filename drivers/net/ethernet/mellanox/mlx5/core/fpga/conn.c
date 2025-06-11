@@ -962,7 +962,7 @@ int mlx5_fpga_conn_device_init(struct mlx5_fpga_device *fdev)
 		mlx5_fpga_err(fdev, "get_uars_page failed, %d\n", err);
 		goto err_roce;
 	}
-	mlx5_fpga_dbg(fdev, "Allocated UAR index %u\n",
+	mlx5_fpga_info(fdev, "Allocated UAR index %u\n",
 		      fdev->conn_res.uar->index);
 
 	err = mlx5_core_alloc_pd(fdev->mdev, &fdev->conn_res.pdn);
@@ -970,7 +970,7 @@ int mlx5_fpga_conn_device_init(struct mlx5_fpga_device *fdev)
 		mlx5_fpga_err(fdev, "alloc pd failed, %d\n", err);
 		goto err_uar;
 	}
-	mlx5_fpga_dbg(fdev, "Allocated PD %u\n", fdev->conn_res.pdn);
+	mlx5_fpga_info(fdev, "Allocated PD %u\n", fdev->conn_res.pdn);
 
 	err = mlx5_fpga_conn_create_mkey(fdev->mdev, fdev->conn_res.pdn,
 					 &fdev->conn_res.mkey);
@@ -978,7 +978,7 @@ int mlx5_fpga_conn_device_init(struct mlx5_fpga_device *fdev)
 		mlx5_fpga_err(fdev, "create mkey failed, %d\n", err);
 		goto err_dealloc_pd;
 	}
-	mlx5_fpga_dbg(fdev, "Created mkey 0x%x\n", fdev->conn_res.mkey.key);
+	mlx5_fpga_info(fdev, "Created mkey 0x%x\n", fdev->conn_res.mkey.key);
 
 	return 0;
 

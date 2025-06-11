@@ -473,7 +473,7 @@ irq_pool_alloc(struct mlx5_core_dev *dev, int start, int size, char *name,
 			 name);
 	pool->min_threshold = min_threshold * MLX5_EQ_REFS_PER_IRQ;
 	pool->max_threshold = max_threshold * MLX5_EQ_REFS_PER_IRQ;
-	mlx5_core_dbg(dev, "pool->name = %s, pool->size = %d, pool->start = %d",
+	mlx5_core_info(dev, "pool->name = %s, pool->size = %d, pool->start = %d",
 		      name, size, start);
 	return pool;
 }
@@ -602,7 +602,7 @@ int mlx5_irq_table_get_num_comp(struct mlx5_irq_table *table)
 {
 	return table->pf_pool->xa_num_irqs.max - table->pf_pool->xa_num_irqs.min;
 }
-
+//初始化并分配 PF/SF 控制和 Completion EQ 所需的 IRQ 向量
 int mlx5_irq_table_create(struct mlx5_core_dev *dev)
 {
 	int num_eqs = MLX5_CAP_GEN(dev, max_num_eqs) ?
@@ -627,12 +627,12 @@ int mlx5_irq_table_create(struct mlx5_core_dev *dev)
 			MLX5_COMP_EQS_PER_SF * mlx5_sf_max_functions(dev);
 
 	total_vec = pci_alloc_irq_vectors(dev->pdev, MLX5_IRQ_VEC_COMP_BASE + 1,
-					  total_vec, PCI_IRQ_MSIX);
+					  total_vec, PCI_IRQ_MSIX);//向内核申请总共 total_vec 个 MSI-X 向量
 	if (total_vec < 0)
 		return total_vec;
 	pf_vec = min(pf_vec, total_vec);
 
-	err = irq_pools_init(dev, total_vec - pf_vec, pf_vec);
+	err = irq_pools_init(dev, total_vec - pf_vec, pf_vec);//创建中断资源池
 	if (err)
 		pci_free_irq_vectors(dev->pdev);
 

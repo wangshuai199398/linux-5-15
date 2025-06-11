@@ -7,6 +7,8 @@
             ],
             "defines": [
                 "__KERNEL__",
+                "CONFIG_DYNAMIC_DEBUG",
+                "CONFIG_DYNAMIC_DEBUG_CORE",
                 "CONFIG_PRINTK",
                 "CONFIG_INET",
                 "CONFIG_NET_CLS_ACT",
@@ -26,7 +28,16 @@
                 "CONFIG_MLX5_SF",
                 "CONFIG_MLX5_ESWITCH",
                 "CONFIG_NUMA",
-                "CONFIG_PCI"
+                "CONFIG_PCI",
+                "CONFIG_PTP_1588_CLOCK",
+                "CONFIG_VXLAN",
+                "CONFIG_MLX5_MPFS",
+                "CONFIG_MLX5_FPGA",
+                "CONFIG_MLX5_SF_MANAGER",
+                "CONFIG_PCI_HYPERV_INTERFACE",
+                "CONFIG_RFS_ACCEL",
+                "CONFIG_MLX5_ACCEL",
+                "CONFIG_MLX5_FPGA_TLS"
             ],
             "compilerPath": "/usr/bin/clang",
             "cStandard": "c17",

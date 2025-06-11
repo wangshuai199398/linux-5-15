@@ -871,6 +871,7 @@ static void mlx5_init_pps(struct mlx5_core_dev *mdev)
 	mlx5_init_pin_config(clock);
 }
 
+//初始化并注册 MLX5 设备的 PTP 硬件时钟（PHC），包括设置定时器、初始化 PPS 输出、注册到 Linux PTP 子系统，使该网卡可用于精准网络时间同步。
 void mlx5_init_clock(struct mlx5_core_dev *mdev)
 {
 	struct mlx5_clock *clock = &mdev->clock;
@@ -879,17 +880,21 @@ void mlx5_init_clock(struct mlx5_core_dev *mdev)
 		mlx5_core_warn(mdev, "invalid device_frequency_khz, aborting HW clock init\n");
 		return;
 	}
-
+	//seqlock 是用于并发读写 clock 数据的轻量同步机制
 	seqlock_init(&clock->lock);
+	//初始化周期性读取硬件时间的计时器
 	mlx5_init_timer_clock(mdev);
+	//初始化一个延迟执行的 PPS 输出任务（1PPS 用）
 	INIT_WORK(&clock->pps_info.out_work, mlx5_pps_out);
 
 	/* Configure the PHC */
+	//ptp_info 是定义时钟功能的结构体，比如：adjtime、gettime64、settime64、adjfreq，这些是 Linux PTP 子系统调用的接口函数
 	clock->ptp_info = mlx5_ptp_clock_info;
 
 	/* Initialize 1PPS data structures */
+	//初始化 PPS 数据结构，为 PPS（每秒一个脉冲信号）功能初始化内部状态，比如时间戳记录、输出定时器等
 	mlx5_init_pps(mdev);
-
+	//向 Linux 注册 PTP 时钟，注册后，你可以在用户空间看到：ls /dev/ptp* , 工具如 phc2sys, ptp4l, clock_gettime() 就可以用这个设备来读/写硬件时间戳了
 	clock->ptp = ptp_clock_register(&clock->ptp_info,
 					&mdev->pdev->dev);
 	if (IS_ERR(clock->ptp)) {
@@ -897,7 +902,7 @@ void mlx5_init_clock(struct mlx5_core_dev *mdev)
 			       PTR_ERR(clock->ptp));
 		clock->ptp = NULL;
 	}
-
+	//注册 EQ（事件队列）通知，用于监听 PPS 事件, 初始化一个通知回调，当硬件触发 PPS_EVENT 时调用 mlx5_pps_event(), 实现方式基于中断 EQ
 	MLX5_NB_INIT(&clock->pps_nb, mlx5_pps_event, PPS_EVENT);
 	mlx5_eq_notifier_register(mdev, &clock->pps_nb);
 }

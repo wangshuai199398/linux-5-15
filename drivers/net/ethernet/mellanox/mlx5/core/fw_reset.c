@@ -419,6 +419,7 @@ out:
 	return err;
 }
 
+//启用固件重置（firmware reset）事件处理 
 void mlx5_fw_reset_events_start(struct mlx5_core_dev *dev)
 {
 	struct mlx5_fw_reset *fw_reset = dev->priv.fw_reset;
@@ -432,13 +433,14 @@ void mlx5_fw_reset_events_stop(struct mlx5_core_dev *dev)
 	mlx5_eq_notifier_unregister(dev, &dev->priv.fw_reset->nb);
 }
 
+//为 MLX5 设备初始化用于处理 固件更新、重启、Live Patch、重置协同（sync reset） 的内部工作框架，包括事件处理队列、工作项等
 int mlx5_fw_reset_init(struct mlx5_core_dev *dev)
 {
 	struct mlx5_fw_reset *fw_reset = kzalloc(sizeof(*fw_reset), GFP_KERNEL);
 
 	if (!fw_reset)
 		return -ENOMEM;
-	fw_reset->wq = create_singlethread_workqueue("mlx5_fw_reset_events");
+	fw_reset->wq = create_singlethread_workqueue("mlx5_fw_reset_events");//创建单线程工作队列，用于异步处理固件相关事件，避免阻塞 EQ 或其他路径
 	if (!fw_reset->wq) {
 		kfree(fw_reset);
 		return -ENOMEM;
@@ -446,14 +448,14 @@ int mlx5_fw_reset_init(struct mlx5_core_dev *dev)
 
 	fw_reset->dev = dev;
 	dev->priv.fw_reset = fw_reset;
+	//初始化多个异步工作项
+	INIT_WORK(&fw_reset->fw_live_patch_work, mlx5_fw_live_patch_event);//处理 Live Patch 类型的热修复事件
+	INIT_WORK(&fw_reset->reset_request_work, mlx5_sync_reset_request_event);//同步重置的请求
+	INIT_WORK(&fw_reset->reset_reload_work, mlx5_sync_reset_reload_work);//重载重置逻辑
+	INIT_WORK(&fw_reset->reset_now_work, mlx5_sync_reset_now_event);//立即重置设备（fw/hca）
+	INIT_WORK(&fw_reset->reset_abort_work, mlx5_sync_reset_abort_event);//中止当前重置流程
 
-	INIT_WORK(&fw_reset->fw_live_patch_work, mlx5_fw_live_patch_event);
-	INIT_WORK(&fw_reset->reset_request_work, mlx5_sync_reset_request_event);
-	INIT_WORK(&fw_reset->reset_reload_work, mlx5_sync_reset_reload_work);
-	INIT_WORK(&fw_reset->reset_now_work, mlx5_sync_reset_now_event);
-	INIT_WORK(&fw_reset->reset_abort_work, mlx5_sync_reset_abort_event);
-
-	init_completion(&fw_reset->done);
+	init_completion(&fw_reset->done);//初始化完成标志（同步）用于等待某个工作完成，常用于重置流程同步控制
 	return 0;
 }
 

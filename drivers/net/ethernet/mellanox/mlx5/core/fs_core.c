@@ -2570,7 +2570,7 @@ static int init_root_tree_recursive(struct mlx5_flow_steering *steering,
 
 	return 0;
 }
-
+//设置命名空间内的 flow table tree（层级结构）
 static int init_root_tree(struct mlx5_flow_steering *steering,
 			  struct init_tree_node *init_node,
 			  struct fs_node *fs_parent_node)
@@ -2599,6 +2599,7 @@ static void del_sw_root_ns(struct fs_node *node)
 	kfree(node);
 }
 
+//分配并初始化 flow namespace
 static struct mlx5_flow_root_namespace
 *create_root_ns(struct mlx5_flow_steering *steering,
 		enum fs_flow_table_type table_type)
@@ -2666,7 +2667,7 @@ static void set_prio_attrs_in_prio(struct fs_prio *prio, int acc_level)
 		prio->num_levels = acc_level_ns - prio->start_level;
 	WARN_ON(prio->num_levels < acc_level_ns - prio->start_level);
 }
-
+//设置命名空间内优先级相关的属性
 static void set_prio_attrs(struct mlx5_flow_root_namespace *root_ns)
 {
 	struct mlx5_flow_namespace *ns = &root_ns->ns;
@@ -2742,7 +2743,7 @@ static void clean_tree(struct fs_node *node)
 		tree_remove_node(node, false);
 	}
 }
-
+//错误时清除已创建的命名空间
 static void cleanup_root_ns(struct mlx5_flow_root_namespace *root_ns)
 {
 	if (!root_ns)
@@ -3138,16 +3139,17 @@ cleanup:
 	return err;
 }
 
+//初始化硬件流表（Flow Table）和命名空间（Namespace），使得内核能够通过硬件加速实现数据包过滤、转发、抓包、IPSec 等功能
 int mlx5_init_fs(struct mlx5_core_dev *dev)
 {
 	struct mlx5_flow_steering *steering;
 	int err = 0;
 
-	err = mlx5_init_fc_stats(dev);
+	err = mlx5_init_fc_stats(dev);//为 flow entry 统计计数器分配资源
 	if (err)
 		return err;
 
-	err = mlx5_ft_pool_init(dev);
+	err = mlx5_ft_pool_init(dev);//为 flow table 创建内存池
 	if (err)
 		return err;
 
@@ -3164,7 +3166,7 @@ int mlx5_init_fs(struct mlx5_core_dev *dev)
 		steering->mode = MLX5_FLOW_STEERING_MODE_SMFS;
 	else
 		steering->mode = MLX5_FLOW_STEERING_MODE_DMFS;
-
+	//分配 flow entry / group 的缓存池
 	steering->fgs_cache = kmem_cache_create("mlx5_fs_fgs",
 						sizeof(struct mlx5_flow_group), 0,
 						0, NULL);
@@ -3180,47 +3182,47 @@ int mlx5_init_fs(struct mlx5_core_dev *dev)
 	     ((MLX5_CAP_GEN(dev, port_type) == MLX5_CAP_PORT_TYPE_IB) &&
 	      MLX5_CAP_GEN(dev, ipoib_enhanced_offloads))) &&
 	    MLX5_CAP_FLOWTABLE_NIC_RX(dev, ft_support)) {
-		err = init_root_ns(steering);
+		err = init_root_ns(steering);//接收方向的 根流表命名空间，用于配置硬件加速的数据包转发、过滤、匹配等行为
 		if (err)
 			goto err;
 	}
 
 	if (MLX5_ESWITCH_MANAGER(dev)) {
 		if (MLX5_CAP_ESW_FLOWTABLE_FDB(dev, ft_support)) {
-			err = init_fdb_root_ns(steering);
+			err = init_fdb_root_ns(steering);//初始化 FDB方向流表命名空间,为 eswitch 模式下的数据包转发设置 flow steering 入口
 			if (err)
 				goto err;
 		}
 	}
 
 	if (MLX5_CAP_FLOWTABLE_SNIFFER_RX(dev, ft_support)) {
-		err = init_sniffer_rx_root_ns(steering);
+		err = init_sniffer_rx_root_ns(steering);//为 NIC 接收方向的流量抓取（Sniffer）功能创建 flow table 根命名空间，以便软件或硬件可以对所有进入的包做 mirror 或分析处理
 		if (err)
 			goto err;
 	}
 
 	if (MLX5_CAP_FLOWTABLE_SNIFFER_TX(dev, ft_support)) {
-		err = init_sniffer_tx_root_ns(steering);
+		err = init_sniffer_tx_root_ns(steering);//初始化 Sniffer TX（发送方向探测器） 根命名空间的函数，和 RX 版本对应，但处理的是从网卡发出的数据包流量
 		if (err)
 			goto err;
 	}
 
 	if (MLX5_CAP_FLOWTABLE_RDMA_RX(dev, ft_support) &&
 	    MLX5_CAP_FLOWTABLE_RDMA_RX(dev, table_miss_action_domain)) {
-		err = init_rdma_rx_root_ns(steering);
+		err = init_rdma_rx_root_ns(steering);//初始化 RDMA RX flow steering namespace，使得硬件支持通过 flow table 匹配进入网卡的 RDMA 数据包，并执行相应的动作（如丢弃、转发、计数、镜像等）
 		if (err)
 			goto err;
 	}
 
 	if (MLX5_CAP_FLOWTABLE_RDMA_TX(dev, ft_support)) {
-		err = init_rdma_tx_root_ns(steering);
+		err = init_rdma_tx_root_ns(steering);//在支持 RDMA TX flow table 的网卡中配置一个逻辑入口，用于定义和管理RDMA 传出流量（如发送 WQE 发出的 RDMA 数据包）的匹配规则和处理方式
 		if (err)
 			goto err;
 	}
 
 	if (mlx5_fpga_ipsec_device_caps(steering->dev) & MLX5_ACCEL_IPSEC_CAP_DEVICE ||
 	    MLX5_CAP_FLOWTABLE_NIC_TX(dev, ft_support)) {
-		err = init_egress_root_ns(steering);
+		err = init_egress_root_ns(steering);//为 传输方向 的流量创建一个流表树结构，以便对传出报文应用匹配、修改或动作策略
 		if (err)
 			goto err;
 	}

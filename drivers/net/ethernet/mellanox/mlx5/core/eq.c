@@ -629,29 +629,29 @@ static int create_async_eqs(struct mlx5_core_dev *dev)
 	int err;
 
 	MLX5_NB_INIT(&table->cq_err_nb, cq_err_event_notifier, CQ_ERROR);
-	mlx5_eq_notifier_register(dev, &table->cq_err_nb);
-
+	mlx5_eq_notifier_register(dev, &table->cq_err_nb);//初始化并注册一个 notifier，当发生 CQ（Completion Queue）错误事件时调用。
+	//创建cmd_eq
 	param = (struct mlx5_eq_param) {
 		.nent = MLX5_NUM_CMD_EQE,
 		.mask[0] = 1ull << MLX5_EVENT_TYPE_CMD,
 	};
 	mlx5_cmd_allowed_opcode(dev, MLX5_CMD_OP_CREATE_EQ);
-	err = setup_async_eq(dev, &table->cmd_eq, &param, "cmd");
+	err = setup_async_eq(dev, &table->cmd_eq, &param, "cmd");//分配一个 EQ 专门监听 CMD 类型事件（比如驱动下发命令、FW 响应等）。
 	if (err)
 		goto err1;
 
-	mlx5_cmd_use_events(dev);
+	mlx5_cmd_use_events(dev);//将命令通道切换为事件模式，命令完成通过 cmd_eq 上的 EQ 通知。默认是轮询模式。
 	mlx5_cmd_allowed_opcode(dev, CMD_ALLOWED_OPCODE_ALL);
-
+	//创建 async_eq
 	param = (struct mlx5_eq_param) {
 		.nent = MLX5_NUM_ASYNC_EQE,
 	};
-
+	//生成事件掩码，涵盖设备状态变化等异步通知。
 	gather_async_events_mask(dev, param.mask);
-	err = setup_async_eq(dev, &table->async_eq, &param, "async");
+	err = setup_async_eq(dev, &table->async_eq, &param, "async");//
 	if (err)
 		goto err2;
-
+	//创建 pages_eq，专门用于监听 page fault / page request 事件。在 HCA 初始化早期或内存不足时，设备通过该 EQ 通知 host 提供物理页。
 	param = (struct mlx5_eq_param) {
 		.nent = /* TODO: sriov max_vf + */ 1,
 		.mask[0] = 1ull << MLX5_EVENT_TYPE_PAGE_REQUEST,
@@ -793,6 +793,9 @@ static void destroy_comp_eqs(struct mlx5_core_dev *dev)
 	}
 }
 
+//创建多个 Completion EQ
+//	Completion EQ 是用于接收来自硬件的 完成事件（CQE、WQE 等） 的 EQ。
+//	每个 EQ 对应一个中断向量，可以和 CPU 绑定实现中断亲和性（IRQ affinity）。
 static int create_comp_eqs(struct mlx5_core_dev *dev)
 {
 	struct mlx5_eq_table *table = dev->priv.eq_table;
@@ -802,14 +805,14 @@ static int create_comp_eqs(struct mlx5_core_dev *dev)
 	int err;
 	int i;
 
-	INIT_LIST_HEAD(&table->comp_eqs_list);
+	INIT_LIST_HEAD(&table->comp_eqs_list);//所有创建的 Completion EQ 将链接到 comp_eqs_list 中
 	ncomp_eqs = table->num_comp_eqs;
 	nent = MLX5_COMP_EQ_SIZE;
 	for (i = 0; i < ncomp_eqs; i++) {
-		int vecidx = i + MLX5_IRQ_VEC_COMP_BASE;
+		int vecidx = i + MLX5_IRQ_VEC_COMP_BASE;//IRQ 向量的编号，偏移量是为了跳过保留 IRQ 编号（如 async EQ）。
 		struct mlx5_eq_param param = {};
 
-		eq = kzalloc(sizeof(*eq), GFP_KERNEL);
+		eq = kzalloc(sizeof(*eq), GFP_KERNEL);//为每个 EQ 创建一个结构 mlx5_eq_comp
 		if (!eq) {
 			err = -ENOMEM;
 			goto clean;
@@ -818,7 +821,7 @@ static int create_comp_eqs(struct mlx5_core_dev *dev)
 		INIT_LIST_HEAD(&eq->tasklet_ctx.list);
 		INIT_LIST_HEAD(&eq->tasklet_ctx.process_list);
 		spin_lock_init(&eq->tasklet_ctx.lock);
-		tasklet_setup(&eq->tasklet_ctx.task, mlx5_cq_tasklet_cb);
+		tasklet_setup(&eq->tasklet_ctx.task, mlx5_cq_tasklet_cb);//初始化其任务队列（tasklet），用于软中断上下文处理 CQ 回调
 
 		eq->irq_nb.notifier_call = mlx5_eq_comp_int;
 		param = (struct mlx5_eq_param) {
@@ -826,23 +829,26 @@ static int create_comp_eqs(struct mlx5_core_dev *dev)
 			.nent = nent,
 		};
 
-		if (!zalloc_cpumask_var(&param.affinity, GFP_KERNEL)) {
+		if (!zalloc_cpumask_var(&param.affinity, GFP_KERNEL)) {//设置中断亲和性掩码
 			err = -ENOMEM;
 			goto clean_eq;
 		}
+		//动态为每个 EQ 分配一个 CPU（NUMA 感知）做 affinity，提升性能。
 		cpumask_set_cpu(cpumask_local_spread(i, dev->priv.numa_node),
 				param.affinity);
+		//创建 EQ 并将其与中断向量 (irq_index) 绑定
 		err = create_map_eq(dev, &eq->core, &param);
 		free_cpumask_var(param.affinity);
 		if (err)
 			goto clean_eq;
+		//注册中断处理函数（通过 irq_nb.notifier_call = mlx5_eq_comp_int）
 		err = mlx5_eq_enable(dev, &eq->core, &eq->irq_nb);
 		if (err) {
 			destroy_unmap_eq(dev, &eq->core);
 			goto clean_eq;
 		}
 
-		mlx5_core_dbg(dev, "allocated completion EQN %d\n", eq->core.eqn);
+		mlx5_core_info(dev, "allocated completion EQN %d\n", eq->core.eqn);
 		/* add tail, to keep the list ordered, for mlx5_vector2eqn to work */
 		list_add_tail(&eq->list, &table->comp_eqs_list);
 	}
@@ -991,27 +997,28 @@ void mlx5_core_eq_free_irqs(struct mlx5_core_dev *dev)
 #define MLX5_MAX_ASYNC_EQS 3
 #endif
 
+//创建EQ表，主要负责完成 EQ（事件队列）资源的分配与初始化
 int mlx5_eq_table_create(struct mlx5_core_dev *dev)
 {
 	struct mlx5_eq_table *eq_table = dev->priv.eq_table;
 	int num_eqs = MLX5_CAP_GEN(dev, max_num_eqs) ?
 		      MLX5_CAP_GEN(dev, max_num_eqs) :
-		      1 << MLX5_CAP_GEN(dev, log_max_eq);
+		      1 << MLX5_CAP_GEN(dev, log_max_eq);//设备EQ总量
 	int max_eqs_sf;
 	int err;
 
 	eq_table->num_comp_eqs =
 		min_t(int,
 		      mlx5_irq_table_get_num_comp(eq_table->irq_table),
-		      num_eqs - MLX5_MAX_ASYNC_EQS);
+		      num_eqs - MLX5_MAX_ASYNC_EQS);//设置 Completion EQ 数量，从 IRQ 表里取出当前可用的 Completion EQ 数量；减去固定异步 EQ（MLX5_MAX_ASYNC_EQS）之后再决定最终使用几个。
 	if (mlx5_core_is_sf(dev)) {
 		max_eqs_sf = min_t(int, MLX5_COMP_EQS_PER_SF,
-				   mlx5_irq_table_get_sfs_vec(eq_table->irq_table));
+				   mlx5_irq_table_get_sfs_vec(eq_table->irq_table));//限制 SF 的 EQ 数量，避免使用太多共享 EQ，SF 因为不能分配独占中断，EQ 使用受限
 		eq_table->num_comp_eqs = min_t(int, eq_table->num_comp_eqs,
 					       max_eqs_sf);
 	}
 
-	err = create_async_eqs(dev);
+	err = create_async_eqs(dev);//创建异步 EQs
 	if (err) {
 		mlx5_core_err(dev, "Failed to create async EQs\n");
 		goto err_async_eqs;
@@ -1024,12 +1031,12 @@ int mlx5_eq_table_create(struct mlx5_core_dev *dev)
 		 * for irqs that are shared for different core/netdev RX rings.
 		 * Hence we don't allow netdev rmap for SFs
 		 */
-		err = set_rmap(dev);
+		err = set_rmap(dev);//设置中断与队列的 rmap 映射（PF 专用），rmap 是用于中断负载均衡与队列调度的映射表，SF 使用共享中断，无法独立建立映射，因此跳过
 		if (err)
 			goto err_rmap;
 	}
 
-	err = create_comp_eqs(dev);
+	err = create_comp_eqs(dev);//创建完成 EQs，用于处理数据完成类事件，如 WQ (Work Queue) 完成通知、中断驱动数据包到达。
 	if (err) {
 		mlx5_core_err(dev, "Failed to create completion EQs\n");
 		goto err_comp_eqs;

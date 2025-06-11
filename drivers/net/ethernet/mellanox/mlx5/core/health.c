@@ -717,39 +717,44 @@ static void poll_health(struct timer_list *t)
 	if (dev->state == MLX5_DEVICE_STATE_INTERNAL_ERROR)
 		goto out;
 
-	fatal_error = mlx5_health_check_fatal_sensors(dev);
+	fatal_error = mlx5_health_check_fatal_sensors(dev);//固件致命错误
 
 	if (fatal_error && !health->fatal_error) {
 		mlx5_core_err(dev, "Fatal error %u detected\n", fatal_error);
 		dev->priv.health.fatal_error = fatal_error;
 		print_health_info(dev);
 		dev->state = MLX5_DEVICE_STATE_INTERNAL_ERROR;
-		mlx5_trigger_health_work(dev);
+		mlx5_trigger_health_work(dev);//如果检测到新的致命错误，记录错误码并触发恢复流程，此时会启动复位机制或上报 devlink health
 		return;
 	}
 
-	count = ioread32be(health->health_counter);
+	count = ioread32be(health->health_counter);//读取心跳计数器，从设备 BAR 空间读取心跳计数器。如果设备固件正常运行，这个计数器会定期增加
 	if (count == health->prev)
-		++health->miss_counter;
+		++health->miss_counter;//如果计数器值不变，说明设备没“跳动”，增加 miss_counter
 	else
 		health->miss_counter = 0;
 
 	health->prev = count;
-	if (health->miss_counter == MAX_MISSES) {
+	if (health->miss_counter == MAX_MISSES) {//连续 N 次不变（即“心跳停止”）被视为设备挂死
 		mlx5_core_err(dev, "device's health compromised - reached miss count\n");
 		print_health_info(dev);
-		queue_work(health->wq, &health->report_work);
+		queue_work(health->wq, &health->report_work);//一旦超限，触发 report_work 来处理（记录、上报、甚至复位）
 	}
 
-	prev_synd = health->synd;
+	prev_synd = health->synd;//检查 syndrome 错误码是否变化，syndrome 是设备在出错时写入的 8-bit 错误码
 	health->synd = ioread8(&h->synd);
-	if (health->synd && health->synd != prev_synd)
+	if (health->synd && health->synd != prev_synd)//如果发现 syndrome 有效并且发生了变化，就触发异步错误处理流程
 		queue_work(health->wq, &health->report_work);
 
 out:
-	mod_timer(&health->timer, get_next_poll_jiffies());
+	mod_timer(&health->timer, get_next_poll_jiffies());//重启定时器，将定时器重新设置下一次触发时间，继续轮询
 }
 
+//定期轮询设备健康状态寄存器，用于检测是否发生了硬件故障、命令通道挂起、PCIe 错误、固件死锁等情况
+//一旦检测到异常，会触发恢复逻辑，如：
+//	重启命令通道
+//	复位HCA
+//	上报Linux内核或devlink的错误信息
 void mlx5_start_health_poll(struct mlx5_core_dev *dev)
 {
 	struct mlx5_core_health *health = &dev->priv.health;

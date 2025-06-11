@@ -806,7 +806,7 @@ static int mlx5_fw_tracer_start(struct mlx5_fw_tracer *tracer)
 		goto release_ownership;
 	}
 
-	mlx5_core_dbg(dev, "FWTracer: Ownership granted and active\n");
+	mlx5_core_info(dev, "FWTracer: Ownership granted and active\n");
 	return 0;
 
 release_ownership:
@@ -932,6 +932,7 @@ unlock:
 }
 
 /* Create software resources (Buffers, etc ..) */
+//用于初始化 FW Tracer，用来异步接收和处理来自 NIC 固件的调试 trace 数据，帮助内核驱动进行问题诊断
 struct mlx5_fw_tracer *mlx5_fw_tracer_create(struct mlx5_core_dev *dev)
 {
 	struct mlx5_fw_tracer *tracer = NULL;
@@ -942,11 +943,11 @@ struct mlx5_fw_tracer *mlx5_fw_tracer_create(struct mlx5_core_dev *dev)
 		return NULL;
 	}
 
-	tracer = kvzalloc(sizeof(*tracer), GFP_KERNEL);
+	tracer = kvalloc(sizeof(*tracer), GFP_KERNEL);//这是一个比较大的结构，因此使用 kvzalloc()，会优先分配于 vmalloc 区域，避免堆栈过小
 	if (!tracer)
 		return ERR_PTR(-ENOMEM);
 
-	tracer->work_queue = create_singlethread_workqueue("mlx5_fw_tracer");
+	tracer->work_queue = create_singlethread_workqueue("mlx5_fw_tracer");//创建专属工作队列 用于异步处理 trace 字符串、ownership 更改等事件，tracer 会有多个 work 项排队执行，不阻塞主线程
 	if (!tracer->work_queue) {
 		err = -ENOMEM;
 		goto free_tracer;
@@ -955,31 +956,31 @@ struct mlx5_fw_tracer *mlx5_fw_tracer_create(struct mlx5_core_dev *dev)
 	tracer->dev = dev;
 
 	INIT_LIST_HEAD(&tracer->ready_strings_list);
-	INIT_WORK(&tracer->ownership_change_work, mlx5_fw_tracer_ownership_change);
-	INIT_WORK(&tracer->read_fw_strings_work, mlx5_tracer_read_strings_db);
-	INIT_WORK(&tracer->handle_traces_work, mlx5_fw_tracer_handle_traces);
+	INIT_WORK(&tracer->ownership_change_work, mlx5_fw_tracer_ownership_change);//响应 tracer 拥有权变化（设备重启等）
+	INIT_WORK(&tracer->read_fw_strings_work, mlx5_tracer_read_strings_db);//读取固件中映射的字符串表
+	INIT_WORK(&tracer->handle_traces_work, mlx5_fw_tracer_handle_traces);//处理并解析 trace 日志数据
 
 
-	err = mlx5_query_mtrc_caps(tracer);
+	err = mlx5_query_mtrc_caps(tracer);//查询 tracer 能力，与硬件通信，获取 tracer 的最大能力（比如 buffer 大小、trace mask）
 	if (err) {
 		mlx5_core_dbg(dev, "FWTracer: Failed to query capabilities %d\n", err);
 		goto destroy_workqueue;
 	}
 
-	err = mlx5_fw_tracer_create_log_buf(tracer);
+	err = mlx5_fw_tracer_create_log_buf(tracer);//创建日志缓冲区，在设备中分配一个 log buffer（一般是设备内存中的一块 ICM），用于接收从 FW 推送过来的 trace 数据
 	if (err) {
 		mlx5_core_warn(dev, "FWTracer: Create log buffer failed %d\n", err);
 		goto destroy_workqueue;
 	}
 
-	err = mlx5_fw_tracer_allocate_strings_db(tracer);
+	err = mlx5_fw_tracer_allocate_strings_db(tracer);//分配字符串数据库，FW trace 日志中的字符串通常是以 索引 表示的，必须先加载一份 string index-to-text 数据库 才能翻译日志
 	if (err) {
 		mlx5_core_warn(dev, "FWTracer: Allocate strings database failed %d\n", err);
 		goto free_log_buf;
 	}
 
-	mlx5_fw_tracer_init_saved_traces_array(tracer);
-	mlx5_core_dbg(dev, "FWTracer: Tracer created\n");
+	mlx5_fw_tracer_init_saved_traces_array(tracer);//初始化保存 trace 记录的数组，保存最近 N 条 trace 日志（循环数组形式），供调试工具（如 devlink health show）提取分析
+	mlx5_core_info(dev, "FWTracer: Tracer created\n");
 
 	return tracer;
 
@@ -1007,23 +1008,23 @@ int mlx5_fw_tracer_init(struct mlx5_fw_tracer *tracer)
 	dev = tracer->dev;
 
 	if (!tracer->str_db.loaded)
-		queue_work(tracer->work_queue, &tracer->read_fw_strings_work);
-
+		queue_work(tracer->work_queue, &tracer->read_fw_strings_work);//如果还没加载固件中的日志字符串数据库，异步任务会从设备读取
+	//分配保护域（PD），为 tracer buffer 分配一个 PD（保护域），是访问内存前提。
 	err = mlx5_core_alloc_pd(dev, &tracer->buff.pdn);
 	if (err) {
 		mlx5_core_warn(dev, "FWTracer: Failed to allocate PD %d\n", err);
 		goto err_cancel_work;
 	}
-
+	//创建 Memory Key（MKEY），MKEY 是一个网卡用来访问内存（例如 tracer 日志缓冲区）的权限标识
 	err = mlx5_fw_tracer_create_mkey(tracer);
 	if (err) {
 		mlx5_core_warn(dev, "FWTracer: Failed to create mkey %d\n", err);
 		goto err_dealloc_pd;
 	}
-
+	//注册 EQ 事件回调，设置通知链，响应设备上报的 DEVICE_TRACER 类型事件（例如日志到达、错误等）
 	MLX5_NB_INIT(&tracer->nb, fw_tracer_event, DEVICE_TRACER);
 	mlx5_eq_notifier_register(dev, &tracer->nb);
-
+	//启动 tracer 功能，启动固件追踪机制，可能包括通知 FW 进行日志采样、启动 DMA 传输等。
 	err = mlx5_fw_tracer_start(tracer);
 	if (err) {
 		mlx5_core_warn(dev, "FWTracer: Failed to start tracer %d\n", err);

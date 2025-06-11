@@ -509,6 +509,7 @@ static bool mlx5_sf_table_supported(const struct mlx5_core_dev *dev)
 	       mlx5_sf_hw_table_supported(dev);
 }
 
+//初始化一个用于管理 SF 状态、事件响应、port 映射的控制结构，并注册到 eSwitch 和 VHCA 的通知链中，是整个 SF 功能的软件控制入口。
 int mlx5_sf_table_init(struct mlx5_core_dev *dev)
 {
 	struct mlx5_sf_table *table;
@@ -523,15 +524,15 @@ int mlx5_sf_table_init(struct mlx5_core_dev *dev)
 
 	mutex_init(&table->sf_state_lock);
 	table->dev = dev;
-	xa_init(&table->port_indices);
+	xa_init(&table->port_indices);//用于存储 SF 与 port 的映射关系
 	dev->priv.sf_table = table;
 	refcount_set(&table->refcount, 0);
-	table->esw_nb.notifier_call = mlx5_sf_esw_event;
-	err = mlx5_esw_event_notifier_register(dev->priv.eswitch, &table->esw_nb);
+	table->esw_nb.notifier_call = mlx5_sf_esw_event;//当 eSwitch 中与 SF 相关的状态变化（如 VPort 增删）时触发 mlx5_sf_esw_event
+	err = mlx5_esw_event_notifier_register(dev->priv.eswitch, &table->esw_nb);//把一个回调函数加入到阻塞型通知链中，确保通知是顺序执行、可睡眠的
 	if (err)
 		goto reg_err;
 
-	table->vhca_nb.notifier_call = mlx5_sf_vhca_event;
+	table->vhca_nb.notifier_call = mlx5_sf_vhca_event;//当 SF 的 VHCA 状态发生变化（上线、重建、故障）时触发 mlx5_sf_vhca_event
 	err = mlx5_vhca_event_notifier_register(table->dev, &table->vhca_nb);
 	if (err)
 		goto vhca_err;

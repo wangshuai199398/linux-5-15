@@ -237,7 +237,7 @@ void mlx5_sf_dev_table_create(struct mlx5_core_dev *dev)
 	err = mlx5_sf_dev_vhca_arm_all(table);
 	if (err)
 		goto arm_err;
-	mlx5_core_dbg(dev, "SF DEV: max sf devices=%d\n", max_sfs);
+	mlx5_core_info(dev, "SF DEV: max sf devices=%d\n", max_sfs);
 	return;
 
 arm_err:

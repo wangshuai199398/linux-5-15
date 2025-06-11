@@ -55,6 +55,7 @@ enum {
 	VSC_STATUS_BIT_LEN = 3,
 };
 
+//初始化 PCI VSC（Vendor Specific Capability）扩展功能,VSC是 PCIe 协议中保留给厂商自定义功能的一种机制,设备固件管理,功耗控制,安全性配置
 void mlx5_pci_vsc_init(struct mlx5_core_dev *dev)
 {
 	if (!mlx5_core_is_pf(dev))

@@ -94,15 +94,20 @@ static void free_l2table_index(struct mlx5_mpfs *l2table, u32 ix)
 	__clear_bit(ix, l2table->bitmap);
 }
 
+//mlx5_mpfs_init() 初始化网卡内部的 L2 多路径转发表，用于控制数据包如何在虚拟功能（VF）和物理端口之间进行 L2 层转发。仅在 eswitch 管理模式下启用
+//MPFS（Multi-Path Forwarding Selector）是 Mellanox MLX5 驱动的一个内部机制，主要用于：
+//	虚拟化转发    控制 VM/VF 的 MAC/IP 如何被映射到 VF/port
+//	L2 转发控制   类似硬件级别的 Linux bridge
+//	E-Switch 管理 SR-IOV PF 端管理所有 VF 的转发路径
 int mlx5_mpfs_init(struct mlx5_core_dev *dev)
 {
-	int l2table_size = 1 << MLX5_CAP_GEN(dev, log_max_l2_table);
+	int l2table_size = 1 << MLX5_CAP_GEN(dev, log_max_l2_table);//获取硬件支持的 L2 转发表（MPFS 表）大小
 	struct mlx5_mpfs *mpfs;
 
-	if (!MLX5_ESWITCH_MANAGER(dev))
+	if (!MLX5_ESWITCH_MANAGER(dev))//如果当前不是 eswitch 管理器（比如 VF），直接跳过 MPFS 初始化
 		return 0;
 
-	mpfs = kzalloc(sizeof(*mpfs), GFP_KERNEL);
+	mpfs = kzalloc(sizeof(*mpfs), GFP_KERNEL);//分配 bitmap：用来追踪 MPFS 表项的使用情况（哪些转发表槽位被占用了）
 	if (!mpfs)
 		return -ENOMEM;
 

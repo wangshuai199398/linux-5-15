@@ -2130,7 +2130,7 @@ int mlx5_cmd_init(struct mlx5_core_dev *dev)
 		goto err_cache;
 	}
 
-	create_debugfs_files(dev);//创建 /sys/kernel/debug/mlx5/0000:01:00.0//cmd
+	create_debugfs_files(dev);//创建 /sys/kernel/debug/mlx5/0000:01:00.0/cmd
 
 	return 0;
 

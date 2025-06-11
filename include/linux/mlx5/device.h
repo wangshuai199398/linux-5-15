@@ -307,18 +307,21 @@ enum {
  * mlx5_eq_notifier_register API.
  */
 enum mlx5_event {
-	/* Special value to subscribe to any event */
+	/* 任意事件（调试/通用回调） */
 	MLX5_EVENT_TYPE_NOTIFY_ANY	   = 0x0,
 	/* HW events enum start: comp events are not subscribable */
 	MLX5_EVENT_TYPE_COMP		   = 0x0,
 	/* HW Async events enum start: subscribable events */
 	MLX5_EVENT_TYPE_PATH_MIG	   = 0x01,
+	//通信建立（QP ready）
 	MLX5_EVENT_TYPE_COMM_EST	   = 0x02,
 	MLX5_EVENT_TYPE_SQ_DRAINED	   = 0x03,
+	//SRQ 最后一个接收完毕
 	MLX5_EVENT_TYPE_SRQ_LAST_WQE	   = 0x13,
 	MLX5_EVENT_TYPE_SRQ_RQ_LIMIT	   = 0x14,
 
 	MLX5_EVENT_TYPE_CQ_ERROR	   = 0x04,
+	//WQE 队列崩溃
 	MLX5_EVENT_TYPE_WQ_CATAS_ERROR	   = 0x05,
 	MLX5_EVENT_TYPE_PATH_MIG_FAILED	   = 0x07,
 	MLX5_EVENT_TYPE_WQ_INVAL_REQ_ERROR = 0x10,
@@ -326,9 +329,12 @@ enum mlx5_event {
 	MLX5_EVENT_TYPE_SRQ_CATAS_ERROR	   = 0x12,
 
 	MLX5_EVENT_TYPE_INTERNAL_ERROR	   = 0x08,
+	//端口 UP/DOWN
 	MLX5_EVENT_TYPE_PORT_CHANGE	   = 0x09,
 	MLX5_EVENT_TYPE_GPIO_EVENT	   = 0x15,
+	//光模块插拔/故障
 	MLX5_EVENT_TYPE_PORT_MODULE_EVENT  = 0x16,
+	//温度警告
 	MLX5_EVENT_TYPE_TEMP_WARN_EVENT    = 0x17,
 	MLX5_EVENT_TYPE_XRQ_ERROR	   = 0x18,
 	MLX5_EVENT_TYPE_REMOTE_CONFIG	   = 0x19,

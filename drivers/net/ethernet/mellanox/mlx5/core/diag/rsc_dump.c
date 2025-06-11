@@ -247,6 +247,7 @@ static int mlx5_rsc_dump_create_mkey(struct mlx5_core_dev *mdev, u32 pdn,
 	return err;
 }
 
+//检查设备是否支持资源转储（resource dump），如果支持就分配并返回一个 mlx5_rsc_dump 结构体，用于后续调试使用
 struct mlx5_rsc_dump *mlx5_rsc_dump_create(struct mlx5_core_dev *dev)
 {
 	struct mlx5_rsc_dump *rsc_dump;
@@ -269,6 +270,7 @@ void mlx5_rsc_dump_destroy(struct mlx5_core_dev *dev)
 	kfree(dev->rsc_dump);
 }
 
+//用于初始化 Mellanox MLX5 网卡的资源转储（Resource Dump）功能。这是一个调试工具，用于从设备中提取内部状态或硬件资源信息，供开发人员诊断和分析
 int mlx5_rsc_dump_init(struct mlx5_core_dev *dev)
 {
 	struct mlx5_rsc_dump *rsc_dump = dev->rsc_dump;
@@ -277,17 +279,17 @@ int mlx5_rsc_dump_init(struct mlx5_core_dev *dev)
 	if (IS_ERR_OR_NULL(dev->rsc_dump))
 		return 0;
 
-	err = mlx5_core_alloc_pd(dev, &rsc_dump->pdn);
+	err = mlx5_core_alloc_pd(dev, &rsc_dump->pdn);//分配 PD（Protection Domain）
 	if (err) {
 		mlx5_core_warn(dev, "Resource dump: Failed to allocate PD %d\n", err);
 		return err;
 	}
-	err = mlx5_rsc_dump_create_mkey(dev, rsc_dump->pdn, &rsc_dump->mkey);
+	err = mlx5_rsc_dump_create_mkey(dev, rsc_dump->pdn, &rsc_dump->mkey);//为资源 dump 创建 MKey（内存密钥）
 	if (err) {
 		mlx5_core_err(dev, "Resource dump: Failed to create mkey, %d\n", err);
 		goto free_pd;
 	}
-	err = mlx5_rsc_dump_menu(dev);
+	err = mlx5_rsc_dump_menu(dev);//读取资源菜单（可转储的资源项）
 	if (err) {
 		mlx5_core_err(dev, "Resource dump: Failed to read menu, %d\n", err);
 		goto destroy_mkey;

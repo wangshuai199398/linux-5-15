@@ -175,6 +175,7 @@ static int fpga_qp_err_event(struct notifier_block *nb, unsigned long event, voi
 	return mlx5_fpga_event(fdev, event, eqe);
 }
 
+//负责启动和配置 FPGA 子设备
 int mlx5_fpga_device_start(struct mlx5_core_dev *mdev)
 {
 	struct mlx5_fpga_device *fdev = mdev->fpga;
@@ -190,7 +191,7 @@ int mlx5_fpga_device_start(struct mlx5_core_dev *mdev)
 	if (err)
 		goto out;
 
-	err = mlx5_fpga_device_load_check(fdev);
+	err = mlx5_fpga_device_load_check(fdev);//校验镜像是否有效
 	if (err)
 		goto out;
 
@@ -198,6 +199,7 @@ int mlx5_fpga_device_start(struct mlx5_core_dev *mdev)
 	mlx5_fpga_info(fdev, "FPGA card %s:%u\n", mlx5_fpga_name(fpga_id), fpga_id);
 
 	/* No QPs if FPGA does not participate in net processing */
+	//如果 FPGA 不参与数据流，跳过后续
 	if (mlx5_is_fpga_lookaside(fpga_id))
 		goto out;
 
@@ -215,22 +217,22 @@ int mlx5_fpga_device_start(struct mlx5_core_dev *mdev)
 		err = -ENOTSUPP;
 		goto out;
 	}
-
+	//为 FPGA 通信保留全局标识
 	err = mlx5_core_reserve_gids(mdev, max_num_qps);
 	if (err)
 		goto out;
 
 	MLX5_NB_INIT(&fdev->fpga_err_nb, fpga_err_event, FPGA_ERROR);
 	MLX5_NB_INIT(&fdev->fpga_qp_err_nb, fpga_qp_err_event, FPGA_QP_ERROR);
-	mlx5_eq_notifier_register(fdev->mdev, &fdev->fpga_err_nb);
+	mlx5_eq_notifier_register(fdev->mdev, &fdev->fpga_err_nb);//错误和 QP 错误类型通知，绑定到 EQ（事件队列）
 	mlx5_eq_notifier_register(fdev->mdev, &fdev->fpga_qp_err_nb);
 
-	err = mlx5_fpga_conn_device_init(fdev);
+	err = mlx5_fpga_conn_device_init(fdev);//初始化连接通路
 	if (err)
 		goto err_rsvd_gid;
 
 	if (fdev->last_oper_image == MLX5_FPGA_IMAGE_USER) {
-		err = mlx5_fpga_device_brb(fdev);
+		err = mlx5_fpga_device_brb(fdev);//加载用户镜像
 		if (err)
 			goto err_conn_init;
 	}
@@ -260,7 +262,7 @@ int mlx5_fpga_init(struct mlx5_core_dev *mdev)
 		return 0;
 	}
 
-	mlx5_core_dbg(mdev, "Initializing FPGA\n");
+	mlx5_core_info(mdev, "Initializing FPGA\n");
 
 	fdev = mlx5_fpga_device_alloc();
 	if (!fdev)

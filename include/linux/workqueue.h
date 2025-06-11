@@ -505,6 +505,8 @@ extern void wq_worker_comm(char *buf, size_t size, struct task_struct *task);
  *   r0 = queue_work(wq, work);		  r1 = READ_ONCE(x);
  *
  * Forbids: r0 == true && r1 == 0
+ * 
+ * 将一个工作项（work_struct）提交给内核工作队列（workqueue）异步执行
  */
 static inline bool queue_work(struct workqueue_struct *wq,
 			      struct work_struct *work)

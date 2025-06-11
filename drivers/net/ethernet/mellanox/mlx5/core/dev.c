@@ -471,7 +471,7 @@ static int add_drivers(struct mlx5_core_dev *dev)
 
 		if (!is_supported)
 			continue;
-
+		mlx5_core_info(dev, "[wangs] mlx5_adev_devices[i].suffix %s\n", mlx5_adev_devices[i].suffix);
 		priv->adev[i] = add_adev(dev, i);
 		if (IS_ERR(priv->adev[i])) {
 			mlx5_core_warn(dev, "Device[%d] (%s) failed to load\n",

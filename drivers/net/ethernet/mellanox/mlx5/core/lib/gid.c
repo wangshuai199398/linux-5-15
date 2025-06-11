@@ -36,13 +36,14 @@
 #include "mlx5_core.h"
 #include "lib/mlx5.h"
 
+//初始化 网卡设备中 ROCE GID 表（Global Identifier Table）中“保留 GID”区域的管理结构
 void mlx5_init_reserved_gids(struct mlx5_core_dev *dev)
 {
-	unsigned int tblsz = MLX5_CAP_ROCE(dev, roce_address_table_size);
+	unsigned int tblsz = MLX5_CAP_ROCE(dev, roce_address_table_size);//读取 RoCE GID 表（地址表）的大小，这个大小来自设备固件能力，是 GID 表的最大支持槽位数
 
-	ida_init(&dev->roce.reserved_gids.ida);
-	dev->roce.reserved_gids.start = tblsz;
-	dev->roce.reserved_gids.count = 0;
+	ida_init(&dev->roce.reserved_gids.ida);//初始化一个 ida（ID 分配器），用于管理 保留 GID 槽位号
+	dev->roce.reserved_gids.start = tblsz;//把 GID 表末尾作为保留区域的“起始索引”，意味着：保留 GID 是 从表尾向下分配 的
+	dev->roce.reserved_gids.count = 0;//初始化保留 GID 个数为 0
 }
 
 void mlx5_cleanup_reserved_gids(struct mlx5_core_dev *dev)

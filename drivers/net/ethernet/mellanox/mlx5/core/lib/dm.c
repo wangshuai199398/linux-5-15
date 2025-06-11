@@ -14,6 +14,8 @@ struct mlx5_dm {
 	unsigned long *header_modify_sw_icm_alloc_blocks;
 };
 
+//创建和初始化一个 mlx5_dm 结构，用于管理设备上的 软件 ICM 块（例如 flow table 使用的 memory）是否可用。
+//DM（Device Memory）资源管理器 分配和初始化内存结构，尤其是用于支持 软件定义的 ICM（Internal Control Memory）资源，如 flow steering 和 header modification 的内存
 struct mlx5_dm *mlx5_dm_create(struct mlx5_core_dev *dev)
 {
 	u64 header_modify_icm_blocks = 0;
@@ -29,14 +31,14 @@ struct mlx5_dm *mlx5_dm_create(struct mlx5_core_dev *dev)
 
 	spin_lock_init(&dm->lock);
 
-	if (MLX5_CAP64_DEV_MEM(dev, steering_sw_icm_start_address)) {
+	if (MLX5_CAP64_DEV_MEM(dev, steering_sw_icm_start_address)) {//检查设备是否支持 steering（流表）用的软件 ICM 内存区域
 		steering_icm_blocks =
 			BIT(MLX5_CAP_DEV_MEM(dev, log_steering_sw_icm_size) -
-			    MLX5_LOG_SW_ICM_BLOCK_SIZE(dev));
+			    MLX5_LOG_SW_ICM_BLOCK_SIZE(dev));//计算该区域的块数
 
 		dm->steering_sw_icm_alloc_blocks =
 			kcalloc(BITS_TO_LONGS(steering_icm_blocks),
-				sizeof(unsigned long), GFP_KERNEL);
+				sizeof(unsigned long), GFP_KERNEL);//为其分配一个 bitmap 来标记哪些块已被使用
 		if (!dm->steering_sw_icm_alloc_blocks)
 			goto err_steering;
 	}
@@ -44,7 +46,7 @@ struct mlx5_dm *mlx5_dm_create(struct mlx5_core_dev *dev)
 	if (MLX5_CAP64_DEV_MEM(dev, header_modify_sw_icm_start_address)) {
 		header_modify_icm_blocks =
 			BIT(MLX5_CAP_DEV_MEM(dev, log_header_modify_sw_icm_size) -
-			    MLX5_LOG_SW_ICM_BLOCK_SIZE(dev));
+			    MLX5_LOG_SW_ICM_BLOCK_SIZE(dev));//用于 包头修改（header rewriter） 功能使用的 ICM 区域，也是按块分配并构建 bitmap 管理器
 
 		dm->header_modify_sw_icm_alloc_blocks =
 			kcalloc(BITS_TO_LONGS(header_modify_icm_blocks),

@@ -65,6 +65,7 @@ static struct mlx5_devcom *mlx5_devcom_alloc(struct mlx5_devcom_list *priv,
 }
 
 /* Must be called with intf_mutex held */
+//在系统中注册一个 可以支持多端口设备通信的 devcom 实例（struct mlx5_devcom），用于后续设备间组件（如 IPsec、TLS 等）的通信协作。
 struct mlx5_devcom *mlx5_devcom_register_device(struct mlx5_core_dev *dev)
 {
 	struct mlx5_devcom_list *priv = NULL, *iter;
@@ -75,12 +76,12 @@ struct mlx5_devcom *mlx5_devcom_register_device(struct mlx5_core_dev *dev)
 
 	if (!mlx5_core_is_pf(dev))
 		return NULL;
-	if (MLX5_CAP_GEN(dev, num_lag_ports) != MLX5_DEVCOM_PORTS_SUPPORTED)
+	if (MLX5_CAP_GEN(dev, num_lag_ports) != MLX5_DEVCOM_PORTS_SUPPORTED)//固件支持
 		return NULL;
 
 	mlx5_dev_list_lock();
-	sguid0 = mlx5_query_nic_system_image_guid(dev);
-	list_for_each_entry(iter, &devcom_list, list) {
+	sguid0 = mlx5_query_nic_system_image_guid(dev);//获取设备的 System Image GUID
+	list_for_each_entry(iter, &devcom_list, list) {//遍历已注册的 devcom 共享域列表 devcom_list，查找是否已经有与当前设备属于同一物理设备
 		struct mlx5_core_dev *tmp_dev = NULL;
 
 		idx = -1;
@@ -103,7 +104,7 @@ struct mlx5_devcom *mlx5_devcom_register_device(struct mlx5_core_dev *dev)
 	}
 
 	if (!priv) {
-		priv = mlx5_devcom_list_alloc();
+		priv = mlx5_devcom_list_alloc();//为当前设备新建一个 devcom 通信域
 		if (!priv) {
 			devcom = ERR_PTR(-ENOMEM);
 			goto out;
@@ -114,7 +115,7 @@ struct mlx5_devcom *mlx5_devcom_register_device(struct mlx5_core_dev *dev)
 	}
 
 	priv->devs[idx] = dev;
-	devcom = mlx5_devcom_alloc(priv, idx);
+	devcom = mlx5_devcom_alloc(priv, idx);//为当前设备创建 struct mlx5_devcom 实例
 	if (!devcom) {
 		if (new_priv)
 			kfree(priv);

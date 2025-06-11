@@ -2178,6 +2178,9 @@ static void mlx5_esw_offloads_rep_mark_set(struct mlx5_eswitch *esw,
 		xa_set_mark(&esw->offloads.vport_reps, rep->vport, mark);
 }
 
+//调用初始化函数为每个 vport 创建 rep
+//这些 rep 是 Linux 系统中的虚拟 netdev 设备（例如 rep0, rep1, enP2pf0vf0）
+//rep 是将 VF 流量映射到 soc 的代表，供 tc、ovs 等控制
 static int mlx5_esw_offloads_rep_init(struct mlx5_eswitch *esw, const struct mlx5_vport *vport)
 {
 	struct mlx5_eswitch_rep *rep;
@@ -2224,16 +2227,18 @@ void esw_offloads_cleanup_reps(struct mlx5_eswitch *esw)
 	xa_destroy(&esw->offloads.vport_reps);
 }
 
+//初始化所有 vport 的 rep device（代表设备）
+//会为每个 vport 分配和初始化一个代表设备（rep），这样每个 VF/SF 就可以通过这个 rep device 在主机中进行控制与数据通道交互，比如流表配置、封装卸载等
 int esw_offloads_init_reps(struct mlx5_eswitch *esw)
 {
 	struct mlx5_vport *vport;
 	unsigned long i;
 	int err;
 
-	xa_init(&esw->offloads.vport_reps);
+	xa_init(&esw->offloads.vport_reps);//使用 xarray 存储所有 vport 的 rep 设备结构，vport_reps[i] 将对应于 vport 编号为 i 的 rep
 
 	mlx5_esw_for_each_vport(esw, i, vport) {
-		err = mlx5_esw_offloads_rep_init(esw, vport);
+		err = mlx5_esw_offloads_rep_init(esw, vport);//初始化每个 rep device
 		if (err)
 			goto err;
 	}

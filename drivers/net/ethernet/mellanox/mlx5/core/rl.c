@@ -363,6 +363,7 @@ out:
 }
 EXPORT_SYMBOL(mlx5_rl_remove_rate);
 
+//初始化用于QoS速率限制 的核心结构 —— RL Table（Rate Limiting Table），主要用于支持 packet pacing（包限速/流量控制）功能。
 int mlx5_init_rl_table(struct mlx5_core_dev *dev)
 {
 	struct mlx5_rl_table *table = &dev->priv.rl_table;

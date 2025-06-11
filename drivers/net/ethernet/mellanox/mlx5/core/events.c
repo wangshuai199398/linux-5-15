@@ -26,6 +26,7 @@ static int pcie_core(struct notifier_block *, unsigned long, void *);
 /* handler which forwards the event to events->fw_nh, driver notifiers */
 static int forward_event(struct notifier_block *, unsigned long, void *);
 
+//EQ 事件回调表，不同的事件类型会调用不同的回调函数。大部分事件通过 forward_event() 转发给子模块处理，核心事件如温度/模块故障等由驱动本身处理。
 static struct mlx5_nb events_nbs_ref[] = {
 	/* Events to be processed by mlx5_core */
 	{.nb.notifier_call = any_notifier,  .event_type = MLX5_EVENT_TYPE_NOTIFY_ANY },
@@ -339,6 +340,10 @@ static int forward_event(struct notifier_block *nb, unsigned long event, void *d
 	return NOTIFY_OK;
 }
 
+//主要负责：
+//	固件（FW）事件：比如设备状态变化、命令失败、fatal error 等
+// 	软件（SW）事件：由其他内核模块或驱动层触发
+//	PCIe 热插拔、错误、恢复事件 等
 int mlx5_events_init(struct mlx5_core_dev *dev)
 {
 	struct mlx5_events *events = kzalloc(sizeof(*events), GFP_KERNEL);
@@ -346,15 +351,15 @@ int mlx5_events_init(struct mlx5_core_dev *dev)
 	if (!events)
 		return -ENOMEM;
 
-	ATOMIC_INIT_NOTIFIER_HEAD(&events->fw_nh);
+	ATOMIC_INIT_NOTIFIER_HEAD(&events->fw_nh);//固件通知链：用于注册/分发 firmware 发来的异步事件（如 link up/down, port error）
 	events->dev = dev;
-	dev->priv.events = events;
-	events->wq = create_singlethread_workqueue("mlx5_events");
+	dev->priv.events = events;//将事件子系统挂到设备 dev->priv.events 中，供后续使用
+	events->wq = create_singlethread_workqueue("mlx5_events");//创建单线程的事件处理工作队列，用于异步事件处理的工作队列（不会阻塞中断上下文），在 /proc/pid/comm或内核线程可以看到
 	if (!events->wq) {
 		kfree(events);
 		return -ENOMEM;
 	}
-	INIT_WORK(&events->pcie_core_work, mlx5_pcie_event);
+	INIT_WORK(&events->pcie_core_work, mlx5_pcie_event);//初始化 PCIe 异常处理的 work item
 	BLOCKING_INIT_NOTIFIER_HEAD(&events->sw_nh);
 
 	return 0;
@@ -372,9 +377,9 @@ void mlx5_events_start(struct mlx5_core_dev *dev)
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(events_nbs_ref); i++) {
-		events->notifiers[i].nb  = events_nbs_ref[i];
+		events->notifiers[i].nb  = events_nbs_ref[i];//把全局的回调函数拷贝到设备私有的 notifiers 数组中，同时关联上下文
 		events->notifiers[i].ctx = events;
-		mlx5_eq_notifier_register(dev, &events->notifiers[i].nb);
+		mlx5_eq_notifier_register(dev, &events->notifiers[i].nb);//注册回调到事件队列（EQ）系统，将回调注册到设备的 EQ（Event Queue）通知链上。以后当设备通过 EQ 通知驱动发生事件时，这些回调函数就会被调用
 	}
 }
 

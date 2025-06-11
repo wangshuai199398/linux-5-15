@@ -111,7 +111,7 @@ enable_vfs_hca:
 				continue;
 			}
 		}
-		mlx5_core_dbg(dev, "successfully enabled VF* %d\n", vf);
+		mlx5_core_info(dev, "successfully enabled VF* %d\n", vf);
 	}
 
 	return 0;
@@ -263,6 +263,7 @@ done:
 	return pci_sriov_get_totalvfs(dev->pdev);
 }
 
+//mlx5_sriov_init() 在 PF（物理功能）设备上初始化 SR-IOV 支持，包括记录最多支持的虚拟功能（VF）数目，当前启用的 VF 数量，并为每个 VF 分配上下文数据结构。
 int mlx5_sriov_init(struct mlx5_core_dev *dev)
 {
 	struct mlx5_core_sriov *sriov = &dev->priv.sriov;
@@ -272,10 +273,10 @@ int mlx5_sriov_init(struct mlx5_core_dev *dev)
 	if (!mlx5_core_is_pf(dev))
 		return 0;
 
-	total_vfs = pci_sriov_get_totalvfs(pdev);
-	sriov->max_vfs = mlx5_get_max_vfs(dev);
-	sriov->num_vfs = pci_num_vf(pdev);
-	sriov->vfs_ctx = kcalloc(total_vfs, sizeof(*sriov->vfs_ctx), GFP_KERNEL);
+	total_vfs = pci_sriov_get_totalvfs(pdev);//读取 PCI 硬件支持的最多 VF 数量（从 PCI 配置空间中读出）
+	sriov->max_vfs = mlx5_get_max_vfs(dev);//获取驱动层面允许的最大 VF 数（可能比硬件低）
+	sriov->num_vfs = pci_num_vf(pdev);//当前已经启用了多少个 VF（echo N > /sys/.../sriov_numvfs 后的实际值）
+	sriov->vfs_ctx = kcalloc(total_vfs, sizeof(*sriov->vfs_ctx), GFP_KERNEL);//为每个 VF 分配一个上下文结构 vfs_ctx[N]，用于驱动管理这些 VF（如队列、状态、GID 映射等）
 	if (!sriov->vfs_ctx)
 		return -ENOMEM;
 

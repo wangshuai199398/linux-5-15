@@ -102,37 +102,38 @@ static struct mlx5_uars_page *alloc_uars_page(struct mlx5_core_dev *mdev,
 	int bfregs;
 	int i;
 
-	bfregs = uars_per_sys_page(mdev) * MLX5_BFREGS_PER_UAR;
+	bfregs = uars_per_sys_page(mdev) * MLX5_BFREGS_PER_UAR;//计算该页包含的寄存器数量（BFREG）,一个系统页中可以容纳多个 BFREG（Blue Flame Register）单元。每个寄存器可被绑定为 FP（Fast Path） 或普通使用。
 	up = kzalloc(sizeof(*up), GFP_KERNEL);
 	if (!up)
 		return ERR_PTR(err);
 
 	up->mdev = mdev;
-	up->reg_bitmap = bitmap_zalloc(bfregs, GFP_KERNEL);
+	up->reg_bitmap = bitmap_zalloc(bfregs, GFP_KERNEL);//reg_bitmap 用于标记哪些 BFREG 可被用于普通操作
 	if (!up->reg_bitmap)
 		goto error1;
 
-	up->fp_bitmap = bitmap_zalloc(bfregs, GFP_KERNEL);
+	up->fp_bitmap = bitmap_zalloc(bfregs, GFP_KERNEL);//fp_bitmap 用于标记哪些 BFREG 可用于 fast path 操作（例如内核 bypass）。
 	if (!up->fp_bitmap)
 		goto error1;
-
+	//一页内每个 BFREG 要么作为普通寄存器（non-FP），要么作为 fast path（FP）用途。
 	for (i = 0; i < bfregs; i++)
 		if ((i % MLX5_BFREGS_PER_UAR) < MLX5_NON_FP_BFREGS_PER_UAR)
-			set_bit(i, up->reg_bitmap);
+			set_bit(i, up->reg_bitmap);//这个初始化是基于硬件限制划分每页的前几个寄存器为 non-FP，其余为 FP。
 		else
 			set_bit(i, up->fp_bitmap);
 
 	up->bfregs = bfregs;
 	up->fp_avail = bfregs * MLX5_FP_BFREGS_PER_UAR / MLX5_BFREGS_PER_UAR;
 	up->reg_avail = bfregs * MLX5_NON_FP_BFREGS_PER_UAR / MLX5_BFREGS_PER_UAR;
-
+	//向硬件请求一个 UAR
 	err = mlx5_cmd_alloc_uar(mdev, &up->index);
 	if (err) {
 		mlx5_core_warn(mdev, "mlx5_cmd_alloc_uar() failed, %d\n", err);
 		goto error1;
 	}
-
+	//通过 index 计算出页帧号（PFN)
 	pfn = uar2pfn(mdev, up->index);
+	//将其映射到内核地址空间
 	if (map_wc) {
 		up->map = ioremap_wc(pfn << PAGE_SHIFT, PAGE_SIZE);
 		if (!up->map) {
@@ -147,7 +148,7 @@ static struct mlx5_uars_page *alloc_uars_page(struct mlx5_core_dev *mdev,
 		}
 	}
 	kref_init(&up->ref_count);
-	mlx5_core_dbg(mdev, "allocated UAR page: index %d, total bfregs %d\n",
+	mlx5_core_info(mdev, "allocated UAR page: index %d, total bfregs %d\n",
 		      up->index, up->bfregs);
 	return up;
 
@@ -161,6 +162,11 @@ error1:
 	return ERR_PTR(err);
 }
 
+//从已有列表中复用一个可用的 UAR page，或者在没有可用时新分配一个，供用户态发送 WQE（Work Queue Entry）到硬件使用
+//UAR（User Access Region） 是设备内存映射的一部分。
+//	用户态或内核可以将发送队列的 WQE 写入 UAR，通过它通知硬件有新的任务要处理。
+//	UAR 通常是以页（page）为单位分配的。
+//	每个 mlx5_uars_page 表示一个 UAR 页。
 struct mlx5_uars_page *mlx5_get_uars_page(struct mlx5_core_dev *mdev)
 {
 	struct mlx5_uars_page *ret;

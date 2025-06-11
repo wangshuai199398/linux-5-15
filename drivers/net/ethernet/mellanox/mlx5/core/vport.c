@@ -857,7 +857,7 @@ int mlx5_nic_vport_update_local_lb(struct mlx5_core_dev *mdev, bool enable)
 	err = mlx5_cmd_exec_in(mdev, modify_nic_vport_context, in);
 
 	if (!err)
-		mlx5_core_dbg(mdev, "%s local_lb\n",
+		mlx5_core_info(mdev, "%s local_lb\n",
 			      enable ? "enable" : "disable");
 
 	kvfree(in);
@@ -1130,6 +1130,7 @@ int mlx5_nic_vport_unaffiliate_multiport(struct mlx5_core_dev *port_mdev)
 }
 EXPORT_SYMBOL_GPL(mlx5_nic_vport_unaffiliate_multiport);
 
+//System Image GUID（Global Unique Identifier） 是 Infiniband 和 Mellanox 设备中用于标识“同一张物理卡”的全局唯一标识符
 u64 mlx5_query_nic_system_image_guid(struct mlx5_core_dev *mdev)
 {
 	int port_type_cap = MLX5_CAP_GEN(mdev, port_type);
