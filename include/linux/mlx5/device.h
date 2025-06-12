@@ -70,6 +70,7 @@
 #define MLX5_ADDR_OF(typ, p, fld) ((void *)((uint8_t *)(p) + MLX5_BYTE_OFF(typ, fld)))
 
 /* insert a value to a struct */
+//将 v 赋值给结构 p 中名为 fld 的字段，该结构属于 typ 类型。
 #define MLX5_SET(typ, p, fld, v) do { \
 	u32 _v = v; \
 	BUILD_BUG_ON(__mlx5_st_sz_bits(typ) % 32);             \

@@ -943,7 +943,7 @@ struct mlx5_fw_tracer *mlx5_fw_tracer_create(struct mlx5_core_dev *dev)
 		return NULL;
 	}
 
-	tracer = kvalloc(sizeof(*tracer), GFP_KERNEL);//这是一个比较大的结构，因此使用 kvzalloc()，会优先分配于 vmalloc 区域，避免堆栈过小
+	tracer = kvzalloc(sizeof(*tracer), GFP_KERNEL);//这是一个比较大的结构，因此使用 kvzalloc()，会优先分配于 vmalloc 区域，避免堆栈过小
 	if (!tracer)
 		return ERR_PTR(-ENOMEM);
 
