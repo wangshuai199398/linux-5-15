@@ -177,6 +177,7 @@ void mlx5_frag_buf_free(struct mlx5_core_dev *dev, struct mlx5_frag_buf *buf)
 }
 EXPORT_SYMBOL_GPL(mlx5_frag_buf_free);
 
+//为 mlx5 设备分配一个新的 doorbell 页（Page）并初始化其 bitmap 管理结构，位于指定 NUMA 节点
 static struct mlx5_db_pgdir *mlx5_alloc_db_pgdir(struct mlx5_core_dev *dev,
 						 int node)
 {
@@ -308,7 +309,7 @@ void mlx5_fill_page_frag_array_perm(struct mlx5_frag_buf *buf, __be64 *pas, u8 p
 		pas[i] = cpu_to_be64(buf->frags[i].map | perm);
 }
 EXPORT_SYMBOL_GPL(mlx5_fill_page_frag_array_perm);
-
+//将用户空间或内核空间缓冲区映射成页面片段（Page Fragment）数组，供 DMA 使用
 void mlx5_fill_page_frag_array(struct mlx5_frag_buf *buf, __be64 *pas)
 {
 	mlx5_fill_page_frag_array_perm(buf, pas, 0);

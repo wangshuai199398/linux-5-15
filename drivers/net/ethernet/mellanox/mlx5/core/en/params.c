@@ -493,7 +493,7 @@ int mlx5e_build_rq_param(struct mlx5_core_dev *mdev,
 	void *rqc = param->rqc;
 	void *wq = MLX5_ADDR_OF(rqc, rqc, wq);
 	int ndsegs = 1;
-	mlx5_core_info(mdev, "params->rq_wq_type %u", params->rq_wq_type);
+	mlx5_core_info(mdev, "params->rq_wq_type %u", params->rq_wq_type);//2
 	switch (params->rq_wq_type) {
 	case MLX5_WQ_TYPE_LINKED_LIST_STRIDING_RQ: {
 		u8 log_wqe_num_of_strides = mlx5e_mpwqe_get_log_num_strides(mdev, params, xsk);
@@ -664,6 +664,7 @@ static void mlx5e_build_async_icosq_param(struct mlx5_core_dev *mdev,
 	mlx5e_build_ico_cq_param(mdev, log_wq_size, &param->cqp);
 }
 
+//构建 XDP 发送队列（XDP SQ） 初始化参数
 void mlx5e_build_xdpsq_param(struct mlx5_core_dev *mdev,
 			     struct mlx5e_params *params,
 			     struct mlx5e_sq_param *param)

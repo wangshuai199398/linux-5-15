@@ -1757,7 +1757,7 @@ int mlx5e_rq_set_handlers(struct mlx5e_rq *rq, struct mlx5e_params *params, bool
 	struct net_device *netdev = rq->netdev;
 	struct mlx5_core_dev *mdev = rq->mdev;
 	struct mlx5e_priv *priv = rq->priv;
-
+	netdev_err(netdev, "rq->wq_type %u\n", rq->wq_type);
 	switch (rq->wq_type) {
 	case MLX5_WQ_TYPE_LINKED_LIST_STRIDING_RQ:
 		rq->mpwqe.skb_from_cqe_mpwrq = xsk ?

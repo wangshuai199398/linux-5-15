@@ -860,7 +860,7 @@ clean:
 	destroy_comp_eqs(dev);
 	return err;
 }
-
+//根据给定的中断向量编号 vector，查询其对应的 EQN（事件队列编号）和 IRQN（中断号），返回给调用者
 static int vector2eqnirqn(struct mlx5_core_dev *dev, int vector, int *eqn,
 			  unsigned int *irqn)
 {

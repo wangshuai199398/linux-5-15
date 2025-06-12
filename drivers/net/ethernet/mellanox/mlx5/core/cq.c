@@ -85,23 +85,23 @@ static void mlx5_add_cq_to_tasklet(struct mlx5_core_cq *cq,
 	}
 	spin_unlock_irqrestore(&tasklet_ctx->lock, flags);
 }
-
+//向硬件发送 CREATE_CQ 命令，建立一个新的 Completion Queue（CQ），并将其注册到相应的 EQ（事件队列）中，以便接收完成事件
 int mlx5_core_create_cq(struct mlx5_core_dev *dev, struct mlx5_core_cq *cq,
 			u32 *in, int inlen, u32 *out, int outlen)
 {
 	int eqn = MLX5_GET(cqc, MLX5_ADDR_OF(create_cq_in, in, cq_context),
-			   c_eqn_or_apu_element);
+			   c_eqn_or_apu_element);//获取 CQ 绑定的 EQ 的硬件编号（eqn）
 	u32 din[MLX5_ST_SZ_DW(destroy_cq_in)] = {};
 	struct mlx5_eq_comp *eq;
 	int err;
 
-	eq = mlx5_eqn2comp_eq(dev, eqn);
+	eq = mlx5_eqn2comp_eq(dev, eqn);//获取对应的 mlx5_eq_comp 对象
 	if (IS_ERR(eq))
 		return PTR_ERR(eq);
 
 	memset(out, 0, outlen);
-	MLX5_SET(create_cq_in, in, opcode, MLX5_CMD_OP_CREATE_CQ);
-	err = mlx5_cmd_exec(dev, in, inlen, out, outlen);
+	MLX5_SET(create_cq_in, in, opcode, MLX5_CMD_OP_CREATE_CQ);//填写命令头部，设置 opcode
+	err = mlx5_cmd_exec(dev, in, inlen, out, outlen);//发出 CREATE_CQ 命令
 	if (err)
 		return err;
 
@@ -196,7 +196,7 @@ int mlx5_core_modify_cq(struct mlx5_core_dev *dev, struct mlx5_core_cq *cq,
 	return mlx5_cmd_exec(dev, in, inlen, out, sizeof(out));
 }
 EXPORT_SYMBOL(mlx5_core_modify_cq);
-
+//设置 CQ 的中断节流策略（moderation）——多少个完成事件或多长时间后触发一次中断，减少 CPU 中断负担，提高吞吐
 int mlx5_core_modify_cq_moderation(struct mlx5_core_dev *dev,
 				   struct mlx5_core_cq *cq,
 				   u16 cq_period,
