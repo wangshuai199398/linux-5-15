@@ -349,7 +349,12 @@ struct bpf_local_storage;
   *	@sk_txtime_deadline_mode: set deadline mode for SO_TXTIME
   *	@sk_txtime_report_errors: set report errors mode for SO_TXTIME
   *	@sk_txtime_unused: unused txtime flags
-  */
+
+ |<--sock-->|
+ |<----inet_sock---->|
+ |<------inet_connection_sock------>|
+ |<-----------------tcp_sock-------------->|
+*/
 struct sock {
 	/*
 	 * Now struct inet_timewait_sock also uses sock_common, so please just
@@ -486,8 +491,8 @@ struct sock {
 	rwlock_t		sk_callback_lock;
 	int			sk_err,
 				sk_err_soft;
-	u32			sk_ack_backlog;
-	u32			sk_max_ack_backlog;
+	u32			sk_ack_backlog;//当前请求数
+	u32			sk_max_ack_backlog;//全连接队列长度，listen函数传入的backlog和net.core.smaxconn之间较小值
 	kuid_t			sk_uid;
 #ifdef CONFIG_NET_RX_BUSY_POLL
 	u8			sk_prefer_busy_poll;
@@ -979,6 +984,7 @@ static inline void sk_acceptq_added(struct sock *sk)
  *	return READ_ONCE(sk->sk_ack_backlog) >= READ_ONCE(sk->sk_max_ack_backlog);
  * Then please take a look at commit 64a146513f8f ("[NET]: Revert incorrect accept queue backlog changes.")
  */
+//全连接队列是否满
 static inline bool sk_acceptq_is_full(const struct sock *sk)
 {
 	return READ_ONCE(sk->sk_ack_backlog) > READ_ONCE(sk->sk_max_ack_backlog);

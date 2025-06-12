@@ -821,7 +821,7 @@ ok:
 /*
  * Bind a port for a connect operation and hash it.
  * 为socket分配本地端口（如果还没有），并将其插入到 established 哈希表中，确保四元组唯一性（本地IP:端口+远端IP:端口）
- * __inet_check_established是established表冲突检测用的回调
+ * __inet_check_established 检查是否和现有的establist状态的连接有冲突
  */
 int inet_hash_connect(struct inet_timewait_death_row *death_row,
 		      struct sock *sk)

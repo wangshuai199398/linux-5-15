@@ -302,7 +302,7 @@ int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 	 * lock select source port, enter ourselves into the hash tables and
 	 * complete initialization after this.
 	 */
-	tcp_set_state(sk, TCP_SYN_SENT);
+	tcp_set_state(sk, TCP_SYN_SENT);//设置socket状态为 TCP_SYN_SENT
 	//随机生成一个原端口号
 	err = inet_hash_connect(tcp_death_row, sk);
 	if (err)
@@ -344,6 +344,7 @@ int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
 		printk(KERN_INFO "%s: tp->write_seq 0x%x tp->tsoffset %u\n", __func__, tp->write_seq, tp->tsoffset);
 	}
+	//根据sk中的信息，构建一个syn报文，并将其发送出去
 	err = tcp_connect(sk);
 
 	if (err)
@@ -1775,7 +1776,7 @@ int tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
 
 	if (tcp_checksum_complete(skb))
 		goto csum_err;
-
+	//服务端收到第一步握手SYN或者第三步ACK都会走到这里
 	if (sk->sk_state == TCP_LISTEN) {
 		//尝试通过 syncookie 校验机制处理 SYN 报文，防止 SYN Flood 攻击
 		//当服务器监听 socket 的 SYN 接收队列（accept queue）溢出时，也就是 backlog 满了，内核就会启用 SYN cookie

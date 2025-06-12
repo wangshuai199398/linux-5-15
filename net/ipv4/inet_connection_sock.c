@@ -117,6 +117,7 @@ bool inet_rcv_saddr_any(const struct sock *sk)
 	return !sk->sk_rcv_saddr;
 }
 
+//读取net.ipv4.ip_local_port_range
 void inet_get_local_port_range(struct net *net, int *low, int *high)
 {
 	unsigned int seq;
@@ -1097,7 +1098,7 @@ int inet_csk_listen_start(struct sock *sk, int backlog)
 	err = inet_ulp_can_listen(sk);
 	if (unlikely(err))
 		return err;
-
+	//接收队列内核对象的申请和初始化
 	reqsk_queue_alloc(&icsk->icsk_accept_queue);
 
 	sk->sk_ack_backlog = 0;

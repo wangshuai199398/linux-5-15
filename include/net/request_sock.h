@@ -177,9 +177,9 @@ struct request_sock_queue {
 	u8			rskq_defer_accept;
 
 	u32			synflood_warned;
-	atomic_t		qlen;
+	atomic_t		qlen;//半连接队列长度
 	atomic_t		young;
-
+	//全连接队列
 	struct request_sock	*rskq_accept_head;
 	struct request_sock	*rskq_accept_tail;
 	struct fastopen_queue	fastopenq;  /* Check max_qlen != 0 to determine

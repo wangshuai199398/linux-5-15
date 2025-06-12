@@ -1767,23 +1767,24 @@ int __sys_listen(int fd, int backlog)
 	struct socket *sock;
 	int err, fput_needed;
 	int somaxconn;
-
+	//根据fd查找socket内核对象
 	sock = sockfd_lookup_light(fd, &err, &fput_needed);
 	if (sock) {
+		//获取内核参数net.core.somaxconn
 		somaxconn = READ_ONCE(sock_net(sock->sk)->core.sysctl_somaxconn);
 		if ((unsigned int)backlog > somaxconn)
 			backlog = somaxconn;
 
 		err = security_socket_listen(sock, backlog);
-		//pr_err("%s: %s pid %d fd %d backlog %d \n", __func__, current->comm, current->pid, fd, backlog);
 		if (!err)
-			err = sock->ops->listen(sock, backlog);
+			err = sock->ops->listen(sock, backlog);// inet_listen
 
 		fput_light(sock->file, fput_needed);
 	}
 	return err;
 }
 
+//listen_wangs
 SYSCALL_DEFINE2(listen, int, fd, int, backlog)
 {
 	return __sys_listen(fd, backlog);
@@ -1946,7 +1947,6 @@ int __sys_connect_file(struct file *file, struct sockaddr_storage *address,
 	    security_socket_connect(sock, (struct sockaddr *)address, addrlen);
 	if (err)
 		goto out;
-	//pr_err("%s: %s __sys_connect pid %d file_flags 0x%x \n", __func__, current->comm, current->pid, file_flags);
 	err = sock->ops->connect(sock, (struct sockaddr *)address, addrlen,
 				 sock->file->f_flags | file_flags);//inet_stream_connect
 out:

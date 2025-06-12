@@ -4010,7 +4010,7 @@ static int tcp_send_syn_data(struct sock *sk, struct sk_buff *syn)
 		goto done;
 	}
 
-	/* data was not sent, put it in write_queue */
+	/* data was not sent, put it in write_queue 添加到发送队列sk_write_queue */
 	__skb_queue_tail(&sk->sk_write_queue, syn_data);
 	tp->packets_out -= tcp_skb_pcount(syn_data);
 
@@ -4044,7 +4044,7 @@ int tcp_connect(struct sock *sk)
 		tcp_finish_connect(sk, NULL);
 		return 0;
 	}
-
+	//申请并设置skb
 	buff = sk_stream_alloc_skb(sk, 0, sk->sk_allocation, true);
 	if (unlikely(!buff))
 		return -ENOBUFS;
@@ -4053,6 +4053,7 @@ int tcp_connect(struct sock *sk)
 	//更新时间戳（mstamp） 的函数，主要用于 TCP 的 RTT 测量、拥塞控制等时序相关的操作
 	tcp_mstamp_refresh(tp);
 	tp->retrans_stamp = tcp_time_stamp(tp);
+
 	tcp_connect_queue_skb(sk, buff);
 	tcp_ecn_send_syn(sk, buff);
 	tcp_rbtree_insert(&sk->tcp_rtx_queue, buff);
@@ -4085,7 +4086,7 @@ int tcp_connect(struct sock *sk)
 	}
 	TCP_INC_STATS(sock_net(sk), TCP_MIB_ACTIVEOPENS);
 
-	/* Timer for repeating the SYN until an answer. */
+	/* Timer for repeating the SYN until an answer. 重启重传定时器 */
 	inet_csk_reset_xmit_timer(sk, ICSK_TIME_RETRANS,
 				  inet_csk(sk)->icsk_rto, TCP_RTO_MAX);
 	return 0;

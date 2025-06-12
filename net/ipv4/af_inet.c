@@ -208,11 +208,12 @@ int inet_listen(struct socket *sock, int backlog)
 	old_state = sk->sk_state;
 	if (!((1 << old_state) & (TCPF_CLOSE | TCPF_LISTEN)))
 		goto out;
-
+	//设置全连接队列长度
 	WRITE_ONCE(sk->sk_max_ack_backlog, backlog);
 	/* Really, if the socket is already in listen state
 	 * we can only allow the backlog to be adjusted.
 	 */
+	// 还不是listen 状态（尚未listen过）
 	if (old_state != TCP_LISTEN) {
 		/* Enable TFO w/o requiring TCP_FASTOPEN socket option.
 		 * Note that only TCP sockets (SOCK_STREAM) will reach here.
@@ -227,7 +228,7 @@ int inet_listen(struct socket *sock, int backlog)
 			fastopen_queue_tune(sk, backlog);
 			tcp_fastopen_init_key_once(sock_net(sk));
 		}
-
+		//开始监听
 		err = inet_csk_listen_start(sk, backlog);
 		if (err)
 			goto out;
@@ -660,7 +661,7 @@ int __inet_stream_connect(struct socket *sock, struct sockaddr *uaddr,
 			err = -EALREADY;
 		/* Fall out of switch with err, set for this state */
 		break;
-	case SS_UNCONNECTED:
+	case SS_UNCONNECTED://刚创建完毕的socket状态就是SS_UNCONNECTED
 		err = -EISCONN;
 		if (sk->sk_state != TCP_CLOSE)
 			goto out;
