@@ -540,6 +540,7 @@ EXPORT_SYMBOL(netif_carrier_on);
  *	@dev: network device
  *
  * Device has detected loss of carrier.
+ * 失去物理链路连接
  */
 void netif_carrier_off(struct net_device *dev)
 {

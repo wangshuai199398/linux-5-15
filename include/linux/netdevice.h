@@ -1040,126 +1040,90 @@ struct netdev_net_notifier {
 	struct notifier_block *nb;
 };
 
-/*
- * This structure defines the management hooks for network devices.
- * The following hooks can be defined; unless noted otherwise, they are
- * optional and can be filled with a null pointer.
+/* net_device operations（网络设备操作集）
+ * 该结构体定义了网络设备的管理钩子函数。以下列出的钩子函数都可以定义；除非另有说明，否则它们是可选的，可以设置为空指针
  *
  * int (*ndo_init)(struct net_device *dev);
- *     This function is called once when a network device is registered.
- *     The network device can use this for any late stage initialization
- *     or semantic validation. It can fail with an error code which will
- *     be propagated back to register_netdev.
+ *  当网络设备被注册时，此函数会被调用一次。网络设备可以利用它执行任何后期初始化或语义校验操作。
+ *  该函数可以返回错误码，错误将会被传递回 register_netdev。
  *
  * void (*ndo_uninit)(struct net_device *dev);
- *     This function is called when device is unregistered or when registration
- *     fails. It is not called if init fails.
+ *  当设备被注销，或注册失败时，会调用此函数。如果是在 init 函数失败的情况下，不会调用此函数
  *
  * int (*ndo_open)(struct net_device *dev);
- *     This function is called when a network device transitions to the up
- *     state.
+ *  当网络设备转换为“up”状态时，会调用此函数。
  *
  * int (*ndo_stop)(struct net_device *dev);
- *     This function is called when a network device transitions to the down
- *     state.
+ *  当网络设备转换为“down”状态时，会调用此函数。
  *
- * netdev_tx_t (*ndo_start_xmit)(struct sk_buff *skb,
- *                               struct net_device *dev);
- *	Called when a packet needs to be transmitted.
- *	Returns NETDEV_TX_OK.  Can return NETDEV_TX_BUSY, but you should stop
- *	the queue before that can happen; it's for obsolete devices and weird
- *	corner cases, but the stack really does a non-trivial amount
- *	of useless work if you return NETDEV_TX_BUSY.
- *	Required; cannot be NULL.
+ * netdev_tx_t (*ndo_start_xmit)(struct sk_buff *skb, struct net_device *dev);
+ *	当需要发送一个数据包时调用此函数。返回值为 NETDEV_TX_OK。也可以返回 NETDEV_TX_BUSY，但你应该在那之前就停止队列；
+ *  这个返回值主要是为过时的设备或一些奇怪的边缘情况准备的。如果你返回 NETDEV_TX_BUSY，网络协议栈实际上会做不少无用功。
+ *  此函数是必须实现的，不能为空。
  *
  * netdev_features_t (*ndo_features_check)(struct sk_buff *skb,
  *					   struct net_device *dev
  *					   netdev_features_t features);
- *	Called by core transmit path to determine if device is capable of
- *	performing offload operations on a given packet. This is to give
- *	the device an opportunity to implement any restrictions that cannot
- *	be otherwise expressed by feature flags. The check is called with
- *	the set of features that the stack has calculated and it returns
- *	those the driver believes to be appropriate.
+ *	由核心发送路径调用，用于确定设备是否能够对给定的数据包执行卸载操作。
+ *  此函数为设备提供一个机会，以实现无法通过功能标志（feature flags）表达的限制条件。
+ *  检查时会传入协议栈计算出的功能集，驱动返回其认为适用的功能集。
  *
  * u16 (*ndo_select_queue)(struct net_device *dev, struct sk_buff *skb,
  *                         struct net_device *sb_dev);
- *	Called to decide which queue to use when device supports multiple
- *	transmit queues.
+ *	当设备支持多个发送队列时，调用此函数以决定使用哪个队列
  *
  * void (*ndo_change_rx_flags)(struct net_device *dev, int flags);
- *	This function is called to allow device receiver to make
- *	changes to configuration when multicast or promiscuous is enabled.
+ *	当启用组播（multicast）或混杂模式（promiscuous）时，会调用此函数，以便设备接收端可以相应地调整配置
  *
  * void (*ndo_set_rx_mode)(struct net_device *dev);
- *	This function is called device changes address list filtering.
- *	If driver handles unicast address filtering, it should set
- *	IFF_UNICAST_FLT in its priv_flags.
+ *	当设备更改地址列表过滤规则时，会调用此函数。如果驱动程序支持单播地址过滤，它应在其 priv_flags 中设置 IFF_UNICAST_FLT 标志
  *
  * int (*ndo_set_mac_address)(struct net_device *dev, void *addr);
- *	This function  is called when the Media Access Control address
- *	needs to be changed. If this interface is not defined, the
- *	MAC address can not be changed.
+ *	当需要更改MAC地址时，会调用此函数。如果未定义此接口，则无法更改 MAC 地址
  *
  * int (*ndo_validate_addr)(struct net_device *dev);
- *	Test if Media Access Control address is valid for the device.
+ *	MAC 地址对该设备是否有效
  *
  * int (*ndo_do_ioctl)(struct net_device *dev, struct ifreq *ifr, int cmd);
- *	Old-style ioctl entry point. This is used internally by the
- *	appletalk and ieee802154 subsystems but is no longer called by
- *	the device ioctl handler.
+ *	旧式的 ioctl 入口点。该函数现在仅被 AppleTalk 和 IEEE 802.15.4 子系统内部使用，不再由设备的 ioctl 处理程序调用
  *
  * int (*ndo_siocbond)(struct net_device *dev, struct ifreq *ifr, int cmd);
- *	Used by the bonding driver for its device specific ioctls:
- *	SIOCBONDENSLAVE, SIOCBONDRELEASE, SIOCBONDSETHWADDR, SIOCBONDCHANGEACTIVE,
- *	SIOCBONDSLAVEINFOQUERY, and SIOCBONDINFOQUERY
+ *	由 bonding 驱动用于其设备专用的 ioctl 操作：
+ *  SIOCBONDENSLAVE、SIOCBONDRELEASE、SIOCBONDSETHWADDR、SIOCBONDCHANGEACTIVE、
+ *  SIOCBONDSLAVEINFOQUERY 和 SIOCBONDINFOQUERY。
  *
  * * int (*ndo_eth_ioctl)(struct net_device *dev, struct ifreq *ifr, int cmd);
- *	Called for ethernet specific ioctls: SIOCGMIIPHY, SIOCGMIIREG,
- *	SIOCSMIIREG, SIOCSHWTSTAMP and SIOCGHWTSTAMP.
+ *	针对以太网专用 ioctl 调用的处理函数：SIOCGMIIPHY、SIOCGMIIREG、SIOCSMIIREG、SIOCSHWTSTAMP 和 SIOCGHWTSTAMP
  *
  * int (*ndo_set_config)(struct net_device *dev, struct ifmap *map);
- *	Used to set network devices bus interface parameters. This interface
- *	is retained for legacy reasons; new devices should use the bus
- *	interface (PCI) for low level management.
+ *	用于设置网络设备的总线接口参数。该接口保留用于兼容旧设备；新设备应使用总线接口（如 PCI）进行底层管理。
  *
  * int (*ndo_change_mtu)(struct net_device *dev, int new_mtu);
- *	Called when a user wants to change the Maximum Transfer Unit
- *	of a device.
+ *	当用户希望更改设备的最大传输单元（MTU）时调用此函数
  *
  * void (*ndo_tx_timeout)(struct net_device *dev, unsigned int txqueue);
- *	Callback used when the transmitter has not made any progress
- *	for dev->watchdog ticks.
+ *	当发送器在 dev->watchdog 设定的时间内没有任何进展时，调用此回调函数
  *
  * void (*ndo_get_stats64)(struct net_device *dev,
  *                         struct rtnl_link_stats64 *storage);
  * struct net_device_stats* (*ndo_get_stats)(struct net_device *dev);
- *	Called when a user wants to get the network device usage
- *	statistics. Drivers must do one of the following:
- *	1. Define @ndo_get_stats64 to fill in a zero-initialised
- *	   rtnl_link_stats64 structure passed by the caller.
- *	2. Define @ndo_get_stats to update a net_device_stats structure
- *	   (which should normally be dev->stats) and return a pointer to
- *	   it. The structure may be changed asynchronously only if each
- *	   field is written atomically.
- *	3. Update dev->stats asynchronously and atomically, and define
- *	   neither operation.
+ *	当用户希望获取网络设备使用统计信息时，会调用此函数。驱动必须选择以下三种方式之一进行实现：
+ *	1. 定义 @ndo_get_stats64 回调函数，用于填充调用方传入的已初始化为零的 rtnl_link_stats64 结构体。
+ *	2. 定义 @ndo_get_stats 回调函数，用于更新一个 net_device_stats 结构体（通常是 dev->stats），并返回该结构体的指针。
+ *		该结构体仅在所有字段都是原子写入的情况下，才允许异步修改。
+ *	3. 直接异步、原子地更新 dev->stats 字段，此时不需要定义上述两个回调函数中的任何一个。
  *
  * bool (*ndo_has_offload_stats)(const struct net_device *dev, int attr_id)
- *	Return true if this device supports offload stats of this attr_id.
+ *	如果该设备支持此 attr_id 对应的卸载（offload）统计信息，则返回 true。
  *
- * int (*ndo_get_offload_stats)(int attr_id, const struct net_device *dev,
- *	void *attr_data)
- *	Get statistics for offload operations by attr_id. Write it into the
- *	attr_data pointer.
+ * int (*ndo_get_offload_stats)(int attr_id, const struct net_device *dev, void *attr_data)
+ *	根据 attr_id 获取卸载操作的统计信息，并将其写入 attr_data 指针所指向的内存中
  *
  * int (*ndo_vlan_rx_add_vid)(struct net_device *dev, __be16 proto, u16 vid);
- *	If device supports VLAN filtering this function is called when a
- *	VLAN id is registered.
+ *	如果设备支持 VLAN 过滤，当某个 VLAN ID 被注册时会调用此函数
  *
  * int (*ndo_vlan_rx_kill_vid)(struct net_device *dev, __be16 proto, u16 vid);
- *	If device supports VLAN filtering this function is called when a
- *	VLAN id is unregistered.
+ *	如果设备支持 VLAN 过滤，当某个 VLAN ID 被注销时会调用此函数。
  *
  * void (*ndo_poll_controller)(struct net_device *dev);
  *
@@ -1177,107 +1141,88 @@ struct netdev_net_notifier {
  * int (*ndo_set_vf_port)(struct net_device *dev, int vf,
  *			  struct nlattr *port[]);
  *
- *      Enable or disable the VF ability to query its RSS Redirection Table and
- *      Hash Key. This is needed since on some devices VF share this information
- *      with PF and querying it may introduce a theoretical security risk.
+ *  启用或禁用虚拟功能（VF）查询其 RSS 重定向表（Redirection Table）和哈希密钥（Hash Key）的能力。
+ *  这是必要的，因为在某些设备上，VF 与物理功能（PF）共享这些信息，允许查询可能会带来理论上的安全风险
  * int (*ndo_set_vf_rss_query_en)(struct net_device *dev, int vf, bool setting);
  * int (*ndo_get_vf_port)(struct net_device *dev, int vf, struct sk_buff *skb);
  * int (*ndo_setup_tc)(struct net_device *dev, enum tc_setup_type type,
  *		       void *type_data);
- *	Called to setup any 'tc' scheduler, classifier or action on @dev.
- *	This is always called from the stack with the rtnl lock held and netif
- *	tx queues stopped. This allows the netdevice to perform queue
- *	management safely.
+ *	调用此函数以在 @dev 上设置任何 ‘tc’（Traffic Control）调度器、分类器或动作。
+ *  该函数总是在持有 rtnl 锁并停止网络设备发送队列的情况下由协议栈调用，这使得网络设备可以安全地执行队列管理操作。
  *
- *	Fiber Channel over Ethernet (FCoE) offload functions.
+ *	以太网上的光纤通道（FCoE）卸载功能。
  * int (*ndo_fcoe_enable)(struct net_device *dev);
- *	Called when the FCoE protocol stack wants to start using LLD for FCoE
- *	so the underlying device can perform whatever needed configuration or
- *	initialization to support acceleration of FCoE traffic.
+ *	当 FCoE 协议栈希望开始使用底层驱动（LLD）来承载 FCoE 功能时，会调用此函数，
+ *  以便底层设备可以执行所需的配置或初始化操作，从而支持 FCoE 流量的加速。
  *
  * int (*ndo_fcoe_disable)(struct net_device *dev);
- *	Called when the FCoE protocol stack wants to stop using LLD for FCoE
- *	so the underlying device can perform whatever needed clean-ups to
- *	stop supporting acceleration of FCoE traffic.
+ *	当 FCoE 协议栈希望停止使用底层驱动（LLD）承载 FCoE 功能时，会调用此函数，
+ *  以便底层设备执行必要的清理操作，停止对 FCoE 流量加速的支持。
  *
  * int (*ndo_fcoe_ddp_setup)(struct net_device *dev, u16 xid,
  *			     struct scatterlist *sgl, unsigned int sgc);
- *	Called when the FCoE Initiator wants to initialize an I/O that
- *	is a possible candidate for Direct Data Placement (DDP). The LLD can
- *	perform necessary setup and returns 1 to indicate the device is set up
- *	successfully to perform DDP on this I/O, otherwise this returns 0.
+ *	当 FCoE 启动端（Initiator）希望初始化一个可能适用于直接数据放置（DDP）的 I/O 操作时，会调用此函数。
+ *  底层驱动（LLD）可以在此执行必要的设置，如果设备成功配置好以对该 I/O 执行 DDP，则返回 1；否则返回 0。
  *
  * int (*ndo_fcoe_ddp_done)(struct net_device *dev,  u16 xid);
- *	Called when the FCoE Initiator/Target is done with the DDPed I/O as
- *	indicated by the FC exchange id 'xid', so the underlying device can
- *	clean up and reuse resources for later DDP requests.
+ *	当 FCoE 启动端（Initiator）或目标端（Target）完成了由 FC 交换 ID（xid）标识的 DDP I/O 操作时，会调用此函数，
+ *  以便底层设备可以清理并回收资源，以供后续的 DDP 请求使用。
  *
  * int (*ndo_fcoe_ddp_target)(struct net_device *dev, u16 xid,
  *			      struct scatterlist *sgl, unsigned int sgc);
- *	Called when the FCoE Target wants to initialize an I/O that
- *	is a possible candidate for Direct Data Placement (DDP). The LLD can
- *	perform necessary setup and returns 1 to indicate the device is set up
- *	successfully to perform DDP on this I/O, otherwise this returns 0.
+ *	当 FCoE 目标端（Target）希望初始化一个可能适用于直接数据放置（DDP）的 I/O 操作时，会调用此函数。
+ *  底层驱动（LLD）可以执行必要的设置，如果设备已成功配置好以对该 I/O 执行 DDP，则返回 1；否则返回 0。
  *
  * int (*ndo_fcoe_get_hbainfo)(struct net_device *dev,
  *			       struct netdev_fcoe_hbainfo *hbainfo);
- *	Called when the FCoE Protocol stack wants information on the underlying
- *	device. This information is utilized by the FCoE protocol stack to
- *	register attributes with Fiber Channel management service as per the
- *	FC-GS Fabric Device Management Information(FDMI) specification.
+ *	当 FCoE 协议栈希望获取底层设备的信息时，会调用此函数。
+ *  FCoE 协议栈会使用这些信息，根据 FC-GS 的“Fabric Device Management Information (FDMI)”规范，
+ *  将相关属性注册到光纤通道管理服务中。
  *
  * int (*ndo_fcoe_get_wwn)(struct net_device *dev, u64 *wwn, int type);
- *	Called when the underlying device wants to override default World Wide
- *	Name (WWN) generation mechanism in FCoE protocol stack to pass its own
- *	World Wide Port Name (WWPN) or World Wide Node Name (WWNN) to the FCoE
- *	protocol stack to use.
+ *	当底层设备希望覆盖 FCoE 协议栈中默认的全球唯一名称（WWN）生成机制，
+ *  以传递其自身的全球唯一端口名称（WWPN）或全球唯一节点名称（WWNN）供 FCoE 协议栈使用时，会调用此函数。
  *
  *	RFS acceleration.
  * int (*ndo_rx_flow_steer)(struct net_device *dev, const struct sk_buff *skb,
  *			    u16 rxq_index, u32 flow_id);
- *	Set hardware filter for RFS.  rxq_index is the target queue index;
- *	flow_id is a flow ID to be passed to rps_may_expire_flow() later.
- *	Return the filter ID on success, or a negative error code.
+ *	为 RFS（接收端流量定向）设置硬件过滤器。rxq_index 是目标接收队列的索引；
+ *  flow_id 是一个流 ID，稍后会传递给 rps_may_expire_flow()。成功时返回过滤器 ID，失败时返回负的错误码。
  *
- *	Slave management functions (for bridge, bonding, etc).
+ *	从属设备管理函数（用于 bridge、bonding 等）。
  * int (*ndo_add_slave)(struct net_device *dev, struct net_device *slave_dev);
- *	Called to make another netdev an underling.
+ *	调用该函数以将另一个网络设备设置为从属设备
  *
  * int (*ndo_del_slave)(struct net_device *dev, struct net_device *slave_dev);
- *	Called to release previously enslaved netdev.
+ *	调用该函数以释放之前被设置为从属设备的网络设备。
  *
  * struct net_device *(*ndo_get_xmit_slave)(struct net_device *dev,
  *					    struct sk_buff *skb,
  *					    bool all_slaves);
- *	Get the xmit slave of master device. If all_slaves is true, function
- *	assume all the slaves can transmit.
+ *	获取主设备的用于发送（xmit）的从属设备。如果 all_slaves 为 true，则函数假设所有从属设备都可以进行发送。
  *
- *      Feature/offload setting functions.
+ *      功能/卸载设置函数
  * netdev_features_t (*ndo_fix_features)(struct net_device *dev,
  *		netdev_features_t features);
- *	Adjusts the requested feature flags according to device-specific
- *	constraints, and returns the resulting flags. Must not modify
- *	the device state.
+ *	根据设备特定的限制条件调整请求的功能标志，并返回最终的标志值。该函数不得修改设备的实际状态。
  *
  * int (*ndo_set_features)(struct net_device *dev, netdev_features_t features);
- *	Called to update device configuration to new features. Passed
- *	feature set might be less than what was returned by ndo_fix_features()).
- *	Must return >0 or -errno if it changed dev->features itself.
+ *	当设备需要根据新的功能集更新配置时，会调用此函数。传入的功能集可能比 ndo_fix_features() 返回的特性集更少。
+ *  如果该函数修改了 dev->features，则必须返回大于 0 的值或负的错误码（-errno）。
  *
  * int (*ndo_fdb_add)(struct ndmsg *ndm, struct nlattr *tb[],
  *		      struct net_device *dev,
  *		      const unsigned char *addr, u16 vid, u16 flags,
  *		      struct netlink_ext_ack *extack);
- *	Adds an FDB entry to dev for addr.
+ *	为指定地址 addr 向设备 dev 添加一个 FDB（转发数据库）条目
  * int (*ndo_fdb_del)(struct ndmsg *ndm, struct nlattr *tb[],
  *		      struct net_device *dev,
  *		      const unsigned char *addr, u16 vid)
- *	Deletes the FDB entry from dev coresponding to addr.
+ *	从设备 dev 中删除与地址 addr 对应的 FDB（转发数据库）条目。
  * int (*ndo_fdb_dump)(struct sk_buff *skb, struct netlink_callback *cb,
  *		       struct net_device *dev, struct net_device *filter_dev,
  *		       int *idx)
- *	Used to add FDB entries to dump requests. Implementers should add
- *	entries to skb and update idx with the number of entries.
+ *	用于向 dump 请求中添加 FDB 条目。实现者应将条目添加到 skb 中，并使用添加的条目数量更新 idx。
  *
  * int (*ndo_bridge_setlink)(struct net_device *dev, struct nlmsghdr *nlh,
  *			     u16 flags, struct netlink_ext_ack *extack)
@@ -1288,88 +1233,74 @@ struct netdev_net_notifier {
  *			     u16 flags);
  *
  * int (*ndo_change_carrier)(struct net_device *dev, bool new_carrier);
- *	Called to change device carrier. Soft-devices (like dummy, team, etc)
- *	which do not represent real hardware may define this to allow their
- *	userspace components to manage their virtual carrier state. Devices
- *	that determine carrier state from physical hardware properties (eg
- *	network cables) or protocol-dependent mechanisms (eg
- *	USB_CDC_NOTIFY_NETWORK_CONNECTION) should NOT implement this function.
+ *	调用此函数用于更改设备的载波（carrier）状态。不代表真实硬件的软设备（如 dummy、team 等）可以实现此函数，以允许用户空间组件管理其虚拟的载波状态
+ *  那些根据物理硬件属性（例如网线连接）或协议相关机制（例如 USB_CDC_NOTIFY_NETWORK_CONNECTION）确定载波状态的设备不应实现此函数
  *
  * int (*ndo_get_phys_port_id)(struct net_device *dev,
  *			       struct netdev_phys_item_id *ppid);
- *	Called to get ID of physical port of this device. If driver does
- *	not implement this, it is assumed that the hw is not able to have
- *	multiple net devices on single physical port.
+ *	调用此函数以获取该设备所对应的物理端口（physical port）的 ID。如果驱动未实现此函数，系统会默认认为该硬件无法在单个物理端口上支持多个网络设备
  *
  * int (*ndo_get_port_parent_id)(struct net_device *dev,
  *				 struct netdev_phys_item_id *ppid)
- *	Called to get the parent ID of the physical port of this device.
+ *	调用此函数以获取该设备物理端口的父 ID（Parent ID）
  *
  * void* (*ndo_dfwd_add_station)(struct net_device *pdev,
  *				 struct net_device *dev)
- *	Called by upper layer devices to accelerate switching or other
- *	station functionality into hardware. 'pdev is the lowerdev
- *	to use for the offload and 'dev' is the net device that will
- *	back the offload. Returns a pointer to the private structure
- *	the upper layer will maintain.
+ *	由上层设备调用，用于将交换功能或其他站点功能加速到硬件中。pdev 是用于执行 offload 的下层设备（lowerdev），
+ *  dev 是将作为 offload 载体的网络设备。该函数返回一个指向私有结构的指针，由上层维护。
+ *  
  * void (*ndo_dfwd_del_station)(struct net_device *pdev, void *priv)
- *	Called by upper layer device to delete the station created
- *	by 'ndo_dfwd_add_station'. 'pdev' is the net device backing
- *	the station and priv is the structure returned by the add
- *	operation.
+ *	由上层设备调用，用于删除通过 ndo_dfwd_add_station 创建的 station。pdev 是作为该 station 后端的网络设备，priv 是添加操作时返回的私有结构。
+ *  
  * int (*ndo_set_tx_maxrate)(struct net_device *dev,
  *			     int queue_index, u32 maxrate);
- *	Called when a user wants to set a max-rate limitation of specific
- *	TX queue.
+ *	当用户希望为特定的 TX（发送）队列设置最大速率限制时，会调用此函数
+ *
  * int (*ndo_get_iflink)(const struct net_device *dev);
- *	Called to get the iflink value of this device.
- * void (*ndo_change_proto_down)(struct net_device *dev,
- *				 bool proto_down);
- *	This function is used to pass protocol port error state information
- *	to the switch driver. The switch driver can react to the proto_down
- *      by doing a phys down on the associated switch port.
+ *	调用此函数以获取该设备的 iflink 值
+ *  
+ * void (*ndo_change_proto_down)(struct net_device *dev, bool proto_down);
+ *	该函数用于将协议端口错误状态信息传递给交换芯片驱动。交换驱动可以根据 proto_down 状态，对关联的交换端口执行物理断链（phys down）操作。
+ * 
  * int (*ndo_fill_metadata_dst)(struct net_device *dev, struct sk_buff *skb);
- *	This function is used to get egress tunnel information for given skb.
- *	This is useful for retrieving outer tunnel header parameters while
- *	sampling packet.
+ *	该函数用于获取指定 skb（数据包）的出口隧道信息。在对数据包进行采样时，此函数可用于提取外层隧道头部参数。
+ *
  * void (*ndo_set_rx_headroom)(struct net_device *dev, int needed_headroom);
- *	This function is used to specify the headroom that the skb must
- *	consider when allocation skb during packet reception. Setting
- *	appropriate rx headroom value allows avoiding skb head copy on
- *	forward. Setting a negative value resets the rx headroom to the
- *	default value.
+ *	该函数用于指定在数据包接收期间分配 skb 时需要预留的 headroom（头部空间）。
+ *  设置合适的接收（rx）headroom 值可以避免在转发过程中发生 skb 头部复制操作。
+ *  如果设置为负值，则会将接收 headroom 重置为默认值。
  * int (*ndo_bpf)(struct net_device *dev, struct netdev_bpf *bpf);
- *	This function is used to set or query state related to XDP on the
- *	netdevice and manage BPF offload. See definition of
- *	enum bpf_netdev_command for details.
+ *	该函数用于在网络设备（netdevice）上设置或查询与 XDP（eXpress Data Path）相关的状态，并管理 BPF 程序的卸载。
+ *  有关详细命令说明，请参阅 enum bpf_netdev_command 的定义。
+ * 
  * int (*ndo_xdp_xmit)(struct net_device *dev, int n, struct xdp_frame **xdp,
  *			u32 flags);
- *	This function is used to submit @n XDP packets for transmit on a
- *	netdevice. Returns number of frames successfully transmitted, frames
- *	that got dropped are freed/returned via xdp_return_frame().
- *	Returns negative number, means general error invoking ndo, meaning
- *	no frames were xmit'ed and core-caller will free all frames.
+ *	该函数用于在网络设备（netdevice）上提交 @n 个 XDP 数据包用于发送（transmit）。
+ *  返回值为成功发送的帧数；被丢弃的帧将通过 xdp_return_frame() 进行释放或归还。
+ *  如果返回负数，则表示调用此 ndo 时发生通用错误，意味着没有帧被发送，所有帧将由核心调用方统一释放。
+ * 
  * struct net_device *(*ndo_xdp_get_xmit_slave)(struct net_device *dev,
  *					        struct xdp_buff *xdp);
- *      Get the xmit slave of master device based on the xdp_buff.
+ *  基于 xdp_buff，获取主设备（master device）对应的发送从设备（xmit slave）。
+ * 
  * int (*ndo_xsk_wakeup)(struct net_device *dev, u32 queue_id, u32 flags);
  *      This function is used to wake up the softirq, ksoftirqd or kthread
- *	responsible for sending and/or receiving packets on a specific
- *	queue id bound to an AF_XDP socket. The flags field specifies if
- *	only RX, only Tx, or both should be woken up using the flags
- *	XDP_WAKEUP_RX and XDP_WAKEUP_TX.
+ *	负责在绑定到某个 AF_XDP 套接字的特定队列 ID 上收发数据包。flags 字段用于指定唤醒的方向：
+ *  仅接收（RX）、仅发送（TX）或同时唤醒两者，可使用 XDP_WAKEUP_RX 和 XDP_WAKEUP_TX 标志位来表示。
+ * 
  * struct devlink_port *(*ndo_get_devlink_port)(struct net_device *dev);
- *	Get devlink port instance associated with a given netdev.
- *	Called with a reference on the netdevice and devlink locks only,
- *	rtnl_lock is not held.
- * int (*ndo_tunnel_ctl)(struct net_device *dev, struct ip_tunnel_parm *p,
- *			 int cmd);
- *	Add, change, delete or get information on an IPv4 tunnel.
+ *	获取与给定网络设备（netdev）关联的 devlink 端口（devlink port）实例。
+ *  调用该函数时，持有的是 netdevice 和 devlink 的锁，未持有 rtnl_lock。
+ *
+ * int (*ndo_tunnel_ctl)(struct net_device *dev, struct ip_tunnel_parm *p, int cmd);
+ *	添加、修改、删除或获取 IPv4 隧道的信息。
+ *
  * struct net_device *(*ndo_get_peer_dev)(struct net_device *dev);
- *	If a device is paired with a peer device, return the peer instance.
- *	The caller must be under RCU read context.
+ *	如果一个设备与一个对端设备（peer device）配对，则返回该对端实例。
+ *  调用者必须处于 RCU（Read-Copy-Update）读取上下文中。
+ *
  * int (*ndo_fill_forward_path)(struct net_device_path_ctx *ctx, struct net_device_path *path);
- *     Get the forwarding path to reach the real device from the HW destination address
+ *  从硬件目标地址（HW destination address）出发，获取到达实际设备（real device）的转发路径。
  */
 struct net_device_ops {
 	int			(*ndo_init)(struct net_device *dev);
@@ -2457,6 +2388,7 @@ struct net *dev_net(const struct net_device *dev)
 	return read_pnet(&dev->nd_net);
 }
 
+//将一个 net_device（网络设备）对象绑定到特定的 network namespace（网络命名空间）
 static inline
 void dev_net_set(struct net_device *dev, struct net *net)
 {
@@ -4570,7 +4502,7 @@ static inline void netif_tx_unlock_bh(struct net_device *dev)
 		__netif_tx_release(txq);		\
 	}						\
 }
-
+//立即停用设备的 TX queue
 static inline void netif_tx_disable(struct net_device *dev)
 {
 	unsigned int i;

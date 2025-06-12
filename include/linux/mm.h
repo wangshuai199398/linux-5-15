@@ -808,6 +808,7 @@ static inline void *kvzalloc_node(size_t size, gfp_t flags, int node)
 {
 	return kvmalloc_node(size, flags | __GFP_ZERO, node);
 }
+//表示如果内存较大，可能从 vmalloc 区分配（而不是 slab）,自动将分配的内存清零（zalloc 的意思）
 static inline void *kvzalloc(size_t size, gfp_t flags)
 {
 	return kvmalloc(size, flags | __GFP_ZERO);

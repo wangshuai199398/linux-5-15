@@ -1250,7 +1250,9 @@ struct mlx5_ifc_ipsec_cap_bits {
 
 enum {
 	MLX5_WQ_TYPE_LINKED_LIST  = 0x0,
+	//循环队列
 	MLX5_WQ_TYPE_CYCLIC       = 0x1,
+	//链表型分片队列
 	MLX5_WQ_TYPE_LINKED_LIST_STRIDING_RQ = 0x2,
 	MLX5_WQ_TYPE_CYCLIC_STRIDING_RQ = 0x3,
 };

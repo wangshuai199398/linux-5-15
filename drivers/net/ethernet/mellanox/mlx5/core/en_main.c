@@ -2617,7 +2617,7 @@ int mlx5e_open_locked(struct net_device *netdev)
 	if (err)
 		goto err_clear_state_opened_flag;
 
-	priv->profile->update_rx(priv);
+	priv->profile->update_rx(priv);//mlx5e_update_nic_rx
 	mlx5e_activate_priv_channels(priv);
 	mlx5e_apply_traps(priv, true);
 	if (priv->profile->update_carrier)
@@ -4966,11 +4966,11 @@ int mlx5e_attach_netdev(struct mlx5e_priv *priv)
 	if (err)
 		goto out;
 
-	err = profile->init_tx(priv);
+	err = profile->init_tx(priv);//mlx5e_init_nic_tx
 	if (err)
 		goto out;
 
-	err = profile->init_rx(priv);
+	err = profile->init_rx(priv);//mlx5e_init_nic_rx
 	if (err)
 		goto err_cleanup_tx;
 
@@ -5112,10 +5112,10 @@ static int mlx5e_resume(struct auxiliary_device *adev)
 	struct mlx5_core_dev *mdev = edev->mdev;
 	int err;
 
-	if (netif_device_present(netdev))
+	if (netif_device_present(netdev))//设备是否“逻辑在线”
 		return 0;
 
-	err = mlx5e_create_mdev_resources(mdev);
+	err = mlx5e_create_mdev_resources(mdev);//创建网卡资源
 	if (err)
 		return err;
 
