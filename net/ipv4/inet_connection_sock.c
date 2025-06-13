@@ -1152,6 +1152,7 @@ static void inet_child_forget(struct sock *sk, struct request_sock *req,
 	inet_csk_destroy_sock(child);
 }
 
+//将握手成功的request_sock对象插到全连接队列链表的尾部
 struct sock *inet_csk_reqsk_queue_add(struct sock *sk,
 				      struct request_sock *req,
 				      struct sock *child)

@@ -359,7 +359,7 @@ static int mlx5e_qos_alloc_queues(struct mlx5e_priv *priv, struct mlx5e_channels
 			goto err_free;
 
 		WRITE_ONCE(chs->c[i]->qos_sqs_size, qos_sqs_size);
-		smp_wmb(); /* Pairs with mlx5e_napi_poll. */
+		smp_wmb(); /* Pairs with mlx5e_napi_poll. 确保 qos_sqs_size 的写入发生在 qos_sqs 的发布（指针赋值）之前 */
 		rcu_assign_pointer(chs->c[i]->qos_sqs, sqs);
 	}
 

@@ -20,8 +20,8 @@ struct mlx5e_ptp_params {
 };
 
 struct mlx5e_skb_cb_hwtstamp {
-	ktime_t cqe_hwtstamp;
-	ktime_t port_hwtstamp;
+	ktime_t cqe_hwtstamp;//来自 CQE 的硬件时间戳
+	ktime_t port_hwtstamp;//来自端口层的硬件时间戳（更精准）
 };
 
 void mlx5e_skb_cb_hwtstamp_init(struct sk_buff *skb)
@@ -44,7 +44,7 @@ static void mlx5e_skb_cb_hwtstamp_tx(struct sk_buff *skb,
 	diff = abs(mlx5e_skb_cb_get_hwts(skb)->port_hwtstamp -
 		   mlx5e_skb_cb_get_hwts(skb)->cqe_hwtstamp);
 
-	/* Maximal allowed diff is 1 / 128 second */
+	/* 如果差距超过 1/128 秒，判为异常 */
 	if (diff > (NSEC_PER_SEC >> 7)) {
 		cq_stats->abort++;
 		cq_stats->abort_abs_diff_ns += diff;
@@ -68,13 +68,11 @@ void mlx5e_skb_cb_hwtstamp_handler(struct sk_buff *skb, int hwtstamp_type,
 		break;
 	}
 
-	/* If both CQEs arrive, check and report the port tstamp, and clear skb cb as
-	 * skb soon to be released.
-	 */
+	/* 如果两个 CQE 都已到达，则检查并上报端口时间戳，并清除 skb->cb，因为该 skb 即将被释放 */
 	if (!mlx5e_skb_cb_get_hwts(skb)->cqe_hwtstamp ||
 	    !mlx5e_skb_cb_get_hwts(skb)->port_hwtstamp)
 		return;
-
+	//将收集好的时间戳报告给内核时间戳系统
 	mlx5e_skb_cb_hwtstamp_tx(skb, cq_stats);
 	memset(skb->cb, 0, sizeof(struct mlx5e_skb_cb_hwtstamp));
 }

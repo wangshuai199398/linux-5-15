@@ -463,7 +463,7 @@ struct skb_shared_hwtstamps {
 
 /* Definitions for tx_flags in struct skb_shared_info */
 enum {
-	/* generate hardware time stamp */
+	/* 硬件时间戳（PTP） */
 	SKBTX_HW_TSTAMP = 1 << 0,
 
 	/* generate software time stamp when queueing packet to NIC */

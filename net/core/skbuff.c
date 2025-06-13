@@ -5080,6 +5080,8 @@ void __skb_tstamp_tx(struct sk_buff *orig_skb,
 }
 EXPORT_SYMBOL_GPL(__skb_tstamp_tx);
 
+//把时间戳写进 skb 的共享控制结构中，供 socket 子系统用于发送完成后回传给用户空间
+//用户如果配置了setsockopt(sock, SOL_SOCKET, SO_TIMESTAMPING, ...)，内核会将 skb_tstamp_tx() 设置的时间戳传给用户
 void skb_tstamp_tx(struct sk_buff *orig_skb,
 		   struct skb_shared_hwtstamps *hwtstamps)
 {

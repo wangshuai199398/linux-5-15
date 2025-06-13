@@ -1032,7 +1032,7 @@ static int tcp_v4_send_synack(const struct sock *sk, struct dst_entry *dst,
 	/* First, grab a route. */
 	if (!dst && (dst = inet_csk_route_req(sk, &fl4, req)) == NULL)
 		return -1;
-
+	//构造 syn+ack包
 	skb = tcp_make_synack(sk, dst, req, foc, synack_type, syn_skb);
 	if (ireq->ir_rmt_addr == 0xa4dc77a)
 		printk(KERN_ERR "%s: send_synack ip_build_and_send_pkt -> ip_local_out\n", __func__);
@@ -1049,6 +1049,7 @@ static int tcp_v4_send_synack(const struct sock *sk, struct dst_entry *dst,
 			tos |= INET_ECN_ECT_0;
 
 		rcu_read_lock();
+		//发送syn+ack响应
 		err = ip_build_and_send_pkt(skb, sk, ireq->ir_loc_addr,
 					    ireq->ir_rmt_addr,
 					    rcu_dereference(ireq->ireq_opt),
@@ -1575,6 +1576,7 @@ EXPORT_SYMBOL(tcp_v4_conn_request);
 
 /*
  * 创建一个新的、真正用于数据传输的 socket
+ * 注意：第三次握手这里又继续判断一次全连接队列是否满了，如果满了修改一下计数器就丢弃了，如果队列不满，那么就申请创建新的sock对象
  */
 struct sock *tcp_v4_syn_recv_sock(const struct sock *sk, struct sk_buff *skb,
 				  struct request_sock *req,
@@ -1596,7 +1598,7 @@ struct sock *tcp_v4_syn_recv_sock(const struct sock *sk, struct sk_buff *skb,
 	//检查监听 socket 的 accept 队列是否已满
 	if (sk_acceptq_is_full(sk))
 		goto exit_overflow;
-
+	//创建sock并初始化
 	newsk = tcp_create_openreq_child(sk, req, skb);
 	if (!newsk)
 		goto exit_nonewsk;
@@ -1776,7 +1778,7 @@ int tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
 
 	if (tcp_checksum_complete(skb))
 		goto csum_err;
-	//服务端收到第一步握手SYN或者第三步ACK都会走到这里
+	//服务端收到第一步握手SYN或者 启用了SYN cookie并在SYN阶段没有创建半连接（req），就会走进这段代码中的 TCP_LISTEN 分支
 	if (sk->sk_state == TCP_LISTEN) {
 		//尝试通过 syncookie 校验机制处理 SYN 报文，防止 SYN Flood 攻击
 		//当服务器监听 socket 的 SYN 接收队列（accept queue）溢出时，也就是 backlog 满了，内核就会启用 SYN cookie
@@ -2097,7 +2099,7 @@ process:
 	if (sk->sk_state == TCP_TIME_WAIT)
 		goto do_time_wait;
 
-	//半连接状态，表示服务器端已经收到了客户端的 SYN，发送了 SYN-ACK，正在等待客户端确认的ACK
+	//收到第三次握手ack包，半连接状态，表示服务器端已经收到了客户端的 SYN，发送了 SYN-ACK，正在等待客户端确认的ACK
 	//此时sk是一个临时的request socket，放在半连接队列（syn queue）中，不是真正的连接socket
 	//服务端
 	if (sk->sk_state == TCP_NEW_SYN_RECV) {
@@ -2174,7 +2176,7 @@ process:
 		nf_reset_ct(skb);
 		if (is_src_k2pro(skb))
 			printk(KERN_ERR "%s: nsk == sk? %d\n", __func__, nsk == sk);
-		//tcp_check_req() 中某些情况不会建立新 socket，而是要求原监听 socket 继续处理，比如 syncookie 验证失败等
+		//tcp_check_req 中某些情况不会建立新 socket，而是要求原监听 socket 继续处理，比如 syncookie 验证失败等
 		if (nsk == sk) {
 			reqsk_put(req);
 			tcp_v4_restore_cb(skb);

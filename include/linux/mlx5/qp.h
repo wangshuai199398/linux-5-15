@@ -199,6 +199,7 @@ struct mlx5_wqe_fmr_seg {
 	u32			reserved[2];
 };
 
+//控制段（Control Segment）
 struct mlx5_wqe_ctrl_seg {
 	__be32			opmod_idx_opcode;
 	__be32			qpn_ds;
@@ -222,9 +223,13 @@ struct mlx5_wqe_ctrl_seg {
 #define MLX5_WQE_CTRL_WQE_INDEX_SHIFT 8
 
 enum {
+	//封装包中的内层 IP 校验
 	MLX5_ETH_WQE_L3_INNER_CSUM      = 1 << 4,
+	//封装包中的内层 TCP/UDP 校验
 	MLX5_ETH_WQE_L4_INNER_CSUM      = 1 << 5,
+	//执行 L3 校验（IP）
 	MLX5_ETH_WQE_L3_CSUM            = 1 << 6,
+	//执行 L4 校验（TCP/UDP）
 	MLX5_ETH_WQE_L4_CSUM            = 1 << 7,
 };
 
@@ -249,6 +254,7 @@ enum {
 	MLX5_ETH_WQE_FT_META_IPSEC = BIT(0),
 };
 
+// Ethernet 段（Ethernet Segment）WQE 中用于描述以太网层的结构
 struct mlx5_wqe_eth_seg {
 	u8              swp_outer_l4_offset;
 	u8              swp_outer_l3_offset;
@@ -351,9 +357,10 @@ struct mlx5_wqe_atomic_seg {
 	__be64			swap_add;
 	__be64			compare;
 };
-
+//数据段（Data Segments）
 struct mlx5_wqe_data_seg {
 	__be32			byte_count;
+	//区分 NIC 内存区域（用户态/内核态）
 	__be32			lkey;
 	__be64			addr;
 };

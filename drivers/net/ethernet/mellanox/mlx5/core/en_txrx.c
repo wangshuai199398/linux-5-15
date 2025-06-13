@@ -110,10 +110,11 @@ static bool mlx5e_napi_xsk_post(struct mlx5e_xdpsq *xsksq, struct mlx5e_rq *xskr
 	return busy_xsk;
 }
 
+//内核在软中断（softirq）上下文中调度执行，用于处理 RX 和 TX CQ 的完成事件
+//budget 是允许本轮 poll 中最多处理的包数（RX）
 int mlx5e_napi_poll(struct napi_struct *napi, int budget)
 {
-	struct mlx5e_channel *c = container_of(napi, struct mlx5e_channel,
-					       napi);
+	struct mlx5e_channel *c = container_of(napi, struct mlx5e_channel, napi);//从 napi 找到对应的 通道结构体 channel
 	struct mlx5e_ch_stats *ch_stats = c->stats;
 	struct mlx5e_xdpsq *xsksq = &c->xsksq;
 	struct mlx5e_txqsq __rcu **qos_sqs;
@@ -131,7 +132,7 @@ int mlx5e_napi_poll(struct napi_struct *napi, int budget)
 
 	qos_sqs = rcu_dereference(c->qos_sqs);
 
-	xsk_open = test_bit(MLX5E_CHANNEL_STATE_XSK, c->state);
+	xsk_open = test_bit(MLX5E_CHANNEL_STATE_XSK, c->state);//检查是否启用了 XSK（AF_XDP） 模式
 
 	ch_stats->poll++;
 
@@ -139,6 +140,7 @@ int mlx5e_napi_poll(struct napi_struct *napi, int budget)
 		busy |= mlx5e_poll_tx_cq(&c->sq[i].cq, budget);
 
 	if (unlikely(qos_sqs)) {
+		//保证 qos_sqs 的写入操作(mlx5e_qos_alloc_queues中写的)在下边 qos_sqs_size 的读取之前
 		smp_rmb(); /* Pairs with mlx5e_qos_alloc_queues. */
 		qos_sqs_size = READ_ONCE(c->qos_sqs_size);
 
@@ -150,7 +152,7 @@ int mlx5e_napi_poll(struct napi_struct *napi, int budget)
 		}
 	}
 
-	/* budget=0 means we may be in IRQ context, do as little as possible */
+	/* budget=0 表示我们可能正处于中断（IRQ）上下文中，因此应尽量少做事 */
 	if (unlikely(!budget))
 		goto out;
 

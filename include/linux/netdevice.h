@@ -558,7 +558,9 @@ static inline bool napi_if_scheduled_mark_missed(struct napi_struct *n)
 }
 
 enum netdev_queue_state_t {
+	//驱动层控制的“XOFF”状态，表示驱动认为不该再发送数据（比如网卡满了）
 	__QUEUE_STATE_DRV_XOFF,
+	//协议栈控制的“XOFF”状态，表示内核网络子系统出于某种原因暂停发送（比如 BQL 控制）
 	__QUEUE_STATE_STACK_XOFF,
 	__QUEUE_STATE_FROZEN,
 };
@@ -574,13 +576,12 @@ enum netdev_queue_state_t {
 					QUEUE_STATE_FROZEN)
 
 /*
- * __QUEUE_STATE_DRV_XOFF is used by drivers to stop the transmit queue.  The
- * netif_tx_* functions below are used to manipulate this flag.  The
- * __QUEUE_STATE_STACK_XOFF flag is used by the stack to stop the transmit
- * queue independently.  The netif_xmit_*stopped functions below are called
- * to check if the queue has been stopped by the driver or stack (either
- * of the XOFF bits are set in the state).  Drivers should not need to call
- * netif_xmit*stopped functions, they should only be using netif_tx_*.
+ * __QUEUE_STATE_DRV_XOFF 是由驱动程序用于停止发送队列的标志。下面的 netif_tx_* 系列函数用于操作这个标志。
+ * netif_tx_* 函数：驱动用来启动或停止发送队列（例如 netif_tx_stop_queue()、netif_tx_wake_queue() 等）
+ * __QUEUE_STATE_STACK_XOFF 是由协议栈使用的标志，用于独立地停止发送队列。
+ * netif_xmit_*stopped 系列函数会检查发送队列是否已被驱动或协议栈停止（即判断这两个 XOFF 标志中是否有被设置）。
+ * netif_xmit_*stopped()：内核内部函数，用于判断某个队列是否处于 XOFF 状态（任意一个 XOFF 被设置）
+ * 驱动程序不应该调用 netif_xmit*stopped 这类函数，它们应该只使用 netif_tx_* 相关函数。
  */
 
 struct netdev_queue {
@@ -3525,36 +3526,32 @@ static inline void netdev_txq_bql_complete_prefetchw(struct netdev_queue *dev_qu
 #endif
 }
 
+//将即将发送的数据告诉 BQL 系统，并在队列空间不足时，设置暂停标志 __QUEUE_STATE_STACK_XOFF 来停止进一步发送
 static inline void netdev_tx_sent_queue(struct netdev_queue *dev_queue,
 					unsigned int bytes)
 {
 #ifdef CONFIG_BQL
-	dql_queued(&dev_queue->dql, bytes);
+	dql_queued(&dev_queue->dql, bytes);//告诉 BQL 系统：我刚刚要发送 bytes 个字节。它会增加内部记录的“已排队但尚未完成”的字节数
 
-	if (likely(dql_avail(&dev_queue->dql) >= 0))
+	if (likely(dql_avail(&dev_queue->dql) >= 0))//判断是否还有队列空间，如果还有空间，就直接返回，无需暂停
 		return;
+	set_bit(__QUEUE_STATE_STACK_XOFF, &dev_queue->state);//如果没有空间了，设置 XOFF 标志，告诉系统“我这个队列不能继续发了”
 
-	set_bit(__QUEUE_STATE_STACK_XOFF, &dev_queue->state);
+	/* 必须在检查下面的 dql_avail 之前设置 XOFF 标志，
+	 * 因为在 netdev_tx_completed_queue 中，我们是在检查 XOFF 标志之前更新 dql_completed 的 */
+	smp_mb();//内存屏障，确保上面的set_bit对其他cpu可见，避免竞争条件：确保先设置了“暂停”状态，再去判断是否有空间
 
-	/*
-	 * The XOFF flag must be set before checking the dql_avail below,
-	 * because in netdev_tx_completed_queue we update the dql_completed
-	 * before checking the XOFF flag.
-	 */
-	smp_mb();
-
-	/* check again in case another CPU has just made room avail */
+	/* 再次检查，以防其他 CPU 刚好释放出了空间 如果现在又有空间了，就取消 XOFF 状态 */
 	if (unlikely(dql_avail(&dev_queue->dql) >= 0))
 		clear_bit(__QUEUE_STATE_STACK_XOFF, &dev_queue->state);
 #endif
 }
 
-/* Variant of netdev_tx_sent_queue() for drivers that are aware
- * that they should not test BQL status themselves.
- * We do want to change __QUEUE_STATE_STACK_XOFF only for the last
- * skb of a batch.
- * Returns true if the doorbell must be used to kick the NIC.
+/* netdev_tx_sent_queue 的变体，其适用于驱动程序已知自己不应检查 BQL 状态的情况
+ * 我们只希望在一个批次中的最后一个 skb 时修改 __QUEUE_STATE_STACK_XOFF
+ * 如果需要使用 doorbell 通知网卡（NIC），则返回 true
  */
+//BQL 是 Linux 网络栈为了避免设备发送队列拥堵引入的一种流控机制；内核会根据历史延迟自动调整 “最多可以挂多少数据在队列里”；驱动通过 dql_queued() / dql_completed() 上报发送情况。
 static inline bool __netdev_tx_sent_queue(struct netdev_queue *dev_queue,
 					  unsigned int bytes,
 					  bool xmit_more)
@@ -3591,6 +3588,7 @@ static inline bool __netdev_sent_queue(struct net_device *dev,
 				      xmit_more);
 }
 
+//发送队列 sq->txq 已完成 npkts 个包，总共发送了 nbytes 字节
 static inline void netdev_tx_completed_queue(struct netdev_queue *dev_queue,
 					     unsigned int pkts, unsigned int bytes)
 {
@@ -4955,7 +4953,7 @@ static inline netdev_tx_t __netdev_start_xmit(const struct net_device_ops *ops,
 	__this_cpu_write(softnet_data.xmit.more, more);
 	return ops->ndo_start_xmit(skb, dev);//igb_xmit_frame 回环: loopback_xmit
 }
-
+//发送合并优化，（即驱动还将继续发更多包），可以延迟写 doorbell 减少 PCIe 压力
 static inline bool netdev_xmit_more(void)
 {
 	return __this_cpu_read(softnet_data.xmit.more);

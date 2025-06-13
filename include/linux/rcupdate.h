@@ -540,6 +540,7 @@ do {									      \
  * the data, or after a synchronize_rcu() returns.  This can be useful
  * when tearing down multi-linked structures after a grace period
  * has elapsed.
+ * 读取 RCU 指针
  */
 #define rcu_access_pointer(p) __rcu_access_pointer((p), __rcu)
 

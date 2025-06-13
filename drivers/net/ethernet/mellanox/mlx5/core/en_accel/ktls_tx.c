@@ -345,16 +345,23 @@ tx_post_resync_dump(struct mlx5e_txqsq *sq, skb_frag_t *frag, u32 tisn, bool fir
 	return 0;
 }
 
+/* 什么是 TLS Resync Dump？
+在 KTLS（Kernel TLS）卸载加速场景中：
+	•	当内核或硬件发现 TLS record 不完整、序号不同步时，会触发重同步；
+	•	驱动构造一个特殊的“dump 包”，包含完整 record 的明文；
+	•	dump 包不会发送到网络上，它只是写入硬件 TLS context 中用于恢复状态；
+	•	所以这些 WQE 发出去后，只需等待硬件确认完成，再回收资源。
+*/
 void mlx5e_ktls_tx_handle_resync_dump_comp(struct mlx5e_txqsq *sq,
 					   struct mlx5e_tx_wqe_info *wi,
 					   u32 *dma_fifo_cc)
 {
 	struct mlx5e_sq_stats *stats;
 	struct mlx5e_sq_dma *dma;
-
+	//获取本次 resync dump 对应的 DMA 映射项（从 FIFO 中取出），dma_fifo_cc++ 表示我们消费了一个 FIFO 中的项
 	dma = mlx5e_dma_get(sq, (*dma_fifo_cc)++);
 	stats = sq->stats;
-
+	//解除之前为 resync dump 包做的 DMA 映射
 	mlx5e_tx_dma_unmap(sq->pdev, dma);
 	page_ref_dec(wi->resync_dump_frag_page);
 	stats->tls_dump_packets++;

@@ -1027,9 +1027,8 @@ int xdp_do_redirect_frame(struct net_device *dev,
 			  struct bpf_prog *prog);
 void xdp_do_flush(void);
 
-/* The xdp_do_flush_map() helper has been renamed to drop the _map suffix, as
- * it is no longer only flushing maps. Keep this define for compatibility
- * until all drivers are updated - do not use xdp_do_flush_map() in new code!
+/* xdp_do_flush_map() 这个辅助函数已经被重命名，去掉了 _map 后缀，因为它现在不再只是用于刷新 map 操作了。
+ * 为了兼容性，保留这个宏定义，直到所有驱动都完成更新 —— 在新代码中请不要再使用 xdp_do_flush_map()
  */
 #define xdp_do_flush_map xdp_do_flush
 

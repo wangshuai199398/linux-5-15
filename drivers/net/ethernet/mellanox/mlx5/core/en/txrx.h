@@ -26,6 +26,7 @@
 
 #define MLX5E_RX_ERR_CQE(cqe) (get_cqe_opcode(cqe) != MLX5_CQE_RESP_SEND)
 
+//依赖驱动注册的PTP时钟接口，将网卡周期计数转换为系统时钟
 static inline
 ktime_t mlx5e_cqe_ts_to_ns(cqe_ts_to_ns func, struct mlx5_clock *clock, u64 cqe_ts)
 {
@@ -133,6 +134,7 @@ mlx5e_post_nop_fence(struct mlx5_wq_cyc *wq, u32 sqn, u16 *pc)
 	return wqe;
 }
 
+//每个 SQ 索引对应的 WQE 元信息（如 DMA 数、WQEBB 数）
 struct mlx5e_tx_wqe_info {
 	struct sk_buff *skb;
 	u32 num_bytes;
@@ -140,35 +142,42 @@ struct mlx5e_tx_wqe_info {
 	u8 num_dma;
 	u8 num_fifo_pkts;
 #ifdef CONFIG_MLX5_EN_TLS
-	struct page *resync_dump_frag_page;
+	struct page *resync_dump_frag_page;//发送重同步数据时设置，用于提示这是一个 专门用于 TLS record 重建的 WQE
 #endif
 };
 
+//确保当前要分配的 WQE 块不会跨页（page boundary），如果可能跨页，则插入 NOP（空操作）填充，跳过当前页的剩余空间
+//这对网卡 DMA 非常重要，因为大多数硬件都不支持一个 WQE 跨越两个物理页
 static inline u16 mlx5e_txqsq_get_next_pi(struct mlx5e_txqsq *sq, u16 size)
 {
 	struct mlx5_wq_cyc *wq = &sq->wq;
 	u16 pi, contig_wqebbs;
-
+	//获取当前producer counter对应的队列位置索引 pi
 	pi = mlx5_wq_cyc_ctr2ix(wq, sq->pc);
+	//计算从当前 pi 开始，还能连续分配多少个 WQE 块而不跨页
 	contig_wqebbs = mlx5_wq_cyc_get_contig_wqebbs(wq, pi);
+	//如果连续空间不够，则需要“跳过”这部分空间，避免 WQE 跨页
 	if (unlikely(contig_wqebbs < size)) {
 		struct mlx5e_tx_wqe_info *wi, *edge_wi;
 
 		wi = &sq->db.wqe_info[pi];
 		edge_wi = wi + contig_wqebbs;
 
-		/* Fill SQ frag edge with NOPs to avoid WQE wrapping two pages. */
+		/* Fill SQ frag edge with NOPs to avoid WQE wrapping two pages. 在连续不够的位置插入 NOP */
 		for (; wi < edge_wi; wi++) {
+			//每个 NOP 占用一个 wqebb
 			*wi = (struct mlx5e_tx_wqe_info) {
 				.num_wqebbs = 1,
 			};
+			// 向队列中实际写入 NOP WQE
 			mlx5e_post_nop(wq, sq->sqn, &sq->pc);
 		}
+		//统计插入了多少个 NOP，方便后续分析 TX 效率
 		sq->stats->nop += contig_wqebbs;
-
+		//插入完 NOP 后，重新计算 PI（已经推进到了一个新的“安全位置”）
 		pi = mlx5_wq_cyc_ctr2ix(wq, sq->pc);
 	}
-
+	//返回一个不会跨页的、可以写入 WQE 的位置索引
 	return pi;
 }
 

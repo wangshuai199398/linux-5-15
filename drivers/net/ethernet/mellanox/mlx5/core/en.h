@@ -141,6 +141,7 @@ struct page_pool;
 #define MLX5E_MIN_NUM_CHANNELS         0x1
 #define MLX5E_MAX_NUM_CHANNELS         (MLX5E_INDIR_RQT_SIZE / 2)
 #define MLX5E_MAX_NUM_SQS              (MLX5E_MAX_NUM_CHANNELS * MLX5E_MAX_NUM_TC)
+//每次轮询最多处理的 CQE 个数
 #define MLX5E_TX_CQ_POLL_BUDGET        128
 #define MLX5E_TX_XSK_POLL_BUDGET       64
 #define MLX5E_SQ_RECOVER_MIN_INTERVAL  500 /* msecs */
@@ -199,9 +200,9 @@ static inline int mlx5e_get_max_num_channels(struct mlx5_core_dev *mdev)
 }
 
 struct mlx5e_tx_wqe {
-	struct mlx5_wqe_ctrl_seg ctrl;
-	struct mlx5_wqe_eth_seg  eth;
-	struct mlx5_wqe_data_seg data[0];
+	struct mlx5_wqe_ctrl_seg ctrl;//包含控制信息，例如 opcode、fence、QPN 等
+	struct mlx5_wqe_eth_seg  eth;//存放和以太网层相关的头部信息，比如 VLAN、MSS
+	struct mlx5_wqe_data_seg data[0];//实际待发送的数据段（通常是 DMA 映射后的物理地址）
 };
 
 struct mlx5e_rx_wqe_ll {
@@ -338,6 +339,7 @@ struct mlx5e_sq_dma {
 
 enum {
 	MLX5E_SQ_STATE_ENABLED,
+	//MPWQE（Multi-Packet WQE）是一种批量发送多个包的高效机制，可减少 WQE 消耗、提高吞吐
 	MLX5E_SQ_STATE_MPWQE,
 	MLX5E_SQ_STATE_RECOVERING,
 	MLX5E_SQ_STATE_IPSEC,
@@ -389,7 +391,7 @@ struct mlx5e_txqsq {
 	struct {
 		struct mlx5e_sq_dma       *dma_fifo;
 		struct mlx5e_skb_fifo      skb_fifo;
-		struct mlx5e_tx_wqe_info  *wqe_info;
+		struct mlx5e_tx_wqe_info  *wqe_info;//对应的队列元数据数组
 	} db;
 	void __iomem              *uar_map;
 	struct netdev_queue       *txq;
@@ -641,7 +643,8 @@ struct mlx5e_rq {
 	struct net_device     *netdev;
 	struct mlx5e_rq_stats *stats;
 	struct mlx5e_cq        cq;
-	struct mlx5e_cq_decomp cqd;
+	//为了提升性能，Mellanox 的硬件支持 压缩多个 CQE（称为 mini-CQE）到一个 WQE 中，减少 PCIe 带宽和缓存压力
+	struct mlx5e_cq_decomp cqd;//Compressed Queue Descriptor
 	struct mlx5e_page_cache page_cache;
 	struct hwtstamp_config *tstamp;
 	struct mlx5_clock      *clock;
@@ -687,36 +690,48 @@ enum mlx5e_channel_state {
 	MLX5E_CHANNEL_STATE_XSK,
 	MLX5E_CHANNEL_NUM_STATES
 };
-
+//
 struct mlx5e_channel {
 	/* data path */
+	//主接收队列
 	struct mlx5e_rq            rq;
+	//用于支持 XDP_DROP/XDP_TX 的内部发送通道
 	struct mlx5e_xdpsq         rq_xdpsq;
+	//普通 TX 队列，按 traffic class 分多个
 	struct mlx5e_txqsq         sq[MLX5E_MAX_NUM_TC];
+	//内部控制操作 SQ，例如修改 QP 参数等
 	struct mlx5e_icosq         icosq;   /* internal control operations */
+	//RCU 指针，支持 QoS 映射到特定 SQ（运行时可切换）
 	struct mlx5e_txqsq __rcu * __rcu *qos_sqs;
+	//是否启用了 XDP
 	bool                       xdp;
 	struct napi_struct         napi;
 	struct device             *pdev;
 	struct net_device         *netdev;
+	//NIC 访问 host 内存的 LKey（big-endian）
 	__be32                     mkey_be;
 	u16                        qos_sqs_size;
 	u8                         num_tc;
 	u8                         lag_port;
 
 	/* XDP_REDIRECT */
+	//支持 XDP_REDIRECT 的 TX 队列
 	struct mlx5e_xdpsq         xdpsq;
 
 	/* AF_XDP zero-copy */
+	//用于 AF_XDP 的 RX 队列
 	struct mlx5e_rq            xskrq;
+	//用于 AF_XDP 的 TX 队列
 	struct mlx5e_xdpsq         xsksq;
 
 	/* Async ICOSQ */
+	//用于异步控制操作的 SQ
 	struct mlx5e_icosq         async_icosq;
 	/* async_icosq can be accessed from any CPU - the spinlock protects it. */
 	spinlock_t                 async_icosq_lock;
 
 	/* data path - accessed per napi poll */
+	//当前 channel 的 CPU affinity 掩码
 	const struct cpumask	  *aff_mask;
 	struct mlx5e_ch_stats     *stats;
 
@@ -724,8 +739,11 @@ struct mlx5e_channel {
 	struct mlx5e_priv         *priv;
 	struct mlx5_core_dev      *mdev;
 	struct hwtstamp_config    *tstamp;
+	//当前 channel 状态（位图，如是否启用 XSK）
 	DECLARE_BITMAP(state, MLX5E_CHANNEL_NUM_STATES);
+	//channel 编号（index）
 	int                        ix;
+	//该 channel 所绑定的 CPU
 	int                        cpu;
 	/* Sync between icosq recovery and XSK enable/disable. */
 	struct mutex               icosq_recovery_lock;

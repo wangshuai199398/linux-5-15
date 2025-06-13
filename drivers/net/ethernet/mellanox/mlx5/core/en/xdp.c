@@ -460,7 +460,9 @@ bool mlx5e_poll_xdpsq_cq(struct mlx5e_cq *cq)
 
 	mlx5_cqwq_update_db_record(&cq->wq);
 
-	/* ensure cq space is freed before enabling more cqes */
+	/* 在允许硬件生成更多 CQE 之前，先确保已经释放了 CQ 空间 
+	   确保 cc 的写入（doorbell 更新）在任何后续写操作之前完成并对设备可见
+	   保证上面那条写 cc 的指令，不会被乱序排到后面                     */
 	wmb();
 
 	sq->cc = sqcc;
@@ -558,14 +560,15 @@ int mlx5e_xdp_xmit(struct net_device *dev, int n, struct xdp_frame **frames,
 void mlx5e_xdp_rx_poll_complete(struct mlx5e_rq *rq)
 {
 	struct mlx5e_xdpsq *xdpsq = rq->xdpsq;
-
+	//如果有未完成的 XDP 多包发送（MPWQE 打包还没收尾），就在这里补充完整避免遗留 WQE 或资源未提交导致硬件漏包
 	if (xdpsq->mpwqe.wqe)
 		mlx5e_xdp_mpwqe_complete(xdpsq);
-
+	//向硬件发 doorbell，通知它有 XDP TX 的数据已经准备好，可以发送了，这是写入 doorbell 区域（MMIO）的操作
 	mlx5e_xmit_xdp_doorbell(xdpsq);
-
+	//如果在本轮 poll 过程中曾执行了 XDP_REDIRECT (比如将包重定向到别的 CPU 或 interface)
 	if (test_bit(MLX5E_RQ_FLAG_XDP_REDIRECT, rq->flags)) {
 		xdp_do_flush_map();
+		//清除标志位，表示“这轮 poll 的 redirect 已完成”
 		__clear_bit(MLX5E_RQ_FLAG_XDP_REDIRECT, rq->flags);
 	}
 }

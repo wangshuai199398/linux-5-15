@@ -3944,33 +3944,23 @@ static const struct bpf_func_proto bpf_xdp_adjust_meta_proto = {
 	.arg2_type	= ARG_ANYTHING,
 };
 
-/* XDP_REDIRECT works by a three-step process, implemented in the functions
- * below:
+/* XDP_REDIRECT 是通过三步流程实现的，下面的函数中体现了这三步:
  *
- * 1. The bpf_redirect() and bpf_redirect_map() helpers will lookup the target
- *    of the redirect and store it (along with some other metadata) in a per-CPU
- *    struct bpf_redirect_info.
+ * 1. bpf_redirect() 和 bpf_redirect_map() 这两个辅助函数会查找重定向的目标，并将其（连同一些其他元数据）
+ *    存储到每个 CPU 的 struct bpf_redirect_info 中
  *
- * 2. When the program returns the XDP_REDIRECT return code, the driver will
- *    call xdp_do_redirect() which will use the information in struct
- *    bpf_redirect_info to actually enqueue the frame into a map type-specific
- *    bulk queue structure.
+ * 2. 当 XDP 程序返回 XDP_REDIRECT 返回码时，驱动会调用 xdp_do_redirect()，它将使用 struct bpf_redirect_info 
+ *    中保存的信息，实际将该数据帧加入到特定 map 类型对应的批量队列结构中。
  *
- * 3. Before exiting its NAPI poll loop, the driver will call xdp_do_flush(),
- *    which will flush all the different bulk queues, thus completing the
- *    redirect.
+ * 3. 在退出其 NAPI 轮询循环（poll loop）之前，驱动会调用 xdp_do_flush()，该函数会刷新所有不同类型的批量队列，从而完成重定向操作
  *
- * Pointers to the map entries will be kept around for this whole sequence of
- * steps, protected by RCU. However, there is no top-level rcu_read_lock() in
- * the core code; instead, the RCU protection relies on everything happening
- * inside a single NAPI poll sequence, which means it's between a pair of calls
- * to local_bh_disable()/local_bh_enable().
+ * 指向 map 项（map entries）的指针会在整个处理流程中一直保留，并通过 RCU 进行保护。
+ * 然而，在核心代码中并没有使用顶层的 rcu_read_lock()；取而代之的是，RCU 的保护依赖于整个流程都发生在一次 NAPI 轮询（poll）序列中，
+ * 也就是说，这个过程被包裹在一对 local_bh_disable() / local_bh_enable() 调用之间。
  *
- * The map entries are marked as __rcu and the map code makes sure to
- * dereference those pointers with rcu_dereference_check() in a way that works
- * for both sections that to hold an rcu_read_lock() and sections that are
- * called from NAPI without a separate rcu_read_lock(). The code below does not
- * use RCU annotations, but relies on those in the map code.
+ * map 条目被标记为 __rcu，而 map 的实现代码在解引用这些指针时使用了 rcu_dereference_check()，
+ * 这样做既适用于显式持有 rcu_read_lock() 的代码段，也适用于那些从 NAPI 上下文中调用、但没有显式加 rcu_read_lock() 的代码段。
+ * 本段代码本身没有使用 RCU 注解，而是依赖于 map 代码中的 RCU 处理来保证安全性
  */
 void xdp_do_flush(void)
 {

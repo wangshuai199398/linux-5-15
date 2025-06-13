@@ -590,17 +590,14 @@ struct sock *tcp_create_openreq_child(const struct sock *sk,
 EXPORT_SYMBOL(tcp_create_openreq_child);
 
 /*
- * Process an incoming packet for SYN_RECV sockets represented as a
- * request_sock. Normally sk is the listener socket but for TFO it
- * points to the child socket.
+ * 处理一个对应于 SYN_RECV 状态的 request_sock 的传入数据包。
+ * 通常，sk 是监听套接字（listener socket），但如果启用了 TFO（TCP Fast Open），它可能是子 socket。
  *
- * XXX (TFO) - The current impl contains a special check for ack
- * validation and inside tcp_v4_reqsk_send_ack(). Can we do better?
+ * XXX（TFO）注：当前实现中包含了一个特殊的 ACK 校验逻辑，位于 tcp_v4_reqsk_send_ack() 中。是否有更好的方式来处理它？（TODO 或技术债的提醒）
  *
- * We don't need to initialize tmp_opt.sack_ok as we don't use the results
+ * 我们不需要初始化 tmp_opt.sack_ok，因为后续不会使用这个结果。这是指暂时解析 TCP 选项时不关心 SACK 是否可用。
  *
- * Note: If @fastopen is true, this can be called from process context.
- *       Otherwise, this is from BH context.
+ * 注意：如果 @fastopen 为 true，此函数可能从进程上下文调用；否则为软中断（bottom half）上下文。
  */
 
 struct sock *tcp_check_req(struct sock *sk, struct sk_buff *skb,
@@ -738,9 +735,8 @@ struct sock *tcp_check_req(struct sock *sk, struct sk_buff *skb,
 		return NULL;
 	}
 
-	/* OK, ACK is valid, create big socket and feed this segment to it. It will repeat all the tests. THIS SEGMENT MUST MOVE SOCKET TOESTABLISHED STATE.
-	 * If it will be dropped after socket is created, wait for troubles.
-	 */
+	/* 创建子socket，并把这个数据段交给它处理。它会重新执行所有必要的协议检查。
+	   这个数据段必须让 socket 进入 ESTABLISHED 状态。如果在创建 socket 之后这个段被丢弃，那你就等着出问题吧 */
 	child = inet_csk(sk)->icsk_af_ops->syn_recv_sock(sk, skb, req, NULL,
 							 req, &own_req);//tcp_v4_syn_recv_sock
 	if (!child)
@@ -748,9 +744,9 @@ struct sock *tcp_check_req(struct sock *sk, struct sk_buff *skb,
 	//own_req 表示当前处理逻辑是否“拥有”该 request socket
 	//rsk_drop_req是否应立即丢弃这个 req（可能是连接超时、被撤销等）
 	if (own_req && rsk_drop_req(req)) {
-		reqsk_queue_removed(&inet_csk(req->rsk_listener)->icsk_accept_queue, req);
-		inet_csk_reqsk_queue_drop_and_put(req->rsk_listener, req);
-		return child;
+		reqsk_queue_removed(&inet_csk(req->rsk_listener)->icsk_accept_queue, req);//从监听 socket 的半连接队列中移除已处理的连接请求
+		inet_csk_reqsk_queue_drop_and_put(req->rsk_listener, req);//释放该连接请求的资源
+		return child;//返回一个新的、正式的 socket 结构（已建立连接）
 	}
 	//保存接收到的skb中的 RPS（Receive Packet Steering）哈希。
 	//这用于将接下来的数据包调度到对应CPU，提高多核并发处理能力。
@@ -760,7 +756,7 @@ struct sock *tcp_check_req(struct sock *sk, struct sk_buff *skb,
 	//如果当前逻辑是“偷”了别人处理的请求（例如 TFO 处理路径中这样可能发生），设置 *req_stolen = true，否则，标记为自己处理的请求
 	*req_stolen = !own_req;
 	//完成 hashdance 操作，hashdance 是一个术语，指将新的 socket 从临时连接状态（req）转换为完整连接，并插入到 established 哈希表中
-	//此函数也负责设置 socket 状态为 ESTABLISHED，并通知上层应用该连接可用。
+	//此函数也负责设置 socket 状态为 ESTABLISHED，并通知上层应用该连接可用。 添加到全连接队列
 	return inet_csk_complete_hashdance(sk, child, req, own_req);
 
 listen_overflow:

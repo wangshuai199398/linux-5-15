@@ -4158,10 +4158,8 @@ void __tcp_send_ack(struct sock *sk, u32 rcv_nxt)
 	if (sk->sk_state == TCP_CLOSE)
 		return;
 
-	/* We are not putting this on the write queue, so
-	 * tcp_transmit_skb() will set the ownership to this
-	 * sock.
-	 */
+	/* 我们并没有把这个放入写队列，所以 tcp_transmit_skb() 会将其归属权设置为当前这个 socket */
+	//申请和构造ack包
 	buff = alloc_skb(MAX_TCP_HEADER,
 			 sk_gfp_mask(sk, GFP_ATOMIC | __GFP_NOWARN));
 	if (unlikely(!buff)) {

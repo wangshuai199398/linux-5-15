@@ -216,28 +216,34 @@ static inline u32 mlx5_cqwq_get_wrap_cnt(struct mlx5_cqwq *wq)
 {
 	return mlx5_cqwq_get_ctr_wrap_cnt(wq, wq->cc);
 }
-
+//增加 CQ consumer index，表示消费了一个 CQE
 static inline void mlx5_cqwq_pop(struct mlx5_cqwq *wq)
 {
 	wq->cc++;
 }
 
+//将软件端处理完的 Completion Queue Entry（CQE）个数 wq->cc 写入 Doorbell Record（wq->db），告诉硬件：
+//我已经处理了 N 个 CQE，现在这些槽位你可以重用了
 static inline void mlx5_cqwq_update_db_record(struct mlx5_cqwq *wq)
 {
 	*wq->db = cpu_to_be32(wq->cc & 0xffffff);
 }
-
+//从 Completion Queue (CQ) 获取下一个有效 CQE, 只有当 CQE 中的 owner 位表明数据是硬件新写入的才会返回有效指针
 static inline struct mlx5_cqe64 *mlx5_cqwq_get_cqe(struct mlx5_cqwq *wq)
 {
+	//获取当前CI consumer index
 	u32 ci = mlx5_cqwq_get_ci(wq);
+	//获取该索引对应的 CQE 指针,这个结构就是 HW 写入的完成事件（TX/RX 完成）
 	struct mlx5_cqe64 *cqe = mlx5_cqwq_get_wqe(wq, ci);
+	//owner bit 用来区分这个 CQE 属于硬件写入的当前轮次还是上一轮被消费的旧数据
 	u8 cqe_ownership_bit = cqe->op_own & MLX5_CQE_OWNER_MASK;
+	//表示软件认为现在在偶数轮 or 奇数轮
 	u8 sw_ownership_val = mlx5_cqwq_get_wrap_cnt(wq) & 1;
-
+	//判断是否是新 CQE（是否可以读取） 返回 NULL，表示目前没有可用的 CQE，poll 函数会停下或等待下一次
 	if (cqe_ownership_bit != sw_ownership_val)
 		return NULL;
 
-	/* ensure cqe content is read after cqe ownership bit */
+	/* 保证cpu之后的读取都是最新的 */
 	dma_rmb();
 
 	return cqe;

@@ -173,7 +173,7 @@ void tcp_assign_congestion_control(struct sock *sk)
 	else
 		INET_ECN_dontxmit(sk);
 }
-
+//初始化拥塞控制
 void tcp_init_congestion_control(struct sock *sk)
 {
 	struct inet_connection_sock *icsk = inet_csk(sk);

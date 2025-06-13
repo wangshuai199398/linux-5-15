@@ -765,15 +765,10 @@ new_measure:
 	tp->rcvq_space.time = tp->tcp_mstamp;
 }
 
-/* There is something which you must keep in mind when you analyze the
- * behavior of the tp->ato delayed ack timeout interval.  When a
- * connection starts up, we want to ack as quickly as possible.  The
- * problem is that "good" TCP's do slow start at the beginning of data
- * transmission.  The means that until we send the first few ACK's the
- * sender will sit on his end and only queue most of his data, because
- * he can only send snd_cwnd unacked packets at any given time.  For
- * each ACK we send, he increments snd_cwnd and transmits more of his
- * queue.  -DaveM
+/* 在分析 tp->ato 延迟确认（delayed ack）超时间隔的行为时，有一点必须记住。
+ * 当一个连接刚刚建立时，我们希望尽可能快地发送确认（ACK）。问题在于，“优秀”的 TCP 实现通常会在开始发送数据时执行慢启动（slow start）。
+ * 这意味着，在我们发送最初几个 ACK 之前，发送方大多会将数据排队等待，因为在任意时刻它只能发送 snd_cwnd 个未被确认的数据包。
+ * 每当我们发送一个 ACK，它就会增加 snd_cwnd（发送窗口），然后从队列中发送更多数据。
  */
 static void tcp_event_data_recv(struct sock *sk, struct sk_buff *skb)
 {
@@ -3220,8 +3215,8 @@ static void tcp_cong_avoid(struct sock *sk, u32 ack, u32 acked)
 	tcp_sk(sk)->snd_cwnd_stamp = tcp_jiffies32;
 }
 
-/* Restart timer after forward progress on connection.
- * RFC2988 recommends to restart timer to now+rto.
+/* 在连接有前向进展（forward progress）后重启定时器。RFC 2988 建议将定时器重启为 当前时间 + RTO（重传超时时间）。
+ * 清除定时器
  */
 void tcp_rearm_rto(struct sock *sk)
 {
@@ -3998,8 +3993,7 @@ static int tcp_ack(struct sock *sk, const struct sk_buff *skb, int flag)
 	if (!prior_packets)
 		goto no_queue;
 
-	/* See if we can take anything off of the retransmit queue. */
-	//清理重传队列，确认了的数据包从队列中移除
+	/* 看看我们是否可以从重传队列中移除一些数据 清理重传队列，确认了的数据包从队列中移除 */
 	flag |= tcp_clean_rtx_queue(sk, skb, prior_fack, prior_snd_una,
 				    &sack_state, flag & FLAG_ECE);
 	//使用 RACK（Recent Acknowledged Packet）算法更新 Reordering Window，帮助判断包是否乱序到达，以及后续是否要重传
@@ -6258,7 +6252,7 @@ void tcp_finish_connect(struct sock *sk, struct sk_buff *skb)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 	struct inet_connection_sock *icsk = inet_csk(sk);
-
+	//修改 socket 状态
 	tcp_set_state(sk, TCP_ESTABLISHED);
 	icsk->icsk_ack.lrcvtime = tcp_jiffies32;
 
@@ -6274,7 +6268,7 @@ void tcp_finish_connect(struct sock *sk, struct sk_buff *skb)
 	 * packet.
 	 */
 	tp->lsndtime = tcp_jiffies32;
-
+	//保活计时器打开
 	if (sock_flag(sk, SOCK_KEEPOPEN))
 		inet_csk_reset_keepalive_timer(sk, keepalive_time_when(tp));
 
@@ -6495,16 +6489,14 @@ static int tcp_rcv_synsent_state_process(struct sock *sk, struct sk_buff *skb,
 		//初始化接收方的 MSS（接收端能接受的最大报文段长度）
 		tcp_initialize_rcv_mss(sk);
 
-		/* Remember, tcp_poll() does not lock socket!
-		 * Change state from SYN-SENT only after copied_seq
-		 * is initialized. */
+		/* 请记住，tcp_poll() 不会对套接字加锁！只有在 copied_seq 初始化之后，才能从 SYN-SENT 状态切换。 */
 		//设置已复制数据的位置，为零拷贝准备，一定要在状态转换前完成（否则 tcp_poll可能读到未初始化值）
 		WRITE_ONCE(tp->copied_seq, tp->rcv_nxt);
 		//仅当启用 SMC 协议时生效
 		smc_check_reset_syn(tp);
 		//内存屏障，确保上面的变量写入对其他 CPU 可见，防止乱序
 		smp_mb();
-		//真正将 socket 状态设置为 TCP_ESTABLISHED，初始化RTT、启用 keepalive、调用sock_def_readable以唤醒 connect
+		//连接建立完成，真正将 socket 状态设置为 TCP_ESTABLISHED，初始化RTT、启用 keepalive、调用sock_def_readable以唤醒 connect
 		tcp_finish_connect(sk, skb);
 		//如果这是 Fast Open 连接（带数据 SYN），检查是否失败，如果失败，回退为普通连接
 		fastopen_fail = (tp->syn_fastopen || tp->syn_data) &&
@@ -6523,13 +6515,9 @@ static int tcp_rcv_synsent_state_process(struct sock *sk, struct sk_buff *skb,
 		if (sk->sk_write_pending ||
 		    icsk->icsk_accept_queue.rskq_defer_accept ||
 		    inet_csk_in_pingpong_mode(sk)) {
-			/* Save one ACK. Data will be ready after
-			 * several ticks, if write_pending is set.
-			 *
-			 * It may be deleted, but with this feature tcpdumps
-			 * look so _wonderfully_ clever, that I was not able
-			 * to stand against the temptation 8)     --ANK
-			 */
+			/* 节省一个 ACK。如果设置了 write_pending，那么数据将在几个时钟周期后准备好
+			 * 这一部分逻辑可以被删除，但启用这个特性后，tcpdump 的输出看起来异常聪明，我实在抵挡不住这个诱惑 */
+			//延迟确认
 			//计划发送 ACK，但稍后再发
 			inet_csk_schedule_ack(sk);
 			//启动快速ACK模式
@@ -6675,10 +6663,9 @@ static void tcp_rcv_synrecv_state_fastopen(struct sock *sk)
 }
 
 /*
- *	This function implements the receiving procedure of RFC 793 for
- *	all states except ESTABLISHED and TIME_WAIT.
- *	It's called from both tcp_v4_rcv and tcp_v6_rcv and should be
- *	address independent.
+ *	此函数实现了 RFC 793 中除 ESTABLISHED 和 TIME_WAIT 之外所有状态的接收过程。
+ *  它会被 tcp_v4_rcv 和 tcp_v6_rcv 调用，并且应当与地址无关。
+ * 除了 ESTABLISHED 和 TIME_WAIT，其他状态下的TCP处理都走这里
  */
 
 int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb)
@@ -6698,10 +6685,8 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb)
 	case TCP_LISTEN:
 		if (th->ack)
 			return 1;
-
 		if (th->rst)
 			goto discard;
-
 		if (th->syn) {
 			if (th->fin)
 				goto discard;
@@ -6713,7 +6698,6 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb)
 			acceptable = icsk->icsk_af_ops->conn_request(sk, skb) >= 0;//tcp_v4_conn_request
 			local_bh_enable();
 			rcu_read_unlock();
-
 			if (!acceptable)
 				return 1;
 			consume_skb(skb);
@@ -6725,11 +6709,11 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb)
 		tp->rx_opt.saw_tstamp = 0;
 		//刷新TCP的“时间戳戳记”（用于 RTT 估算等）
 		tcp_mstamp_refresh(tp);
+		//处理synack包
 		queued = tcp_rcv_synsent_state_process(sk, skb, th);
 		//如果 queued >= 0，表示处理完毕，返回
 		if (queued >= 0)
 			return queued;
-
 		/* Do step6 onward by hand. */
 		//检查TCP报文中是否有紧急数据（URG 标志），如果有就处理
 		tcp_urg(sk, skb, th);
@@ -7195,7 +7179,7 @@ int tcp_conn_request(struct request_sock_ops *rsk_ops,
 		if (!want_cookie)
 			goto drop;
 	}
-	//判断当前监听 socket 的 accept 队列 是否已满（即已完成三次握手、等待 accept() 的连接数超过 backlog）
+	//全连接队列是否满
 	if (sk_acceptq_is_full(sk)) {
 		NET_INC_STATS(sock_net(sk), LINUX_MIB_LISTENOVERFLOWS);
 		goto drop;
@@ -7320,7 +7304,7 @@ int tcp_conn_request(struct request_sock_ops *rsk_ops,
 		if (!want_cookie) {
 			//设置请求超时
 			req->timeout = tcp_timeout_init((struct sock *)req);
-			//加入半连接队列（SYN_RECV）
+			//添加到半连接队列，并开启计时器
 			if (unlikely(!inet_csk_reqsk_queue_hash_add(sk, req,
 								    req->timeout))) {
 				reqsk_free(req);

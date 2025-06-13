@@ -73,6 +73,7 @@ static inline bool mlx5e_rx_hw_stamp(struct hwtstamp_config *config)
 	return config->rx_filter == HWTSTAMP_FILTER_ALL;
 }
 
+//从设备 CQE 空间（DMA 区）中读取 mini-CQE 数据到 CPU 可访问内存
 static inline void mlx5e_read_cqe_slot(struct mlx5_cqwq *wq,
 				       u32 cqcc, void *data)
 {
@@ -81,24 +82,34 @@ static inline void mlx5e_read_cqe_slot(struct mlx5_cqwq *wq,
 	memcpy(data, mlx5_cqwq_get_wqe(wq, ci), sizeof(struct mlx5_cqe64));
 }
 
+//从 压缩 CQE 的入口 CQE（也称 title CQE） 中读取并缓存必要信息，作为解压压缩 CQE（mini-CQE）的准备步骤
+/*
+在 Mellanox 的驱动中，压缩 CQE（Compressed CQE）由两部分组成：
+	1.	一个 入口 CQE（title CQE），格式为正常 CQE，告诉驱动后面有多少个 mini-CQE。
+	2.	紧接着是一段 mini-CQE array，每个 mini-CQE 表示一个报文
+*/
 static inline void mlx5e_read_title_slot(struct mlx5e_rq *rq,
 					 struct mlx5_cqwq *wq,
 					 u32 cqcc)
 {
+	//拿到当前接收队列对应的“解压状态结构”和要填充的 title CQE 缓存
 	struct mlx5e_cq_decomp *cqd = &rq->cqd;
 	struct mlx5_cqe64 *title = &cqd->title;
-
+	//从 CQ 的第 cqcc 项复制出完整的 CQE，保存在本地变量 cqd->title 中
 	mlx5e_read_cqe_slot(wq, cqcc, title);
 	cqd->left        = be32_to_cpu(title->byte_cnt);
 	cqd->wqe_counter = be16_to_cpu(title->wqe_counter);
 	rq->stats->cqe_compress_blks++;
 }
 
+//读取一组压缩的 mini-CQE 到本地缓存中（mini_arr 数组），为后续逐个解压做准备
 static inline void mlx5e_read_mini_arr_slot(struct mlx5_cqwq *wq,
 					    struct mlx5e_cq_decomp *cqd,
 					    u32 cqcc)
 {
+	//从硬件 CQE 区读取一批 mini-CQE
 	mlx5e_read_cqe_slot(wq, cqcc, cqd->mini_arr);
+	//读取完后，从数组头开始消费
 	cqd->mini_arr_idx = 0;
 }
 
@@ -126,6 +137,8 @@ static inline void mlx5e_cqes_update_owner(struct mlx5_cqwq *wq, int n)
 	}
 }
 
+//将压缩 CQE（mini-CQE）转换成一个“伪造的完整 CQE”（cqd->title），用于后续的统一收包处理流程
+//它从 mini-CQE 中抽取有限的信息（如 packet 长度、checksum、wqe_counter），并补全其他字段，以便收包处理代码可以像处理普通 CQE 那样工作
 static inline void mlx5e_decompress_cqe(struct mlx5e_rq *rq,
 					struct mlx5_cqwq *wq,
 					u32 cqcc)
@@ -156,6 +169,7 @@ static inline void mlx5e_decompress_cqe(struct mlx5e_rq *rq,
 			mlx5_wq_cyc_ctr2ix(&rq->wqe.wq, cqd->wqe_counter + 1);
 }
 
+//解压一个压缩 CQE（mini-CQE），但不处理 hash 相关字段（即 RSS 哈希类型和结果置 0），并将其内容填入一个临时结构 cqd->title，供后续接收包逻辑使用
 static inline void mlx5e_decompress_cqe_no_hash(struct mlx5e_rq *rq,
 						struct mlx5_cqwq *wq,
 						u32 cqcc)
@@ -167,6 +181,7 @@ static inline void mlx5e_decompress_cqe_no_hash(struct mlx5e_rq *rq,
 	cqd->title.rss_hash_result = 0;
 }
 
+//在收到压缩 Compressed CQE 之后，逐个“解压”并处理这些 mini-CQE，直到 budget 用完或没有压缩 CQE 可处理为止
 static inline u32 mlx5e_decompress_cqes_cont(struct mlx5e_rq *rq,
 					     struct mlx5_cqwq *wq,
 					     int update_owner_only,
@@ -176,14 +191,14 @@ static inline u32 mlx5e_decompress_cqes_cont(struct mlx5e_rq *rq,
 	u32 cqcc = wq->cc + update_owner_only;
 	u32 cqe_count;
 	u32 i;
-
+	//本次处理的较小值
 	cqe_count = min_t(u32, cqd->left, budget_rem);
 
-	for (i = update_owner_only; i < cqe_count;
-	     i++, cqd->mini_arr_idx++, cqcc++) {
+	for (i = update_owner_only; i < cqe_count; i++, cqd->mini_arr_idx++, cqcc++) {
+		//mini-CQE array 读取（每 N 个 CQE 一组）
 		if (cqd->mini_arr_idx == MLX5_MINI_CQE_ARRAY_SIZE)
-			mlx5e_read_mini_arr_slot(wq, cqd, cqcc);
-
+			mlx5e_read_mini_arr_slot(wq, cqd, cqcc);//如果当前 mini-CQE array 读完，加载下一块
+		//解压 mini-CQE 到 cqd->title
 		mlx5e_decompress_cqe_no_hash(rq, wq, cqcc);
 		INDIRECT_CALL_2(rq->handle_rx_cqe, mlx5e_handle_rx_cqe_mpwrq,
 				mlx5e_handle_rx_cqe, rq, &cqd->title);
@@ -1530,18 +1545,19 @@ mpwrq_cqe_out:
 	mlx5_wq_ll_pop(wq, cqe->wqe_id, &wqe->next.next_wqe_index);
 }
 
+//budget: 一次 poll 能处理的最多包数（避免抢占 CPU 太久）
 int mlx5e_poll_rx_cq(struct mlx5e_cq *cq, int budget)
 {
 	struct mlx5e_rq *rq = container_of(cq, struct mlx5e_rq, cq);
 	struct mlx5_cqwq *cqwq = &cq->wq;
 	struct mlx5_cqe64 *cqe;
-	int work_done = 0;
+	int work_done = 0;//当前已处理的 CQE 数量
 
 	if (unlikely(!test_bit(MLX5E_RQ_STATE_ENABLED, &rq->state)))
 		return 0;
-
+	//当前还有未解压的 CQE 剩余数量
 	if (rq->cqd.left) {
-		work_done += mlx5e_decompress_cqes_cont(rq, cqwq, 0, budget);
+		work_done += mlx5e_decompress_cqes_cont(rq, cqwq, 0, budget);//解压剩余的压缩 CQEs
 		if (work_done >= budget)
 			goto out;
 	}
@@ -1554,6 +1570,7 @@ int mlx5e_poll_rx_cq(struct mlx5e_cq *cq, int budget)
 	}
 
 	do {
+		//如果当前从 CQ（Completion Queue）中取出的 CQE 是压缩格式（MLX5_COMPRESSED），就启动压缩 CQE 的解压处理逻辑，然后 continue 跳过后续流程，重新处理下一个 CQE
 		if (mlx5_get_cqe_format(cqe) == MLX5_COMPRESSED) {
 			work_done +=
 				mlx5e_decompress_cqes_start(rq, cqwq,
@@ -1570,12 +1587,10 @@ int mlx5e_poll_rx_cq(struct mlx5e_cq *cq, int budget)
 out:
 	if (rcu_access_pointer(rq->xdp_prog))
 		mlx5e_xdp_rx_poll_complete(rq);
-
+	//更新 CQ 消费者指针，通知硬件：这些 CQE 已处理完
 	mlx5_cqwq_update_db_record(cqwq);
-
-	/* ensure cq space is freed before enabling more cqes */
+	/* 确保 CQ 空间已经释放后(即上边的mlx5_cqwq_update_db_record)，再允许硬件生成更多 CQE（收包） */
 	wmb();
-
 	return work_done;
 }
 

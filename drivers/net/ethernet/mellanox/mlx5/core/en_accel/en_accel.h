@@ -114,6 +114,7 @@ struct mlx5e_accel_tx_state {
 #endif
 };
 
+//为每个待发送数据包检查并初始化加速传输状态（如 UDP GSO、TLS、IPSec）的关键前置函数，确保包在硬件层正确加速处理
 static inline bool mlx5e_accel_tx_begin(struct net_device *dev,
 					struct mlx5e_txqsq *sq,
 					struct sk_buff *skb,
@@ -148,6 +149,7 @@ static inline bool mlx5e_accel_tx_is_ipsec_flow(struct mlx5e_accel_tx_state *sta
 #endif
 }
 
+//加速标签（如 TLS session id、IPSec SA id）长度
 static inline unsigned int mlx5e_accel_tx_ids_len(struct mlx5e_txqsq *sq,
 						  struct mlx5e_accel_tx_state *state)
 {
@@ -160,8 +162,15 @@ static inline unsigned int mlx5e_accel_tx_ids_len(struct mlx5e_txqsq *sq,
 }
 
 /* Part of the eseg touched by TX offloads */
+//在构造以太网发送段（mlx5_wqe_eth_seg）时，根据包的加速需求（如 IPsec 或 GENEVE）填充相关字段
 #define MLX5E_ACCEL_ESEG_LEN offsetof(struct mlx5_wqe_eth_seg, mss)
 
+/* 这个函数用于处理“加速 offload”相关的内容，如：
+	•	TLS offload 时的 inline header 长度设置；
+	•	复制 MAC/IP/TCP 头到 inline 段；
+	•	VLAN tag 的插入等；
+	•	ihs（inline header size）是关键参数，指示应将多少头部写入 inline 区
+*/
 static inline void mlx5e_accel_tx_eseg(struct mlx5e_priv *priv,
 				       struct sk_buff *skb,
 				       struct mlx5_wqe_eth_seg *eseg, u16 ihs)
@@ -177,6 +186,8 @@ static inline void mlx5e_accel_tx_eseg(struct mlx5e_priv *priv,
 #endif
 }
 
+//处理网络数据加速功能（如 TLS/IPsec）在数据包被组织为 WQE（Work Queue Entry）之后调用，用于将安全加速信息写入到 WQE 中
+//如果启用了 TLS 或 IPsec 硬件加速功能，则调用相应处理函数，把这些加速相关的元数据嵌入到 WQE 中，供网卡加速使用
 static inline void mlx5e_accel_tx_finish(struct mlx5e_txqsq *sq,
 					 struct mlx5e_tx_wqe *wqe,
 					 struct mlx5e_accel_tx_state *state,
