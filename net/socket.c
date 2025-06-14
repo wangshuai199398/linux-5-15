@@ -1825,7 +1825,7 @@ struct file *do_accept(struct file *file, unsigned file_flags,
 		goto out_fd;
 	//pr_err("%s: %s pid %d file_flags 0x%x \n", __func__, current->comm, current->pid, file_flags);
 	err = sock->ops->accept(sock, newsock, sock->file->f_flags | file_flags,
-					false);
+					false);//inet_csk_accept
 	if (err < 0)
 		goto out_fd;
 
@@ -1916,6 +1916,7 @@ SYSCALL_DEFINE4(accept4, int, fd, struct sockaddr __user *, upeer_sockaddr,
 SYSCALL_DEFINE3(accept, int, fd, struct sockaddr __user *, upeer_sockaddr,
 		int __user *, upeer_addrlen)
 {
+	//accept的重点工作就是从已经建立好的全连接队列中取出一个返回给用户进程
 	return __sys_accept4(fd, upeer_sockaddr, upeer_addrlen, 0);
 }
 

@@ -6759,6 +6759,7 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb)
 		goto discard;
 	}
 	switch (sk->sk_state) {
+	//第三次握手处理
 	case TCP_SYN_RECV:
 		//传输统计
 		tp->delivered++; /* SYN-ACK delivery isn't tracked in tcp_ack */
@@ -6778,7 +6779,7 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb)
 			WRITE_ONCE(tp->copied_seq, tp->rcv_nxt);
 		}
 		smp_mb();
-		//改变 socket 状态到 ESTABLISHED
+		//改变 socket 状态为连接
 		tcp_set_state(sk, TCP_ESTABLISHED);
 		//唤醒等待该 socket 状态变化的上层应用或进程
 		sk->sk_state_change(sk);
