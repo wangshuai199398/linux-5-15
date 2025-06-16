@@ -1872,7 +1872,7 @@ free_wqe:
 
 void mlx5e_rq_set_trap_handlers(struct mlx5e_rq *rq, struct mlx5e_params *params)
 {
-	pr_err("[wangs] mlx5e_skb_from_cqe_linear or mlx5e_skb_from_cqe_nonlinear", mlx5e_rx_is_linear_skb(params, NULL));
+	pr_err("[wangs] mlx5e_skb_from_cqe_linear or mlx5e_skb_from_cqe_nonlinear %d\n", mlx5e_rx_is_linear_skb(params, NULL));
 	rq->wqe.skb_from_cqe = mlx5e_rx_is_linear_skb(params, NULL) ?
 			       mlx5e_skb_from_cqe_linear :
 			       mlx5e_skb_from_cqe_nonlinear;
