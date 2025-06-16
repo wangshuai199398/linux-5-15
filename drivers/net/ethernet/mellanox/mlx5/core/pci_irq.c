@@ -416,13 +416,12 @@ void mlx5_irq_release(struct mlx5_irq *irq)
 }
 
 /**
- * mlx5_irq_request - request an IRQ for mlx5 device.
- * @dev: mlx5 device that requesting the IRQ.
- * @vecidx: vector index of the IRQ. This argument is ignore if affinity is
- * provided.
- * @affinity: cpumask requested for this IRQ.
+ * 为 mlx5 设备请求一个中断（IRQ）
+ * @dev:      mlx5 device that requesting the IRQ.
+ * @vecidx:   中断的向量索引。如果提供了亲和性（affinity），此参数将被忽略
+ * @affinity: 请求该中断的 CPU 掩码（cpumask）
  *
- * This function returns a pointer to IRQ, or ERR_PTR in case of error.
+ * 该函数返回一个指向中断（IRQ）的指针；如果出错，则返回 ERR_PTR
  */
 struct mlx5_irq *mlx5_irq_request(struct mlx5_core_dev *dev, u16 vecidx,
 				  struct cpumask *affinity)
@@ -436,6 +435,7 @@ struct mlx5_irq *mlx5_irq_request(struct mlx5_core_dev *dev, u16 vecidx,
 		if (!pool)
 			/* we don't have IRQs for SFs, using the PF IRQs */
 			goto pf_irq;
+		//如果 affinity 是空的并且池名是 "mlx5_sf_comp"，则使用指定向量号请求
 		if (cpumask_empty(affinity) && !strcmp(pool->name, "mlx5_sf_comp"))
 			/* In case an SF user request IRQ with vecidx */
 			irq = irq_pool_request_vector(pool, vecidx, NULL);
@@ -445,11 +445,12 @@ struct mlx5_irq *mlx5_irq_request(struct mlx5_core_dev *dev, u16 vecidx,
 	}
 pf_irq:
 	pool = irq_table->pf_pool;
+	//按指定的 affinity 请求
 	irq = irq_pool_request_vector(pool, vecidx, affinity);
 out:
 	if (IS_ERR(irq))
 		return irq;
-	mlx5_core_dbg(dev, "irq %u mapped to cpu %*pbl, %u EQs on this irq\n",
+	mlx5_core_err(dev, "irq %u mapped to cpu %*pbl, %u EQs on this irq\n",
 		      irq->irqn, cpumask_pr_args(affinity),
 		      irq->refcount / MLX5_EQ_REFS_PER_IRQ);
 	return irq;
