@@ -161,7 +161,7 @@ static int async_event(struct notifier_block *nb, unsigned long event, void *dat
 
 	return NOTIFY_OK;
 }
-
+//启用设备的异步事件机制
 static void mlx5e_enable_async_events(struct mlx5e_priv *priv)
 {
 	priv->events_nb.notifier_call = async_event;

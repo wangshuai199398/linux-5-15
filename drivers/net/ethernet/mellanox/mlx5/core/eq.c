@@ -104,13 +104,14 @@ static int mlx5_eq_comp_int(struct notifier_block *nb,
 			    __always_unused unsigned long action,
 			    __always_unused void *data)
 {
+	//从 notifier_block 拿到包含它的 EQ 完成对象
 	struct mlx5_eq_comp *eq_comp =
 		container_of(nb, struct mlx5_eq_comp, irq_nb);
 	struct mlx5_eq *eq = &eq_comp->core;
 	struct mlx5_eqe *eqe;
 	int num_eqes = 0;
 	u32 cqn = -1;
-
+	//获取下一个软件可见的 EQ 条目（如果没有，跳过）
 	eqe = next_eqe_sw(eq);
 	if (!eqe)
 		goto out;
@@ -118,9 +119,7 @@ static int mlx5_eq_comp_int(struct notifier_block *nb,
 	do {
 		struct mlx5_core_cq *cq;
 
-		/* Make sure we read EQ entry contents after we've
-		 * checked the ownership bit.
-		 */
+		/* 确保在检查完所有权位（ownership bit）之后再读取 EQ 条目的内容 */
 		dma_rmb();
 		/* Assume (eqe->type) is always MLX5_EVENT_TYPE_COMP */
 		cqn = be32_to_cpu(eqe->data.comp.cqn) & 0xffffff;
@@ -128,7 +127,7 @@ static int mlx5_eq_comp_int(struct notifier_block *nb,
 		cq = mlx5_eq_cq_get(eq, cqn);
 		if (likely(cq)) {
 			++cq->arm_sn;
-			cq->comp(cq, eqe);
+			cq->comp(cq, eqe);// mlx5e_completion_event
 			mlx5_cq_put(cq);
 		} else {
 			dev_dbg_ratelimited(eq->dev->device,
@@ -140,8 +139,9 @@ static int mlx5_eq_comp_int(struct notifier_block *nb,
 	} while ((++num_eqes < MLX5_EQ_POLLING_BUDGET) && (eqe = next_eqe_sw(eq)));
 
 out:
+	//更新 Consumer Index 到硬件
 	eq_update_ci(eq, 1);
-
+	//如果处理了 EQ 事件，调度 tasklet 来进行更多底层操作（比如 CQ arming）
 	if (cqn != -1)
 		tasklet_schedule(&eq_comp->tasklet_ctx.task);
 
