@@ -202,6 +202,7 @@ static inline bool is_valid_ether_addr(const u8 *addr)
  * Check that the value from the Ethertype/length field is a valid Ethertype.
  *
  * Return true if the valid is an 802.3 supported Ethertype.
+ * 如果 h_proto ≥ 0x0600，说明是标准以太网协议（如 IPv4 是 0x0800）
  */
 static inline bool eth_proto_is_802_3(__be16 proto)
 {
@@ -549,6 +550,7 @@ static inline unsigned long compare_ether_header(const void *a, const void *b)
  *
  * If the destination MAC address of the packet does not match the network
  * device address, assign an appropriate packet type.
+ * 判断是广播包、组播包、目标是本机还是其他主机（影响协议栈如何处理）
  */
 static inline void eth_skb_pkt_type(struct sk_buff *skb,
 				    const struct net_device *dev)

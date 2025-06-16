@@ -119,16 +119,19 @@ mlx5e_xmit_xdp_buff(struct mlx5e_xdpsq *sq, struct mlx5e_rq *rq,
 }
 
 /* returns true if packet was consumed by xdp */
+//执行绑定在接收队列（RQ）上的 XDP 程序，根据程序返回的动作（如 XDP_PASS, XDP_DROP, XDP_TX, XDP_REDIRECT 等），
+//执行相应操作，并告知调用方是否需要丢包或停止继续进入内核协议栈
 bool mlx5e_xdp_handle(struct mlx5e_rq *rq, struct mlx5e_dma_info *di,
 		      u32 *len, struct xdp_buff *xdp)
 {
+	//获取绑定在该 RQ 上的 BPF XDP 程序（可能为 NULL）
 	struct bpf_prog *prog = rcu_dereference(rq->xdp_prog);
 	u32 act;
 	int err;
 
 	if (!prog)
 		return false;
-
+	//运行 BPF XDP 程序（用户空间加载的 eBPF 程序）
 	act = bpf_prog_run_xdp(prog, xdp);
 	switch (act) {
 	case XDP_PASS:

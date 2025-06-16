@@ -199,7 +199,7 @@ static inline unsigned long _compound_head(const struct page *page)
 		return head - 1;
 	return (unsigned long)page;
 }
-
+//返回 page 所属复合页的头页，不管你传的是头页还是尾页
 #define compound_head(page)	((typeof(page))_compound_head(page))
 
 static __always_inline int PageTail(struct page *page)

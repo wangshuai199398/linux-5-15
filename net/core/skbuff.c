@@ -220,11 +220,10 @@ static void __build_skb_around(struct sk_buff *skb, void *data,
  * @data: data buffer provided by caller
  * @frag_size: size of data, or 0 if head was kmalloced
  *
- * Allocate a new &sk_buff. Caller provides space holding head and
- * skb_shared_info. @data must have been allocated by kmalloc() only if
- * @frag_size is 0, otherwise data should come from the page allocator
- *  or vmalloc()
- * The return is the new skb buffer.
+ * 分配一个新的 sk_buff 结构. 调用者提供的 data 内存区域需要同时包含 head and
+ * skb_shared_info. 当 frag_size 为 0 时，@data 必须是通过 kmalloc() 分配的, 
+ * 否则，@data 应该是通过 页分配器（page allocator） 或 vmalloc() 获取的
+ * 函数返回新创建的 sk_buff 缓冲区
  * On a failure the return is %NULL, and @data is not freed.
  * Notes :
  *  Before IO, driver allocates only data buffer where NIC put incoming frame
@@ -248,10 +247,8 @@ struct sk_buff *__build_skb(void *data, unsigned int frag_size)
 	return skb;
 }
 
-/* build_skb() is wrapper over __build_skb(), that specifically
- * takes care of skb->head and skb->pfmemalloc
- * This means that if @frag_size is not zero, then @data must be backed
- * by a page fragment, not kmalloc() or vmalloc()
+/* build_skb() 是 __build_skb() 的封装函数，它特别处理了 skb->head 和 skb->pfmemalloc 字段。
+ * 这意味着，如果传入的参数 @frag_size 不为零，那么参数 @data 必须来自于 页片段（page fragment），而不能是通过 kmalloc() 或 vmalloc() 分配的内存
  */
 struct sk_buff *build_skb(void *data, unsigned int frag_size)
 {
@@ -538,15 +535,14 @@ skb_fail:
 EXPORT_SYMBOL(__netdev_alloc_skb);
 
 /**
- *	__napi_alloc_skb - allocate skbuff for rx in a specific NAPI instance
+ *	为某个 NAPI 实例分配接收用的 sk_buff
  *	@napi: napi instance this buffer was allocated for
  *	@len: length to allocate
- *	@gfp_mask: get_free_pages mask, passed to alloc_skb and alloc_pages
+ *	@gfp_mask: 分配标志（用于 alloc_skb / alloc_pages）
  *
- *	Allocate a new sk_buff for use in NAPI receive.  This buffer will
- *	attempt to allocate the head from a special reserved region used
- *	only for NAPI Rx allocation.  By doing this we can save several
- *	CPU cycles by avoiding having to disable and re-enable IRQs.
+ *	为 NAPI 接收路径分配一个新的 sk_buff
+ *	此函数尝试从专门为 NAPI 接收分配保留的内存区域中分配 head 区域。
+ *	这样可以节省若干 CPU 周期，因为可以避免禁用和重新启用中断。
  *
  *	%NULL is returned if there is no free memory.
  */
@@ -602,6 +598,7 @@ skb_fail:
 }
 EXPORT_SYMBOL(__napi_alloc_skb);
 
+//将一个 page-based buffer（页片段）添加到 sk_buff 的 frags[] 中，作为接收到的数据片段
 void skb_add_rx_frag(struct sk_buff *skb, int i, struct page *page, int off,
 		     int size, unsigned int truesize)
 {
@@ -2039,13 +2036,12 @@ void *pskb_put(struct sk_buff *skb, struct sk_buff *tail, int len)
 EXPORT_SYMBOL_GPL(pskb_put);
 
 /**
- *	skb_put - add data to a buffer
+ *	向缓冲区添加数据
  *	@skb: buffer to use
  *	@len: amount of data to add
  *
- *	This function extends the used data area of the buffer. If this would
- *	exceed the total buffer size the kernel will panic. A pointer to the
- *	first byte of the extra data is returned.
+ *	此函数会扩展缓冲区中已使用的数据区域。如果扩展后的数据长度超过整个缓冲区的大小，内核将崩溃（panic）。
+ *  它返回指向新增数据起始位置的指针
  */
 void *skb_put(struct sk_buff *skb, unsigned int len)
 {

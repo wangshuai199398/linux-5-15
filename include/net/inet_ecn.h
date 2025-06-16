@@ -10,6 +10,10 @@
 #include <net/dsfield.h>
 #include <net/checksum.h>
 
+/* 什么是 ECN（Explicit Congestion Notification）？
+ECN 是 TCP/IP 网络中一种非丢包拥塞标记机制，在不丢包的情况下通知对方“发生了拥塞”
+路由器/交换机可在遇到拥塞时将 IP 头中的 ECN 字段设置为 CE，接收方驱动识别 CE 并设置 IP 报文中的 ECN 字段，TCP 层据此回传 ECE 标志，发起拥塞控制
+*/
 enum {
 	INET_ECN_NOT_ECT = 0,
 	INET_ECN_ECT_1 = 1,

@@ -143,13 +143,13 @@ u32 eth_get_headlen(const struct net_device *dev, const void *data, u32 len)
 EXPORT_SYMBOL(eth_get_headlen);
 
 /**
- * eth_type_trans - determine the packet's protocol ID.
+ * 确定数据包的协议类型（Protocol ID）
  * @skb: received socket data
  * @dev: receiving network device
  *
- * The rule here is that we
- * assume 802.3 if the type field is short enough to be a length.
- * This is normal practice and works for any 'now in use' protocol.
+ * 在以太网帧中，第 13–14 字节字段既可以表示 EtherType（协议号），也可以是 Length（长度）：
+	• 值 ≥ 1536 (0x0600) → 表示 协议类型（如 IPv4 是 0x0800）
+	• 值 < 1536 → 表示 帧长度，认为是 IEEE 802.3 帧，可能后面跟的是 LLC/SNAP
  */
 __be16 eth_type_trans(struct sk_buff *skb, struct net_device *dev)
 {
@@ -165,28 +165,20 @@ __be16 eth_type_trans(struct sk_buff *skb, struct net_device *dev)
 
 	eth_skb_pkt_type(skb, dev);
 
-	/*
-	 * Some variants of DSA tagging don't have an ethertype field
-	 * at all, so we check here whether one of those tagging
-	 * variants has been configured on the receiving interface,
-	 * and if so, set skb->protocol without looking at the packet.
-	 */
+	/* 某些 DSA（分布式交换架构）的标签格式变种根本不包含 Ethertype 字段，因此我们在这里检查接收接口上是否配置了这类标签格式的变种
+	   如果是，就不解析数据包内容，直接设置 skb->protocol 字段 */
 	if (unlikely(netdev_uses_dsa(dev)))
 		return htons(ETH_P_XDSA);
 
 	if (likely(eth_proto_is_802_3(eth->h_proto)))
 		return eth->h_proto;
 
-	/*
-	 *      This is a magic hack to spot IPX packets. Older Novell breaks
-	 *      the protocol design and runs IPX over 802.3 without an 802.2 LLC
-	 *      layer. We look for FFFF which isn't a used 802.2 SSAP/DSAP. This
-	 *      won't work for fault tolerant netware but does for the rest.
-	 */
+	/* 这是一个用于识别 IPX 数据包的特殊技巧（magic hack）。旧版的 Novell 系统违反了协议设计规范，将 IPX 协议直接运行在 802.3 帧之上，而没有使用 802.2 LLC 层 
+	   我们通过检查数据包的前两个字节是否是 FFFF（这是一个在 802.2 中未被使用的 SSAP/DSAP 值）来判断是否是这样的 IPX 包。
+	   这个方法无法识别容错版 NetWare（fault tolerant netware），但对于其他版本是有效的 */
 	sap = skb_header_pointer(skb, 0, sizeof(*sap), &_service_access_point);
 	if (sap && *sap == 0xFFFF)
 		return htons(ETH_P_802_3);
-
 	/*
 	 *      Real 802.2 LLC
 	 */

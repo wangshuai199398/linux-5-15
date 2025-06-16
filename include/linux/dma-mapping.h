@@ -342,6 +342,7 @@ static inline void dma_unmap_single_attrs(struct device *dev, dma_addr_t addr,
 	return dma_unmap_page_attrs(dev, addr, size, dir, attrs);
 }
 
+//当设备通过 DMA 写入了一块内存区域（即 buffer），如果 CPU 想要读取该 buffer 的一部分，就必须先调用该函数，否则可能读到旧数据或脏数据
 static inline void dma_sync_single_range_for_cpu(struct device *dev,
 		dma_addr_t addr, unsigned long offset, size_t size,
 		enum dma_data_direction dir)

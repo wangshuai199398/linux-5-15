@@ -63,6 +63,7 @@ mlx5e_tls_handle_tx_wqe(struct mlx5_wqe_ctrl_seg *cseg,
 void mlx5e_tls_handle_rx_skb_metadata(struct mlx5e_rq *rq, struct sk_buff *skb,
 				      u32 *cqe_bcnt);
 
+//接收到一个带 TLS 加密封装的包（例如 kTLS 透传情况）时，解析 TLS metadata、调整数据偏移
 static inline void
 mlx5e_tls_handle_rx_skb(struct mlx5e_rq *rq, struct sk_buff *skb,
 			struct mlx5_cqe64 *cqe, u32 *cqe_bcnt)

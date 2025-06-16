@@ -5447,8 +5447,11 @@ struct bpf_xdp_sock {
 enum xdp_action {
 	XDP_ABORTED = 0,
 	XDP_DROP,
+	//XDP程序不处理此包，走协议栈
 	XDP_PASS,
+	//表示立即回发此包（如做简单转发、反射）
 	XDP_TX,
+	//表示将包重定向到另一个设备或用户空间（如 AF_XDP）
 	XDP_REDIRECT,
 };
 

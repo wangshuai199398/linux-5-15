@@ -366,7 +366,8 @@ static inline void mlx5e_put_rx_frag(struct mlx5e_rq *rq,
 	if (frag->last_in_page)
 		mlx5e_page_release(rq, frag->di, recycle);
 }
-
+//根据队列索引 ix，从环形工作队列中获取这个索引位置上所有 fragment 的起始指针
+//如果 log_num_frags = 2，则每个 WQE 有 2^2 = 4 个 fragment
 static inline struct mlx5e_wqe_frag_info *get_frag(struct mlx5e_rq *rq, u16 ix)
 {
 	return &rq->wqe.frags[ix << rq->wqe.info.log_num_frags];
@@ -467,7 +468,7 @@ mlx5e_copy_skb_header(struct device *pdev, struct sk_buff *skb,
 		      int offset_from, u32 headlen)
 {
 	const void *from = page_address(dma_info->page) + offset_from;
-	/* Aligning len to sizeof(long) optimizes memcpy performance */
+	/* 将 len 对齐到 sizeof(long) 可以优化 memcpy 的性能 */
 	unsigned int len = ALIGN(headlen, sizeof(long));
 
 	dma_sync_single_for_cpu(pdev, dma_info->addr + offset_from, len,
@@ -867,12 +868,14 @@ static inline void mlx5e_skb_set_hash(struct mlx5_cqe64 *cqe,
 	skb_set_hash(skb, be32_to_cpu(cqe->rss_hash_result), ht);
 }
 
+//判断当前 skb 是否承载了 IP（IPv4 或 IPv6）协议，并确保其 IP 头部可访问
 static inline bool is_last_ethertype_ip(struct sk_buff *skb, int *network_depth,
 					__be16 *proto)
 {
 	*proto = ((struct ethhdr *)skb->data)->h_proto;
+	//如果包中含有 VLAN tag（802.1Q），那么真正的协议类型嵌套在 VLAN header 后面
 	*proto = __vlan_get_protocol(skb, *proto, network_depth);
-
+	//如果是 IPv4，检查是否至少有完整的 IP 头数据可访问
 	if (*proto == htons(ETH_P_IP))
 		return pskb_may_pull(skb, *network_depth + sizeof(struct iphdr));
 
@@ -881,18 +884,19 @@ static inline bool is_last_ethertype_ip(struct sk_buff *skb, int *network_depth,
 
 	return false;
 }
-
+//如果该报文是 IP 包，并且硬件报告了 ECN CE 标志，则修改 IP 头，把 ECN 位设置为 CE（表示“已遇到拥塞”）
 static inline void mlx5e_enable_ecn(struct mlx5e_rq *rq, struct sk_buff *skb)
 {
 	int network_depth = 0;
 	__be16 proto;
 	void *ip;
 	int rc;
-
+	//检查是否是 IP 包
 	if (unlikely(!is_last_ethertype_ip(skb, &network_depth, &proto)))
 		return;
 
 	ip = skb->data + network_depth;
+	//设置 IPv4 的 ECN 位（将 IPTOS_ECN_MASK 设为 0b11）
 	rc = ((proto == htons(ETH_P_IP)) ? IP_ECN_set_ce((struct iphdr *)ip) :
 					 IP6_ECN_set_ce(skb, (struct ipv6hdr *)ip));
 
@@ -982,6 +986,7 @@ mlx5e_skb_csum_fixup(struct sk_buff *skb, int network_depth, __be16 proto,
 	tail_padding_csum(skb, pkt_len, stats);
 }
 
+//根据网卡提供的 CQE 信息，决定是否标记 skb->ip_summed = CHECKSUM_UNNECESSARY、CHECKSUM_COMPLETE，或者需要协议栈软件计算校验和（CHECKSUM_NONE）
 static inline void mlx5e_handle_csum(struct net_device *netdev,
 				     struct mlx5_cqe64 *cqe,
 				     struct mlx5e_rq *rq,
@@ -991,32 +996,28 @@ static inline void mlx5e_handle_csum(struct net_device *netdev,
 	struct mlx5e_rq_stats *stats = rq->stats;
 	int network_depth = 0;
 	__be16 proto;
-
+	//如果网卡未开启 RXCSUM 硬件功能，则直接交给协议栈做校验（CHECKSUM_NONE）
 	if (unlikely(!(netdev->features & NETIF_F_RXCSUM)))
 		goto csum_none;
-
+	//如果是硬件 LRO 合并包，认为校验正确，跳过校验
 	if (lro) {
 		skb->ip_summed = CHECKSUM_UNNECESSARY;
 		stats->csum_unnecessary++;
 		return;
 	}
 
-	/* True when explicitly set via priv flag, or XDP prog is loaded */
+	/* 当通过私有标志显式设置，或已加载 XDP 程序时为真 */
+	//如果显式禁止了 checksum complete 或启用了 TLS offload，也认为校验无关，设置为 CHECKSUM_UNNECESSARY
 	if (test_bit(MLX5E_RQ_STATE_NO_CSUM_COMPLETE, &rq->state) ||
 	    get_cqe_tls_offload(cqe))
 		goto csum_unnecessary;
 
-	/* CQE csum doesn't cover padding octets in short ethernet
-	 * frames. And the pad field is appended prior to calculating
-	 * and appending the FCS field.
-	 *
-	 * Detecting these padded frames requires to verify and parse
-	 * IP headers, so we simply force all those small frames to be
-	 * CHECKSUM_UNNECESSARY even if they are not padded.
-	 */
+	/* CQE 的校验和不覆盖以太网短帧中的填充字节（padding）。而这些填充字段是在计算并附加 FCS（帧校验序列）之前添加的
+	 * 检测这些被填充的帧需要解析和验证 IP 头部，因此我们直接将所有这些小帧强制标记为 CHECKSUM_UNNECESSARY，即使它们实际上没有被填充 */
+	//小于 64 字节的帧可能被填充（pad），而硬件校验不包括 pad，因此统一跳过
 	if (short_frame(skb->len))
 		goto csum_unnecessary;
-
+	//对于 IPv4/IPv6 的 TCP/UDP 包，硬件提供完整校验值（CHECKSUM_COMPLETE），供上层如 UDP 校验
 	if (likely(is_last_ethertype_ip(skb, &network_depth, &proto))) {
 		if (unlikely(get_ip_proto(skb, network_depth, proto) == IPPROTO_SCTP))
 			goto csum_unnecessary;
@@ -1028,15 +1029,17 @@ static inline void mlx5e_handle_csum(struct net_device *netdev,
 		if (test_bit(MLX5E_RQ_STATE_CSUM_FULL, &rq->state))
 			return; /* CQE csum covers all received bytes */
 
-		/* csum might need some fixups ...*/
+		/* 若硬件不能 cover 全包，还会进一步修复校验 */
 		mlx5e_skb_csum_fixup(skb, network_depth, proto, stats);
 		return;
 	}
 
 csum_unnecessary:
+	//如果 CQE 提示 IP/L4 都 OK，设置 CHECKSUM_UNNECESSARY
 	if (likely((cqe->hds_ip_ext & CQE_L3_OK) &&
 		   (cqe->hds_ip_ext & CQE_L4_OK))) {
 		skb->ip_summed = CHECKSUM_UNNECESSARY;
+		//若是隧道包，还设置 csum_level = 1 和 encapsulation = 1
 		if (cqe_is_tunneled(cqe)) {
 			skb->csum_level = 1;
 			skb->encapsulation = 1;
@@ -1047,6 +1050,7 @@ csum_unnecessary:
 		return;
 	}
 csum_none:
+	//校验不可靠，交由协议栈自行计算
 	skb->ip_summed = CHECKSUM_NONE;
 	stats->csum_none++;
 }
@@ -1063,12 +1067,12 @@ static inline void mlx5e_build_rx_skb(struct mlx5_cqe64 *cqe,
 	struct net_device *netdev = rq->netdev;
 
 	skb->mac_len = ETH_HLEN;
-
+	//tls处理
 	mlx5e_tls_handle_rx_skb(rq, skb, cqe, &cqe_bcnt);
-
+	//IPsec 硬件卸载处理
 	if (unlikely(mlx5_ipsec_is_rx_flow(cqe)))
 		mlx5e_ipsec_offload_handle_rx_skb(netdev, skb, cqe);
-
+	//如果当前收到的数据是一个由多个 TCP 段合并的大包（LRO 包），则对 skb 进行标记、调整 GSO 参数，并更新统计信息
 	if (lro_num_seg > 1) {
 		mlx5e_lro_update_hdr(skb, cqe, cqe_bcnt);
 		skb_shinfo(skb)->gso_size = DIV_ROUND_UP(cqe_bcnt, lro_num_seg);
@@ -1079,7 +1083,7 @@ static inline void mlx5e_build_rx_skb(struct mlx5_cqe64 *cqe,
 		stats->lro_packets++;
 		stats->lro_bytes += cqe_bcnt;
 	}
-
+	//如果开启了硬件时间戳（HW timestamping），则将 CQE 中的时间戳转换为纳秒，并写入 skb，供协议栈使用
 	if (unlikely(mlx5e_rx_hw_stamp(rq->tstamp)))
 		skb_hwtstamps(skb)->hwtstamp = mlx5e_cqe_ts_to_ns(rq->ptp_cyc2time,
 								  rq->clock, get_cqe_ts(cqe));
@@ -1097,7 +1101,7 @@ static inline void mlx5e_build_rx_skb(struct mlx5_cqe64 *cqe,
 	skb->mark = be32_to_cpu(cqe->sop_drop_qpn) & MLX5E_TC_FLOW_ID_MASK;
 
 	mlx5e_handle_csum(netdev, cqe, rq, skb, !!lro_num_seg);
-	/* checking CE bit in cqe - MSB in ml_path field */
+	/* 检查 CQE 中的 CE（Congestion Experienced 拥塞标志）位 —— 它是 ml_path 字段中的最高位（MSB） */
 	if (unlikely(cqe->ml_path & MLX5E_CE_BIT_MASK))
 		mlx5e_enable_ecn(rq, skb);
 
@@ -1107,6 +1111,7 @@ static inline void mlx5e_build_rx_skb(struct mlx5_cqe64 *cqe,
 		stats->mcast_packets++;
 }
 
+//记录统计信息，并调用 mlx5e_build_rx_skb 构建和完善 skb 内容
 static inline void mlx5e_complete_rx_cqe(struct mlx5e_rq *rq,
 					 struct mlx5_cqe64 *cqe,
 					 u32 cqe_bcnt,
@@ -1119,6 +1124,7 @@ static inline void mlx5e_complete_rx_cqe(struct mlx5e_rq *rq,
 	mlx5e_build_rx_skb(cqe, cqe_bcnt, rq, skb);
 }
 
+//用已有的线性内存（va）构建一个 skb，填入数据长度和 headroom，作为网络协议栈的入口数据包
 static inline
 struct sk_buff *mlx5e_build_linear_skb(struct mlx5e_rq *rq, void *va,
 				       u32 frag_size, u16 headroom,
@@ -1136,7 +1142,7 @@ struct sk_buff *mlx5e_build_linear_skb(struct mlx5e_rq *rq, void *va,
 
 	return skb;
 }
-
+//该函数初始化 xdp_buff 结构，使其指向 DMA 接收到的 packet 数据，以便后续传给 XDP 程序处理（BPF 驱动的 fast path）
 static void mlx5e_fill_xdp_buff(struct mlx5e_rq *rq, void *va, u16 headroom,
 				u32 len, struct xdp_buff *xdp)
 {
@@ -1148,15 +1154,19 @@ static struct sk_buff *
 mlx5e_skb_from_cqe_linear(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
 			  struct mlx5e_wqe_frag_info *wi, u32 cqe_bcnt)
 {
+	//获取当前 packet 所在的 DMA page 信息 di
 	struct mlx5e_dma_info *di = wi->di;
+	//预留给协议栈的头部空间（如 NET_SKB_PAD）
 	u16 rx_headroom = rq->buff.headroom;
 	struct xdp_buff xdp;
 	struct sk_buff *skb;
 	void *va, *data;
 	u32 frag_size;
-
+	//当前 WQE buffer 的虚拟地址（页基址 + 偏移）
 	va             = page_address(di->page) + wi->offset;
+	//有效数据的起始地址（跳过 headroom）
 	data           = va + rx_headroom;
+	//本次使用的 fragment size
 	frag_size      = MLX5_SKB_FRAG_SZ(rx_headroom + cqe_bcnt);
 
 	dma_sync_single_range_for_cpu(rq->pdev, di->addr, wi->offset,
@@ -1167,57 +1177,62 @@ mlx5e_skb_from_cqe_linear(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
 	mlx5e_fill_xdp_buff(rq, va, rx_headroom, cqe_bcnt, &xdp);
 	if (mlx5e_xdp_handle(rq, di, &cqe_bcnt, &xdp))
 		return NULL; /* page/packet was consumed by XDP */
-
+	//由于 XDP 程序可能 xdp_adjust_head()，需要重新计算 headroom 和 frag size
 	rx_headroom = xdp.data - xdp.data_hard_start;
 	frag_size = MLX5_SKB_FRAG_SZ(rx_headroom + cqe_bcnt);
+	//构建线性 skb，数据从 va + rx_headroom 开始，长度为 cqe_bcnt
 	skb = mlx5e_build_linear_skb(rq, va, frag_size, rx_headroom, cqe_bcnt);
 	if (unlikely(!skb))
 		return NULL;
 
-	/* queue up for recycling/reuse */
+	/* queue up for recycling/reuse 增加 page 引用计数 */
 	page_ref_inc(di->page);
 
 	return skb;
 }
 
+//从接收完成队列（CQE）中提取数据，将散布在多个页片段（fragments）上的数据拼接进一个 skb，供内核协议栈使用
 static struct sk_buff *
 mlx5e_skb_from_cqe_nonlinear(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe,
 			     struct mlx5e_wqe_frag_info *wi, u32 cqe_bcnt)
 {
 	struct mlx5e_rq_frag_info *frag_info = &rq->wqe.info.arr[0];
 	struct mlx5e_wqe_frag_info *head_wi = wi;
+	//headlen 是要复制到 skb->data 的线性头部长度，最多 256 字节，剩下的字节保存在页片段中作为非线性部分
 	u16 headlen      = min_t(u32, MLX5E_RX_MAX_HEAD, cqe_bcnt);
 	u16 frag_headlen = headlen;
+	//byte_cnt 是还未处理的数据大小
 	u16 byte_cnt     = cqe_bcnt - headlen;
 	struct sk_buff *skb;
 
-	/* XDP is not supported in this configuration, as incoming packets
-	 * might spread among multiple pages.
-	 */
+	/* 此配置下不支持 XDP，因为接收到的数据包可能会跨越多个内存页（pages）*/
+	//分配一个仅含头部空间的 sk_buff，长度对齐到 sizeof(long) 是为了 优化后续 memcpy() 性能
 	skb = napi_alloc_skb(rq->cq.napi,
 			     ALIGN(MLX5E_RX_MAX_HEAD, sizeof(long)));
 	if (unlikely(!skb)) {
 		rq->stats->buff_alloc_err++;
 		return NULL;
 	}
-
+	//预取线性区缓存，优化写缓存访问性能
 	net_prefetchw(skb->data);
-
+	//通过循环将剩余的数据添加为 skb->frags[] 的非线性片段
 	while (byte_cnt) {
+		//计算每个片段中可复制的字节
 		u16 frag_consumed_bytes =
 			min_t(u16, frag_info->frag_size - frag_headlen, byte_cnt);
-
+		//把这个片段加到 skb 的 frags[] 中
 		mlx5e_add_skb_frag(rq, skb, wi->di, wi->offset + frag_headlen,
 				   frag_consumed_bytes, frag_info->frag_stride);
 		byte_cnt -= frag_consumed_bytes;
+		//之后片段从 offset 0 开始
 		frag_headlen = 0;
 		frag_info++;
 		wi++;
 	}
 
-	/* copy header */
+	/* 拷贝头部数据, 将 packet 的头部 headlen 字节从 DMA buffer 拷贝到 skb->data */
 	mlx5e_copy_skb_header(rq->pdev, skb, head_wi->di, head_wi->offset, headlen);
-	/* skb linear part was allocated with headlen and aligned to long */
+	/* skb 的线性部分是按照 headlen 大小分配的，并且已按 long 类型对齐 */
 	skb->tail += headlen;
 	skb->len  += headlen;
 
@@ -1258,19 +1273,19 @@ static void mlx5e_handle_rx_cqe(struct mlx5e_rq *rq, struct mlx5_cqe64 *cqe)
 			      mlx5e_skb_from_cqe_linear,
 			      mlx5e_skb_from_cqe_nonlinear,
 			      rq, cqe, wi, cqe_bcnt);
+	//如果没有生成 skb（例如被 XDP 吃掉了，或者分配失败），就执行异常处理
 	if (!skb) {
-		/* probably for XDP */
+		/* 是否设置了 XDP_XMIT，同时清除该标志（只处理一次），防止重复 */
 		if (__test_and_clear_bit(MLX5E_RQ_FLAG_XDP_XMIT, rq->flags)) {
-			/* do not return page to cache,
-			 * it will be returned on XDP_TX completion.
-			 */
+			/* 不要现在就归还页（page）到 page pool/page cache
+			 * 因为 XDP_TX 模式下，页面稍后会在发送完成后再释放 */
 			goto wq_cyc_pop;
 		}
 		goto free_wqe;
 	}
 
 	mlx5e_complete_rx_cqe(rq, cqe, cqe_bcnt, skb);
-
+	//如果该接收包携带了 reg_b 元信息（通常由 tc 或 eBPF 插入），但无法成功解析并写入 skb，就释放该 skb 并跳过处理
 	if (mlx5e_cqe_regb_chain(cqe))
 		if (!mlx5e_tc_update_skb(cqe, skb)) {
 			dev_kfree_skb_any(skb);
@@ -1772,7 +1787,7 @@ int mlx5e_rq_set_handlers(struct mlx5e_rq *rq, struct mlx5e_params *params, bool
 	struct net_device *netdev = rq->netdev;
 	struct mlx5_core_dev *mdev = rq->mdev;
 	struct mlx5e_priv *priv = rq->priv;
-	netdev_err(netdev, "rq->wq_type %u\n", rq->wq_type);
+	netdev_err(netdev, "rq->wq_type %u\n", rq->wq_type);//2
 	switch (rq->wq_type) {
 	case MLX5_WQ_TYPE_LINKED_LIST_STRIDING_RQ:
 		rq->mpwqe.skb_from_cqe_mpwrq = xsk ?
@@ -1857,6 +1872,7 @@ free_wqe:
 
 void mlx5e_rq_set_trap_handlers(struct mlx5e_rq *rq, struct mlx5e_params *params)
 {
+	pr_err("[wangs] mlx5e_skb_from_cqe_linear or mlx5e_skb_from_cqe_nonlinear", mlx5e_rx_is_linear_skb(params, NULL));
 	rq->wqe.skb_from_cqe = mlx5e_rx_is_linear_skb(params, NULL) ?
 			       mlx5e_skb_from_cqe_linear :
 			       mlx5e_skb_from_cqe_nonlinear;

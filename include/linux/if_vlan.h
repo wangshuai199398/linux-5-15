@@ -510,12 +510,12 @@ static inline struct sk_buff *__vlan_hwaccel_push_inside(struct sk_buff *skb)
 }
 
 /**
- * __vlan_hwaccel_put_tag - hardware accelerated VLAN inserting
- * @skb: skbuff to tag
- * @vlan_proto: VLAN encapsulation protocol
- * @vlan_tci: VLAN TCI to insert
+ * 硬件加速 VLAN 插入
+ * @skb: 需要打上 VLAN 标签的 sk_buff
+ * @vlan_proto: VLAN 封装协议（例如 ETH_P_8021Q）
+ * @vlan_tci: 要插入的 VLAN TCI（标记控制信息）
  *
- * Puts the VLAN TCI in @skb->vlan_tci and lets the device do the rest
+ * 将 VLAN TCI 放入 @skb->vlan_tci 中，其余工作由网卡设备完成
  */
 static inline void __vlan_hwaccel_put_tag(struct sk_buff *skb,
 					  __be16 vlan_proto, u16 vlan_tci)
@@ -626,6 +626,7 @@ static inline __be16 __vlan_get_protocol_offset(const struct sk_buff *skb,
 	return type;
 }
 
+//递归解析 VLAN 标签链，并返回最内层的协议类型，同时 *network_depth 会记录 以太网头到 IP 头之间的偏移（含 VLAN tag 长度等）
 static inline __be16 __vlan_get_protocol(const struct sk_buff *skb, __be16 type,
 					 int *depth)
 {

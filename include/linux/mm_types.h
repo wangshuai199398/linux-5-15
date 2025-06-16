@@ -145,7 +145,7 @@ struct page {
 			};
 		};
 		struct {	/* Tail pages of compound page */
-			unsigned long compound_head;	/* Bit zero is set */
+			unsigned long compound_head;	/* Bit zero is set, head 页时，值为 0（或未设置）tail 页时，值为指向 head 页的地址 + 1 */
 
 			/* First tail page only */
 			unsigned char compound_dtor;

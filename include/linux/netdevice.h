@@ -2261,7 +2261,7 @@ int netdev_get_num_tc(struct net_device *dev)
 {
 	return dev->num_tc;
 }
-
+//提前将即将被访问的内存数据以“读”的方式预取到 CPU 缓存中，减少读取延迟
 static inline void net_prefetch(void *p)
 {
 	prefetch(p);
@@ -2269,7 +2269,7 @@ static inline void net_prefetch(void *p)
 	prefetch((u8 *)p + L1_CACHE_BYTES);
 #endif
 }
-
+//在处理网络数据包时，预先将指定内存地址以“写模式”加载到 CPU cache 中，优化后续写入性能
 static inline void net_prefetchw(void *p)
 {
 	prefetchw(p);

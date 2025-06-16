@@ -645,6 +645,7 @@ do {									      \
  * @p: The pointer to read, prior to dereferencing
  *
  * This is a simple wrapper around rcu_dereference_check().
+ * RCU 机制下的安全读取方式
  */
 #define rcu_dereference(p) rcu_dereference_check(p, 0)
 

@@ -1673,18 +1673,10 @@ static inline pgoff_t page_index(struct page *page)
 bool page_mapped(struct page *page);
 struct address_space *page_mapping(struct page *page);
 
-/*
- * Return true only if the page has been allocated with
- * ALLOC_NO_WATERMARKS and the low watermark was not
- * met implying that the system is under some pressure.
- */
+/* 仅当该页面是通过 ALLOC_NO_WATERMARKS 分配的，并且未达到低水位线时才返回 true，这意味着系统正处于某种内存压力之下 */
 static inline bool page_is_pfmemalloc(const struct page *page)
 {
-	/*
-	 * lru.next has bit 1 set if the page is allocated from the
-	 * pfmemalloc reserves.  Callers may simply overwrite it if
-	 * they do not need to preserve that information.
-	 */
+	/* 如果页面是从 pfmemalloc 保留区分配的，则 lru.next 的第 1 位会被置位。调用者如果不需要保留这部分信息，可以直接覆盖该字段 */
 	return (uintptr_t)page->lru.next & BIT(1);
 }
 

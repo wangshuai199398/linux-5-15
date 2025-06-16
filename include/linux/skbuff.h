@@ -219,9 +219,13 @@
 
 /* Don't change this without changing skb_csum_unnecessary! */
 // CHECKSUM_PARTIAL 表示硬件完成部分校验和（通常用于 TSO/GSO 场景）
+//需要软件计算校验和
 #define CHECKSUM_NONE		0
+//已通过硬件验证，协议栈无需再算
 #define CHECKSUM_UNNECESSARY	1
+//提供完整校验和，供协议栈进一步使用（如 UDP）
 #define CHECKSUM_COMPLETE	2
+//
 #define CHECKSUM_PARTIAL	3
 
 /* Maximum value in skb->csum_level */
@@ -943,7 +947,7 @@ struct sk_buff {
 #endif
 
 	union {
-		__u32		mark;
+		__u32		mark;//通用标记字段，可用于iptables 的 -m mark 匹配，tc 的 fw filter 或 flower 规则匹配，XDP/BPF 程序进行流分类，用户空间读取 SO_MARK
 		__u32		reserved_tailroom;
 	};
 
@@ -1340,6 +1344,7 @@ __skb_set_hash(struct sk_buff *skb, __u32 hash, bool is_sw, bool is_l4)
 	skb->hash = hash;
 }
 
+//将硬件计算得到的 hash 值（如 RSS hash）保存到 skb 中，供协议栈或用户空间使用
 static inline void
 skb_set_hash(struct sk_buff *skb, __u32 hash, enum pkt_hash_types type)
 {
@@ -2244,28 +2249,23 @@ static inline void __skb_fill_page_desc_noacc(struct skb_shared_info *shinfo,
 {
 	skb_frag_t *frag = &shinfo->frags[i];
 
-	/*
-	 * Propagate page pfmemalloc to the skb if we can. The problem is
-	 * that not all callers have unique ownership of the page but rely
-	 * on page_is_pfmemalloc doing the right thing(tm).
-	 */
+	/* 如果可以的话，将页面的 pfmemalloc 标志传递给 skb。问题在于，并非所有调用者都对该页面拥有唯一所有权，而是依赖 page_is_pfmemalloc 做正确的事 */
 	frag->bv_page		  = page;
 	frag->bv_offset		  = off;
 	skb_frag_size_set(frag, size);
 }
 
 /**
- * __skb_fill_page_desc - initialise a paged fragment in an skb
- * @skb: buffer containing fragment to be initialised
- * @i: paged fragment index to initialise
- * @page: the page to use for this fragment
- * @off: the offset to the data with @page
- * @size: the length of the data
+ * 初始化 skb 中的一个页片段（paged fragment）
+ * @skb: 包含要初始化的片段的 sk_buff 缓冲区
+ * @i: 要初始化的页片段的索引
+ * @page: 用于该片段的数据页
+ * @off: 页中数据的偏移量 @page
+ * @size: 数据的长度（字节）
  *
- * Initialises the @i'th fragment of @skb to point to &size bytes at
- * offset @off within @page.
+ * 将 @skb 的第 @i 个片段初始化为指向 @page 页中从偏移 @off 开始、长度为 @size 字节的数据区域
  *
- * Does not take any additional reference on the fragment.
+ * 不会对该片段（页）增加额外的引用计数
  */
 static inline void __skb_fill_page_desc(struct sk_buff *skb, int i,
 					struct page *page, int off, int size)
@@ -2277,18 +2277,18 @@ static inline void __skb_fill_page_desc(struct sk_buff *skb, int i,
 }
 
 /**
- * skb_fill_page_desc - initialise a paged fragment in an skb
- * @skb: buffer containing fragment to be initialised
- * @i: paged fragment index to initialise
- * @page: the page to use for this fragment
- * @off: the offset to the data with @page
- * @size: the length of the data
+ * 初始化 skb 中的一个页片段（paged fragment）
+ * @skb: 包含要初始化的片段的 sk_buff 缓冲区
+ * @i: 要初始化的页片段的索引
+ * @page: 用于该片段的数据页
+ * @off: 页中数据的偏移量 @page
+ * @size: 数据的长度（字节）
  *
- * As per __skb_fill_page_desc() -- initialises the @i'th fragment of
- * @skb to point to @size bytes at offset @off within @page. In
- * addition updates @skb such that @i is the last fragment.
+ * 功能与 __skb_fill_page_desc() 类似 —— 初始化 skb 的第 @i 个片段
+ * 使其指向 @page 页中从 @off 偏移处开始、长度为 @size 的数据区域。
+ * 同时，更新 skb，使得 @i 成为最后一个片段（nr_frags = i + 1）。
  *
- * Does not take any additional reference on the fragment.
+ * 此函数不会增加该页的引用计数
  */
 static inline void skb_fill_page_desc(struct sk_buff *skb, int i,
 				      struct page *page, int off, int size)
@@ -2444,7 +2444,7 @@ static inline void *__skb_pull(struct sk_buff *skb, unsigned int len)
 	BUG_ON(skb->len < skb->data_len);
 	return skb->data += len;
 }
-
+//将 skb->data 指针往后移动，跳过以太网头
 static inline void *skb_pull_inline(struct sk_buff *skb, unsigned int len)
 {
 	return unlikely(len > skb->len) ? NULL : __skb_pull(skb, len);
@@ -2468,6 +2468,7 @@ static inline void *pskb_pull(struct sk_buff *skb, unsigned int len)
 	return unlikely(len > skb->len) ? NULL : __pskb_pull(skb, len);
 }
 
+//可能触发线性化操作，确保数据在 skb->data 中连续可用
 static inline bool pskb_may_pull(struct sk_buff *skb, unsigned int len)
 {
 	if (likely(len <= skb_headlen(skb)))
@@ -2517,12 +2518,12 @@ static inline int skb_availroom(const struct sk_buff *skb)
 }
 
 /**
- *	skb_reserve - adjust headroom
- *	@skb: buffer to alter
- *	@len: bytes to move
+ *	调整 headroom（预留头部空间）
+ *	@skb: 要修改的 sk_buff 缓冲区
+ *	@len: 要移动的字节数
  *
- *	Increase the headroom of an empty &sk_buff by reducing the tail
- *	room. This is only allowed for an empty buffer.
+ *	通过减少 tailroom（尾部可用空间），来增加一个空的 &sk_buff 的 headroom
+ *	仅允许在 skb 为空（即 data 还未写入）的情况下调用此函数。
  */
 static inline void skb_reserve(struct sk_buff *skb, int len)
 {
@@ -2701,7 +2702,7 @@ static inline void skb_unset_mac_header(struct sk_buff *skb)
 {
 	skb->mac_header = (typeof(skb->mac_header))~0U;
 }
-
+//标记 MAC 层的起始位置（用于协议栈后续使用）
 static inline void skb_reset_mac_header(struct sk_buff *skb)
 {
 	skb->mac_header = skb->data - skb->head;
@@ -4568,6 +4569,7 @@ static inline void skb_copy_queue_mapping(struct sk_buff *to, const struct sk_bu
 	to->queue_mapping = from->queue_mapping;
 }
 
+//加 1 是为了区分“这个 skb 没有设置接收队列”与“设置了队列号为 0”这两种情况
 static inline void skb_record_rx_queue(struct sk_buff *skb, u16 rx_queue)
 {
 	skb->queue_mapping = rx_queue + 1;
