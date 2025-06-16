@@ -6780,6 +6780,7 @@ EXPORT_SYMBOL(napi_schedule_prep);
 
 /**
  * 用于接收路径的调度
+ * 在中断已关闭（irqoff）上下文中调度一个 NAPI poll
  * @n: entry to schedule
  *
  * 这是 __napi_schedule() 的一个变体，**假设当前已屏蔽硬件中断（IRQs）**
@@ -6790,10 +6791,11 @@ EXPORT_SYMBOL(napi_schedule_prep);
  */
 void __napi_schedule_irqoff(struct napi_struct *n)
 {
+	//如果没有启用 PREEMPT_RT（实时内核），走 fast path
 	if (!IS_ENABLED(CONFIG_PREEMPT_RT))
 		____napi_schedule(this_cpu_ptr(&softnet_data), n);
 	else
-		__napi_schedule(n);
+		__napi_schedule(n);// 否则使用可抢占路径（带锁）
 }
 EXPORT_SYMBOL(__napi_schedule_irqoff);
 
