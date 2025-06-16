@@ -286,7 +286,7 @@ mlx5e_txwqe_build_dsegs(struct mlx5e_txqsq *sq, struct sk_buff *skb,
 		dma_addr = dma_map_single(sq->pdev, skb_data, headlen, DMA_TO_DEVICE);
 		if (unlikely(dma_mapping_error(sq->pdev, dma_addr)))
 			goto dma_unmap_wqe_err;
-		/址、LKey、长度写入 WQE 的 data segment/将地
+		//将地址、LKey、长度写入 WQE 的 data segment
 		dseg->addr       = cpu_to_be64(dma_addr);
 		dseg->lkey       = sq->mkey_be;
 		dseg->byte_count = cpu_to_be32(headlen);
