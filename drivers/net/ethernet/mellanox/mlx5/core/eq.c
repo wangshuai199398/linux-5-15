@@ -148,11 +148,8 @@ out:
 	return 0;
 }
 
-/* Some architectures don't latch interrupts when they are disabled, so using
- * mlx5_eq_poll_irq_disabled could end up losing interrupts while trying to
- * avoid losing them.  It is not recommended to use it, unless this is the last
- * resort.
- */
+/* 某些架构在中断被禁用时不会锁存中断信号，因此使用 mlx5_eq_poll_irq_disabled 可能在试图避免中断丢失时反而导致中断丢失。
+ * 除非万不得已，否则不推荐使用这个函数 */
 u32 mlx5_eq_poll_irq_disabled(struct mlx5_eq_comp *eq)
 {
 	u32 count_eqe;
