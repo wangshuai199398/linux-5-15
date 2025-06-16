@@ -223,6 +223,7 @@ repeat:
 		return expanded;
 
 	/* Can we expand? */
+	//判断打开文件数是否超过 fs.nr_open
 	if (nr >= sysctl_nr_open)
 		return -EMFILE;
 
@@ -500,6 +501,7 @@ repeat:
 	 * will limit the total number of files that can be opened.
 	 */
 	error = -EMFILE;
+	//看要分配的文件号是否超过 end (limits.conf 中的 nofile)
 	if (fd >= end)
 		goto out;
 
@@ -543,6 +545,7 @@ int __get_unused_fd_flags(unsigned flags, unsigned long nofile)
 
 int get_unused_fd_flags(unsigned flags)
 {
+	//RLIMIT_NOFILE 是 limits.conf 中配置的 nofile
 	return __get_unused_fd_flags(flags, rlimit(RLIMIT_NOFILE));
 }
 EXPORT_SYMBOL(get_unused_fd_flags);

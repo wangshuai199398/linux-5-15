@@ -232,17 +232,17 @@ int generic_parse_monolithic(struct fs_context *fc, void *data)
 EXPORT_SYMBOL(generic_parse_monolithic);
 
 /**
- * alloc_fs_context - Create a filesystem context.
- * @fs_type: The filesystem type.
- * @reference: The dentry from which this one derives (or NULL)
- * @sb_flags: Filesystem/superblock flags (SB_*)
- * @sb_flags_mask: Applicable members of @sb_flags
- * @purpose: The purpose that this configuration shall be used for.
+ * 创建一个文件系统上下文（filesystem context）
+ * @fs_type: 文件系统类型
+ * @reference: 派生自的 dentry（目录项），可为 NULL
+ * @sb_flags: 文件系统或超级块标志（SB_* 标志）。
+ * @sb_flags_mask: 指明 @sb_flags 中哪些标志是有效的。
+ * @purpose: 此配置的用途（如挂载、查看等）。
  *
- * Open a filesystem and create a mount context.  The mount context is
- * initialised with the supplied flags and, if a submount/automount from
- * another superblock (referred to by @reference) is supplied, may have
- * parameters such as namespaces copied across from that superblock.
+ * 打开一个文件系统，并创建一个挂载上下文（mount context）。
+ * 该上下文会使用传入的标志进行初始化。
+ * 如果提供了一个来自其他超级块的子挂载或自动挂载（通过 @reference 引用的 dentry），
+ * 则可能会从该超级块中复制一些参数（例如命名空间等）到当前上下文中。
  */
 static struct fs_context *alloc_fs_context(struct file_system_type *fs_type,
 				      struct dentry *reference,

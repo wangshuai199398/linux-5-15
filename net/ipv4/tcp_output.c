@@ -4067,7 +4067,7 @@ int tcp_connect(struct sock *sk)
 			printk(KERN_INFO "%s: ->tcp_transmit_skb\n", __func__);
 		}
 	}
-
+	//发出SYN
 	err = tp->fastopen_req ? tcp_send_syn_data(sk, buff) :
 	      tcp_transmit_skb(sk, buff, 1, sk->sk_allocation);
 	if (err == -ECONNREFUSED)

@@ -233,7 +233,7 @@ static struct inode *alloc_inode(struct super_block *sb)
 	struct inode *inode;
 
 	if (ops->alloc_inode)
-		inode = ops->alloc_inode(sb);
+		inode = ops->alloc_inode(sb);// sock_alloc_inode
 	else
 		inode = kmem_cache_alloc(inode_cachep, GFP_KERNEL);
 
@@ -962,14 +962,14 @@ unsigned int get_next_ino(void)
 EXPORT_SYMBOL(get_next_ino);
 
 /**
- *	new_inode_pseudo 	- obtain an inode
+ *	获取一个 inode
  *	@sb: superblock
  *
- *	Allocates a new inode for given superblock.
- *	Inode wont be chained in superblock s_inodes list
+ *	为给定的superblock分配一个新的 inode.
+ *	该 inode 不会被挂接到超级块的 s_inodes 链表中
  *	This means :
- *	- fs can't be unmount
- *	- quotas, fsnotify, writeback can't work
+ *	- 文件系统不能被卸载
+ *	- 配额 quotas, 文件系统事件通知 fsnotify,写回机制 writeback 不会工作
  */
 struct inode *new_inode_pseudo(struct super_block *sb)
 {

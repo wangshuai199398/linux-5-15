@@ -3494,14 +3494,15 @@ void ___cache_free(struct kmem_cache *cachep, void *objp,
 }
 
 /**
- * kmem_cache_alloc - Allocate an object
- * @cachep: The cache to allocate from.
- * @flags: See kmalloc().
+ * 分配一个对象
+ * @cachep: 要从中分配对象的缓存
+ * @flags: 分配标志，具体含义参考 kmalloc()。当缓存中没有可用对象时，这些标志才会生效
  *
- * Allocate an object from this cache.  The flags are only relevant
- * if the cache has no available objects.
+ * 从指定的缓存中分配一个对象。如果缓存中没有空闲对象，则根据标志尝试分配新的内存。
  *
- * Return: pointer to the new object or %NULL in case of error
+ * 返回指向新分配对象的指针
+ * 
+ * 为某个对象申请内存
  */
 void *kmem_cache_alloc(struct kmem_cache *cachep, gfp_t flags)
 {

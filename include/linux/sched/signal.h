@@ -727,6 +727,7 @@ static inline void lockdep_assert_task_sighand_held(struct task_struct *task) { 
 static inline unsigned long task_rlimit(const struct task_struct *task,
 		unsigned int limit)
 {
+	//通过当前进程描述符访问 rlim[limit].rlim_cur 这个是soft nofile (rlim_max 对应 hard nofile)
 	return READ_ONCE(task->signal->rlim[limit].rlim_cur);
 }
 

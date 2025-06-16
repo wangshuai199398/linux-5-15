@@ -663,6 +663,7 @@ static void kmem_rcu_free(struct rcu_head *head)
 	__kmem_cache_free(b, slob_rcu->size);
 }
 
+//将对象占用的内存归还给slab分配器
 void kmem_cache_free(struct kmem_cache *c, void *b)
 {
 	kmemleak_free_recursive(b, c->flags);

@@ -45,7 +45,8 @@
                 "CONFIG_MLX5_EN_TLS",
                 "CONFIG_GENEVE",
                 "CONFIG_SYN_COOKIES",
-                "CONFIG_BQL"
+                "CONFIG_BQL",
+                "CONFIG_MODULES"
             ],
             "compilerPath": "/usr/bin/clang",
             "cStandard": "c17",

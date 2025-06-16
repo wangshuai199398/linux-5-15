@@ -391,29 +391,27 @@ out_unlock:
 EXPORT_SYMBOL(kmem_cache_create_usercopy);
 
 /**
- * kmem_cache_create - Create a cache.
- * @name: A string which is used in /proc/slabinfo to identify this cache.
- * @size: The size of objects to be created in this cache.
- * @align: The required alignment for the objects.
- * @flags: SLAB flags
- * @ctor: A constructor for the objects.
+ * 创建一个 slab 缓存
+ * @name: 用于标识该缓存的字符串，会显示在 /proc/slabinfo 中
+ * @size: 在此缓存中创建的对象的大小（以字节为单位）
+ * @align: 对象所需的对齐方式。
+ * @flags: SLAB 标志位，用于控制缓存行为。
+ * @ctor: 对象的构造函数，当缓存分配新页时调用。
  *
- * Cannot be called within a interrupt, but can be interrupted.
- * The @ctor is run when new pages are allocated by the cache.
+ * 不能在中断上下文中调用此函数，但函数执行过程中可以被中断
+ * 当缓存需要分配新的页时，会调用传入的构造函数（@ctor）
  *
- * The flags are
+ * 支持的标志（flags）包括：
  *
- * %SLAB_POISON - Poison the slab with a known test pattern (a5a5a5a5)
- * to catch references to uninitialised memory.
+ * %SLAB_POISON - 使用已知的测试模式（0xa5a5a5a5）填充缓存，以检测对未初始化内存的访问
  *
- * %SLAB_RED_ZONE - Insert `Red` zones around the allocated memory to check
- * for buffer overruns.
+ * %SLAB_RED_ZONE - 在已分配内存的周围插入“红区”，以检查缓冲区溢出。
  *
- * %SLAB_HWCACHE_ALIGN - Align the objects in this cache to a hardware
- * cacheline.  This can be beneficial if you're counting cycles as closely
- * as davem.
+ * %SLAB_HWCACHE_ALIGN - 将缓存对象按照硬件缓存行大小对齐。如果你对性能和 CPU 周期有严格要求（比如像 davem 那样），这会非常有帮助。
  *
- * Return: a pointer to the cache on success, NULL on failure.
+ * 返回指向所创建缓存的指针
+ * 
+ * 创建一个基于slab的内核对象管理器
  */
 struct kmem_cache *
 kmem_cache_create(const char *name, unsigned int size, unsigned int align,

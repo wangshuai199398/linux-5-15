@@ -137,6 +137,7 @@ struct file *alloc_empty_file(int flags, const struct cred *cred)
 
 	/*
 	 * Privileged users can go above max_files
+	 * 系统打开总文件数量>files_stat.max_files 就是 fs.file-max 参数，注意这里 root 账号并不受限制
 	 */
 	if (get_nr_files() >= files_stat.max_files && !capable(CAP_SYS_ADMIN)) {
 		/*
@@ -222,7 +223,7 @@ struct file *alloc_file_pseudo(struct inode *inode, struct vfsmount *mnt,
 	struct qstr this = QSTR_INIT(name, strlen(name));
 	struct path path;
 	struct file *file;
-
+	//申请dentry
 	path.dentry = d_alloc_pseudo(mnt->mnt_sb, &this);
 	if (!path.dentry)
 		return ERR_PTR(-ENOMEM);
@@ -230,6 +231,7 @@ struct file *alloc_file_pseudo(struct inode *inode, struct vfsmount *mnt,
 		d_set_d_op(path.dentry, &anon_ops);
 	path.mnt = mntget(mnt);
 	d_instantiate(path.dentry, inode);
+	//申请file
 	file = alloc_file(&path, flags, fops);
 	if (IS_ERR(file)) {
 		ihold(inode);

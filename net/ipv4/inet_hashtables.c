@@ -366,17 +366,20 @@ struct sock *__inet_lookup_established(struct net *net,
 				  const int dif, const int sdif)
 {
 	INET_ADDR_COOKIE(acookie, saddr, daddr);
+	//将 源端口、目的端口拼成一个32位 int 整数
 	const __portpair ports = INET_COMBINED_PORTS(sport, hnum);
 	struct sock *sk;
 	const struct hlist_nulls_node *node;
 	/* Optimize here for direct hit, only listening connections can
 	 * have wildcards anyways.
 	 */
+	//内核用哈希的方法加速socket的查找
 	unsigned int hash = inet_ehashfn(net, daddr, hnum, saddr, sport);
 	unsigned int slot = hash & hashinfo->ehash_mask;
 	struct inet_ehash_bucket *head = &hashinfo->ehash[slot];
 
 begin:
+	//遍历链表，逐个对比直到找到
 	sk_nulls_for_each_rcu(sk, node, &head->chain) {
 		if (sk->sk_hash != hash)
 			continue;

@@ -87,7 +87,7 @@ struct inet_connection_sock {
 	unsigned long		  icsk_timeout;
  	struct timer_list	  icsk_retransmit_timer;
  	struct timer_list	  icsk_delack_timer;
-	__u32			  icsk_rto;
+	__u32			  icsk_rto;//超时时间
 	__u32                     icsk_rto_min;
 	__u32                     icsk_delack_max;
 	__u32			  icsk_pmtu_cookie;
@@ -102,7 +102,7 @@ struct inet_connection_sock {
 				  icsk_ca_setsockopt:1,
 				  icsk_ca_dst_locked:1;
 	__u8			  icsk_retransmits;
-	__u8			  icsk_pending;
+	__u8			  icsk_pending;//定时器类型
 	__u8			  icsk_backoff;
 	__u8			  icsk_syn_retries;
 	__u8			  icsk_probes_out;
@@ -193,14 +193,14 @@ void inet_csk_reset_keepalive_timer(struct sock *sk, unsigned long timeout);
 static inline void inet_csk_clear_xmit_timer(struct sock *sk, const int what)
 {
 	struct inet_connection_sock *icsk = inet_csk(sk);
-
+	//重传或探测
 	if (what == ICSK_TIME_RETRANS || what == ICSK_TIME_PROBE0) {
 		icsk->icsk_pending = 0;
 #ifdef INET_CSK_CLEAR_TIMERS
-		sk_stop_timer(sk, &icsk->icsk_retransmit_timer);
+		sk_stop_timer(sk, &icsk->icsk_retransmit_timer);//停止重传定时器
 #endif
-	} else if (what == ICSK_TIME_DACK) {
-		icsk->icsk_ack.pending = 0;
+	} else if (what == ICSK_TIME_DACK) {//延迟确认定时器
+		icsk->icsk_ack.pending = 0;//清除 ACK 的等待状态和重试次数
 		icsk->icsk_ack.retry = 0;
 #ifdef INET_CSK_CLEAR_TIMERS
 		sk_stop_timer(sk, &icsk->icsk_delack_timer);

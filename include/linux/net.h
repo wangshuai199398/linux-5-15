@@ -102,14 +102,14 @@ struct socket_wq {
 } ____cacheline_aligned_in_smp;
 
 /**
- *  struct socket - general BSD socket
- *  @state: socket state (%SS_CONNECTED, etc)
- *  @type: socket type (%SOCK_STREAM, etc)
- *  @flags: socket flags (%SOCK_NOSPACE, etc)
- *  @ops: protocol specific socket operations
- *  @file: File back pointer for gc
- *  @sk: internal networking protocol agnostic socket representation
- *  @wq: wait queue for several uses
+ *  通用 BSD 套接字结构
+ *  @state: 套接字的状态（如 %SS_CONNECTED 等）
+ *  @type: 套接字类型（如 %SOCK_STREAM 等）
+ *  @flags: 套接字标志（如 %SOCK_NOSPACE 等）。
+ *  @ops: 协议相关的套接字操作函数集（即协议族具体实现的操作）。
+ *  @file: 指向文件对象的反向指针，用于垃圾回收（gc）。
+ *  @sk: 内部的、与具体网络协议无关的 socket 表示（即 struct sock）
+ *  @wq: 等待队列，供多种用途使用（如阻塞等待事件）。
  */
 struct socket {
 	socket_state		state;

@@ -540,6 +540,7 @@ void tcp_retransmit_timer(struct sock *sk)
 	}
 
 	__NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPTIMEOUTS);
+	//超过了重传次数则退出
 	if (tcp_write_timeout(sk))
 		goto out;
 
@@ -567,10 +568,11 @@ void tcp_retransmit_timer(struct sock *sk)
 	tcp_enter_loss(sk);
 
 	icsk->icsk_retransmits++;
+	//重传
 	if (tcp_retransmit_skb(sk, tcp_rtx_queue_head(sk), 1) > 0) {
 		/* Retransmission failed because of local congestion,
 		 * Let senders fight for local resources conservatively.
-		 */
+		   重传失败 */
 		inet_csk_reset_xmit_timer(sk, ICSK_TIME_RETRANS,
 					  TCP_RESOURCE_PROBE_INTERVAL,
 					  TCP_RTO_MAX);
@@ -593,7 +595,7 @@ void tcp_retransmit_timer(struct sock *sk)
 	 * the 120 second clamps though!
 	 */
 	icsk->icsk_backoff++;
-
+//退出前重新设置下一次超时时间
 out_reset_timer:
 	/* If stream is thin, use linear timeouts. Since 'icsk_backoff' is
 	 * used to reset timer, set to 0. Recalculate 'icsk_rto' as this
@@ -604,6 +606,7 @@ out_reset_timer:
 	 * exponential backoff behaviour to avoid continue hammering
 	 * linear-timeout retransmissions into a black hole
 	 */
+	//计算超时时间
 	if (sk->sk_state == TCP_ESTABLISHED &&
 	    (tp->thin_lto || READ_ONCE(net->ipv4.sysctl_tcp_thin_linear_timeouts)) &&
 	    tcp_stream_is_thin(tp) &&
@@ -616,6 +619,7 @@ out_reset_timer:
 		/* Use normal (exponential) backoff */
 		icsk->icsk_rto = min(icsk->icsk_rto << 1, TCP_RTO_MAX);
 	}
+	//设置
 	inet_csk_reset_xmit_timer(sk, ICSK_TIME_RETRANS,
 				  tcp_clamp_rto_to_user_timeout(sk), TCP_RTO_MAX);
 	if (retransmits_timed_out(sk, READ_ONCE(net->ipv4.sysctl_tcp_retries1) + 1, 0))
@@ -641,6 +645,7 @@ void tcp_write_timer_handler(struct sock *sk)
 	}
 
 	tcp_mstamp_refresh(tcp_sk(sk));
+	//取出定时器类型
 	event = icsk->icsk_pending;
 
 	switch (event) {
@@ -664,6 +669,7 @@ out:
 	sk_mem_reclaim(sk);
 }
 
+//服务端发生了丢包，定时器到时会进入该回调函数进行重传
 static void tcp_write_timer(struct timer_list *t)
 {
 	struct inet_connection_sock *icsk =

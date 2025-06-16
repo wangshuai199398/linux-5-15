@@ -1863,6 +1863,7 @@ static struct sock *sk_prot_alloc(struct proto *prot, gfp_t priority,
 	slab = prot->slab;
 	if (slab != NULL) {
 		//如果协议定义了 slab cache（如 TCP 定义的 tcp_cachep），用 kmem_cache_alloc() 分配对象
+		//TCP的slab缓存是在 inet_init 初始化好的
 		sk = kmem_cache_alloc(slab, priority & ~__GFP_ZERO);
 		if (!sk)
 			return sk;
@@ -1912,12 +1913,12 @@ static void sk_prot_free(struct proto *prot, struct sock *sk)
 }
 
 /**
- *	sk_alloc - All socket objects are allocated here
- *	@net: the applicable net namespace
- *	@family: protocol family
- *	@priority: for allocation (%GFP_KERNEL, %GFP_ATOMIC, etc)
- *	@prot: struct proto associated with this new sock instance
- *	@kern: is this to be a kernel socket?
+ *	所有 socket 对象都通过此函数分配
+ *	@net: 适用的网络命名空间（net namespace）
+ *	@family: 协议族（如 AF_INET、AF_INET6 等）。
+ *	@priority: 内存分配优先级（如 %GFP_KERNEL、%GFP_ATOMIC 等）。
+ *	@prot: 与该 socket 实例关联的 struct proto，用于指定协议行为（如 TCP、UDP）
+ *	@kern: 是否是一个内核套接字？（内核使用时为 true）
  */
 struct sock *sk_alloc(struct net *net, int family, gfp_t priority,
 		      struct proto *prot, int kern)
@@ -3719,6 +3720,7 @@ int proto_register(struct proto *prot, int alloc_slab)
 	int ret = -ENOBUFS;
 
 	if (alloc_slab) {
+		//创建 slab 缓存池，创建一个名为TCP、大小为 sizeof(struct tcp_sock) 的slab缓存
 		prot->slab = kmem_cache_create_usercopy(prot->name,
 					prot->obj_size, 0,
 					SLAB_HWCACHE_ALIGN | SLAB_ACCOUNT |

@@ -293,8 +293,10 @@ static int move_addr_to_user(struct sockaddr_storage *kaddr, int klen,
 	return __put_user(klen, ulen);
 }
 
+//专门用于存储socket_alloc的slab缓存，在 init_inodecache 中初始化
 static struct kmem_cache *sock_inode_cachep __ro_after_init;
 
+//从sock_inode_cacheslab缓存中申请一个 socket_alloc 对象
 static struct inode *sock_alloc_inode(struct super_block *sb)
 {
 	struct socket_alloc *ei;
@@ -476,14 +478,16 @@ EXPORT_SYMBOL(sock_alloc_file);
 static int sock_map_fd(struct socket *sock, int flags)
 {
 	struct file *newfile;
+	//申请fd，只是找一个可用的数组下标而已
 	int fd = get_unused_fd_flags(flags);
 	if (unlikely(fd < 0)) {
 		sock_release(sock);
 		return fd;
 	}
-
+	//申请dentry、file内核对象
 	newfile = sock_alloc_file(sock, flags, NULL);
 	if (!IS_ERR(newfile)) {
+		//关联到socket及进程
 		fd_install(fd, newfile);
 		return fd;
 	}
@@ -1418,18 +1422,18 @@ call_kill:
 EXPORT_SYMBOL(sock_wake_async);
 
 /**
- *	__sock_create - creates a socket
- *	@net: net namespace
- *	@family: protocol family (AF_INET, ...)
- *	@type: communication type (SOCK_STREAM, ...)
- *	@protocol: protocol (0, ...)
- *	@res: new socket
- *	@kern: boolean for kernel space sockets
+ *	创建一个 socket
+ *	@net: 网络命名空间
+ *	@family: 协议族 (AF_INET, ...)
+ *	@type: 通信类型 (SOCK_STREAM, ...)
+ *	@protocol: 协议 (0, ...)
+ *	@res: 用于返回新创建的套接字指针
+ *	@kern: 布尔值，表示该套接字是否用于内核空间。若为内核空间套接字，需设为 true
  *
- *	Creates a new socket and assigns it to @res, passing through LSM.
- *	Returns 0 or an error. On failure @res is set to %NULL. @kern must
- *	be set to true if the socket resides in kernel space.
- *	This function internally uses GFP_KERNEL.
+ *	该函数用于创建一个新的套接字，并将其指针赋值给 @res。此过程会经过 LSM（Linux 安全模块）机制的检查。
+ *	成功：返回 0。失败：返回错误码，且 @res 被设置为 NULL. 
+ *  @kern 必须设置为 true，如果该套接字属于内核空间
+ *	该函数内部使用 GFP_KERNEL 进行内存分配
  */
 
 int __sock_create(struct net *net, int family, int type, int protocol,
@@ -1462,11 +1466,7 @@ int __sock_create(struct net *net, int family, int type, int protocol,
 	if (err)
 		return err;
 
-	/*
-	 *	Allocate the socket and allow the family to set things up. if
-	 *	the protocol is 0, the family is instructed to select an appropriate
-	 *	default.
-	 */
+	//分配套接字，并允许协议族进行相关设置。如果 protocol 为 0，则指示协议族选择一个合适的默认协议。
 	sock = sock_alloc();
 	if (!sock) {
 		net_warn_ratelimited("socket: no more sockets\n");
@@ -1503,7 +1503,6 @@ int __sock_create(struct net *net, int family, int type, int protocol,
 
 	/* Now protected by module ref count */
 	rcu_read_unlock();
-	//pr_err("%s: %s __sys_socket pid %d family %d type 0x%x protocol %d \n", __func__, current->comm, current->pid, family, type, protocol);//AF_INET 2 SOCK_STREAM 2 IPPROTO_TCP 6
 	//调用指定协议族的创建函数，对于AF_INET对应的是 inet_create
 	err = pf->create(net, sock, protocol, kern);
 	if (err < 0) {
@@ -1798,11 +1797,11 @@ struct file *do_accept(struct file *file, unsigned file_flags,
 	struct file *newfile;
 	int err, len;
 	struct sockaddr_storage address;
-
+	//根据fd查找到监听的socket
 	sock = sock_from_file(file);
 	if (!sock)
 		return ERR_PTR(-ENOTSOCK);
-
+	//申请并初始化新的socket
 	newsock = sock_alloc();
 	if (!newsock)
 		return ERR_PTR(-ENFILE);
@@ -1815,7 +1814,7 @@ struct file *do_accept(struct file *file, unsigned file_flags,
 	 * has the protocol module (sock->ops->owner) held.
 	 */
 	__module_get(newsock->ops->owner);
-
+	//申请新的file对象，并设置到新socket上
 	newfile = sock_alloc_file(newsock, flags, sock->sk->sk_prot_creator->name);
 	if (IS_ERR(newfile))
 		return newfile;
@@ -1823,7 +1822,7 @@ struct file *do_accept(struct file *file, unsigned file_flags,
 	err = security_socket_accept(sock, newsock);
 	if (err)
 		goto out_fd;
-	//pr_err("%s: %s pid %d file_flags 0x%x \n", __func__, current->comm, current->pid, file_flags);
+	//接收连接
 	err = sock->ops->accept(sock, newsock, sock->file->f_flags | file_flags,
 					false);//inet_csk_accept
 	if (err < 0)
@@ -1873,6 +1872,7 @@ int __sys_accept4_file(struct file *file, unsigned file_flags,
 		put_unused_fd(newfd);
 		return PTR_ERR(newfile);
 	}
+	//将新文件添加到当前进程的打开文件列表
 	fd_install(newfd, newfile);
 	return newfd;
 }

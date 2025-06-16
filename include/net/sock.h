@@ -162,7 +162,7 @@ typedef __u64 __bitwise __addrpair;
  */
 struct sock_common {
 	union {
-		__addrpair	skc_addrpair;
+		__addrpair	skc_addrpair;//TCP连接IP对
 		struct {
 			__be32	skc_daddr;
 			__be32	skc_rcv_saddr;
@@ -174,7 +174,7 @@ struct sock_common {
 	};
 	/* skc_dport && skc_num must be grouped as well */
 	union {
-		__portpair	skc_portpair;
+		__portpair	skc_portpair;//TCP连接端口对
 		struct {
 			__be16	skc_dport;
 			__u16	skc_num;

@@ -1860,19 +1860,18 @@ struct dentry *d_alloc_cursor(struct dentry * parent)
 }
 
 /**
- * d_alloc_pseudo - allocate a dentry (for lookup-less filesystems)
+ * 分配一个 dentry（用于无需路径查找的文件系统）
  * @sb: the superblock
- * @name: qstr of the name
+ * @name: 名称，对应的 qstr 结构体
  *
- * For a filesystem that just pins its dentries in memory and never
- * performs lookups at all, return an unhashed IS_ROOT dentry.
- * This is used for pipes, sockets et.al. - the stuff that should
- * never be anyone's children or parents.  Unlike all other
- * dentries, these will not have RCU delay between dropping the
- * last reference and freeing them.
+ * 对于一种只将 dentry 固定在内存中、从不进行路径查找（lookup）的文件系统，
+ * 该函数会返回一个未加入哈希表（unhashed）且标记为 IS_ROOT 的 dentry。
+ * 
+ * 这种机制用于管道（pipe）、套接字（socket）等特殊类型的“伪文件”——这些对象永远不应成为其他目录项的子项或父项。
  *
- * The only user is alloc_file_pseudo() and that's what should
- * be considered a public interface.  Don't use directly.
+ * 与其他 dentry 不同，这类 dentry 在最后一个引用被释放后，不会延迟释放（不使用 RCU 延迟），而是立即释放内存。
+ * 
+ * 注意：这个函数的唯一使用者是 alloc_file_pseudo()。这个函数才应该被视为“公开接口”，不应直接调用 d_alloc_pseudo()。
  */
 struct dentry *d_alloc_pseudo(struct super_block *sb, const struct qstr *name)
 {
@@ -3222,11 +3221,8 @@ static void __init dcache_init_early(void)
 
 static void __init dcache_init(void)
 {
-	/*
-	 * A constructor could be added for stable state like the lists,
-	 * but it is probably not worth it because of the cache nature
-	 * of the dcache.
-	 */
+	//可以为一些稳定状态（比如链表）添加构造函数，但由于 dcache 本身具有缓存的特性，这么做可能并不值得
+	//创建 dentry slab 缓存，所有的dentry对象都将在这里进行分配，名字就是 “dentry”
 	dentry_cache = KMEM_CACHE_USERCOPY(dentry,
 		SLAB_RECLAIM_ACCOUNT|SLAB_PANIC|SLAB_MEM_SPREAD|SLAB_ACCOUNT,
 		d_iname);
