@@ -6804,12 +6804,8 @@ bool napi_complete_done(struct napi_struct *n, int work_done)
 	unsigned long flags, val, new, timeout = 0;
 	bool ret = true;
 
-	/*
-	 * 1) Don't let napi dequeue from the cpu poll list
-	 *    just in case its running on a different cpu.
-	 * 2) If we are busy polling, do nothing here, we have
-	 *    the guarantee we will be called later.
-	 */
+	/* 1) 不要让 napi 从 CPU 轮询列表中移除，以防它正在另一个 CPU 上运行
+	 * 2) 如果我们当前正在繁忙轮询，此处无需做任何操作，因为我们被保证稍后会被再次调用 */
 	//NAPIF_STATE_NPSVC: poll被服务中（内核用来同步poll状态）
 	//NAPIF_STATE_IN_BUSY_POLL: 当前是忙轮询中（用户空间强制唤醒）
 	//那就不能结束poll
@@ -6829,10 +6825,7 @@ bool napi_complete_done(struct napi_struct *n, int work_done)
 			ret = false;
 	}
 	if (n->gro_bitmask) {
-		/* When the NAPI instance uses a timeout and keeps postponing
-		 * it, we need to bound somehow the time packets are kept in
-		 * the GRO layer
-		 */
+		/* 当 NAPI 实例使用超时机制并不断延迟该超时时，我们需要以某种方式限制数据包在 GRO 层中保留的时间 */
 		napi_gro_flush(n, !!timeout);
 	}
 	struct sk_buff *skb, *next;
@@ -6843,7 +6836,7 @@ bool napi_complete_done(struct napi_struct *n, int work_done)
 	gro_normal_list(n);
 
 	if (unlikely(!list_empty(&n->poll_list))) {
-		/* If n->poll_list is not empty, we need to mask irqs */
+		/* 如果 n->poll_list 不为空，我们需要屏蔽中断（mask irqs）*/
 		//关闭本地中断，防止软中断并发访问 poll_list
 		local_irq_save(flags);
 		//将该poll_list从softnet_data->poll_list中删除
@@ -6861,10 +6854,7 @@ bool napi_complete_done(struct napi_struct *n, int work_done)
 			      NAPIF_STATE_SCHED_THREADED |
 			      NAPIF_STATE_PREFER_BUSY_POLL);
 
-		/* If STATE_MISSED was set, leave STATE_SCHED set,
-		 * because we will call napi->poll() one more time.
-		 * This C code was suggested by Alexander Duyck to help gcc.
-		 */
+		/* 如果设置了 STATE_MISSED，则保留 STATE_SCHED 状态，因为我们还会再调用一次 napi->poll */
 		//如果之前有错过调度，就保留 SCHED 状态
 		new |= (val & NAPIF_STATE_MISSED) / NAPIF_STATE_MISSED *
 						    NAPIF_STATE_SCHED;

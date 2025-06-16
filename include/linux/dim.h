@@ -55,6 +55,10 @@ struct dim_cq_moder {
  * @byte_ctr: Number of bytes
  * @event_ctr: Number of events
  * @comp_ctr: Current completion counter
+ * 
+ * DIM（Dynamic Interrupt Moderation） 是一个在运行时根据流量特征自动调整中断频率的机制
+ * 小包 + 低延迟需求    减少延迟，减少合并延迟
+ * 大包 + 高吞吐量需求  增加中断合并，提高处理效率
  */
 struct dim_sample {
 	ktime_t time;
@@ -128,14 +132,13 @@ enum dim_cq_period_mode {
 };
 
 /**
- * enum dim_state - DIM algorithm states
+ * DIM 算法状态枚举
  *
- * These will determine if the algorithm is in a valid state to start an iteration.
+ * 这些状态用于确定算法是否处于可以开始一次迭代的有效状态。
  *
- * @DIM_START_MEASURE: This is the first iteration (also after applying a new profile)
- * @DIM_MEASURE_IN_PROGRESS: Algorithm is already in progress - check if
- * need to perform an action
- * @DIM_APPLY_NEW_PROFILE: DIM consumer is currently applying a profile - no need to measure
+ * @DIM_START_MEASURE: 这是第一次迭代（或者刚刚应用了一个新的配置档案之后）。也就是说，此时算法开始采集性能数据。
+ * @DIM_MEASURE_IN_PROGRESS: 算法已经在运行中 —— 正在测量，检查是否需要采取行动（比如切换 profile）。
+ * @DIM_APPLY_NEW_PROFILE: 当前正在由 DIM 的使用者（比如驱动）应用一个新的参数配置 —— 在这种状态下，不需要继续采样或测量
  */
 enum dim_state {
 	DIM_START_MEASURE,

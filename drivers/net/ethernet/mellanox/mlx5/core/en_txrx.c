@@ -57,6 +57,7 @@ static void mlx5e_handle_tx_dim(struct mlx5e_txqsq *sq)
 	net_dim(&sq->dim, dim_sample);
 }
 
+//动态调整 RX 中断的节流参数（如 coalescing 延迟、包数阈值等），以在吞吐量和延迟之间取得平衡
 static void mlx5e_handle_rx_dim(struct mlx5e_rq *rq)
 {
 	struct mlx5e_rq_stats *stats = rq->stats;
@@ -135,10 +136,10 @@ int mlx5e_napi_poll(struct napi_struct *napi, int budget)
 	xsk_open = test_bit(MLX5E_CHANNEL_STATE_XSK, c->state);//检查是否启用了 XSK（AF_XDP） 模式
 
 	ch_stats->poll++;
-
+	//处理 TX 完成队列,普通 SQ
 	for (i = 0; i < c->num_tc; i++)
 		busy |= mlx5e_poll_tx_cq(&c->sq[i].cq, budget);
-
+	//处理 TX 完成队列,qos_sq
 	if (unlikely(qos_sqs)) {
 		//保证 qos_sqs 的写入操作(mlx5e_qos_alloc_queues中写的)在下边 qos_sqs_size 的读取之前
 		smp_rmb(); /* Pairs with mlx5e_qos_alloc_queues. */
@@ -146,7 +147,6 @@ int mlx5e_napi_poll(struct napi_struct *napi, int budget)
 
 		for (i = 0; i < qos_sqs_size; i++) {
 			struct mlx5e_txqsq *sq = rcu_dereference(qos_sqs[i]);
-
 			if (sq)
 				busy |= mlx5e_poll_tx_cq(&sq->cq, budget);
 		}
@@ -155,20 +155,20 @@ int mlx5e_napi_poll(struct napi_struct *napi, int budget)
 	/* budget=0 表示我们可能正处于中断（IRQ）上下文中，因此应尽量少做事 */
 	if (unlikely(!budget))
 		goto out;
-
+	//处理 通用 XDP 发送队列（xdpsq） 的完成队列（CQ），这个 xdpsq 是 channel 中始终存在的（不依赖是否启用 XDP 程序），可能用于 redirect 等情况
 	busy |= mlx5e_poll_xdpsq_cq(&c->xdpsq.cq);
-
+	//如果本channel启用XDP，处理 XDP redirect 情况下接收方向发送的 rq_xdpsq 的完成队列，例如，XDP 程序返回 XDP_TX 或 XDP_REDIRECT 时，需要通过这个队列完成实际的包发送
 	if (c->xdp)
 		busy |= mlx5e_poll_xdpsq_cq(&c->rq_xdpsq.cq);
-
+	//优先处理 AF_XDP 接收队列 xskrq
 	if (xsk_open)
 		work_done = mlx5e_poll_rx_cq(&xskrq->cq, budget);
-
+	//处理常规 rq
 	if (likely(budget - work_done))
 		work_done += mlx5e_poll_rx_cq(&rq->cq, budget - work_done);
 
 	busy |= work_done == budget;
-
+	//处理控制队列（icosq）和异步事件（async_icosq）
 	mlx5e_poll_ico_cq(&c->icosq.cq);
 	if (mlx5e_poll_ico_cq(&c->async_icosq.cq))
 		/* Don't clear the flag if nothing was polled to prevent
@@ -176,10 +176,10 @@ int mlx5e_napi_poll(struct napi_struct *napi, int budget)
 		 */
 		clear_bit(MLX5E_SQ_STATE_PENDING_XSK_TX, &c->async_icosq.state);
 
-	/* Keep after async ICOSQ CQ poll */
+	/* Keep after async ICOSQ CQ poll 检查 TLS 会话是否需要重同步 */
 	if (unlikely(mlx5e_ktls_rx_pending_resync_list(c, budget)))
 		busy |= mlx5e_ktls_rx_handle_resync_list(c, budget);
-
+	//投递新的 RX 缓冲区
 	busy |= INDIRECT_CALL_2(rq->post_wqes,
 				mlx5e_post_rx_mpwqes,
 				mlx5e_post_rx_wqes,
@@ -190,7 +190,7 @@ int mlx5e_napi_poll(struct napi_struct *napi, int budget)
 	}
 
 	busy |= busy_xsk;
-
+	//处理中断亲和性变化
 	if (busy) {
 		if (likely(mlx5e_channel_no_affinity_change(c))) {
 			work_done = budget;
@@ -201,12 +201,12 @@ int mlx5e_napi_poll(struct napi_struct *napi, int budget)
 		if (budget && work_done == budget)
 			work_done--;
 	}
-
+	//任务是否完成
 	if (unlikely(!napi_complete_done(napi, work_done)))
 		goto out;
 
 	ch_stats->arm++;
-
+	//ARM 所有的 CQ，以便硬件能继续通知事件，包括：发送队列、接收队列、控制队列、AF_XDP 队列等
 	for (i = 0; i < c->num_tc; i++) {
 		mlx5e_handle_tx_dim(&c->sq[i]);
 		mlx5e_cq_arm(&c->sq[i].cq);
@@ -234,7 +234,7 @@ int mlx5e_napi_poll(struct napi_struct *napi, int budget)
 		mlx5e_cq_arm(&xsksq->cq);
 		mlx5e_cq_arm(&xskrq->cq);
 	}
-
+	//如有必要强制触发中断
 	if (unlikely(aff_change && busy_xsk)) {
 		mlx5e_trigger_irq(&c->icosq);
 		ch_stats->force_irq++;
@@ -242,7 +242,6 @@ int mlx5e_napi_poll(struct napi_struct *napi, int budget)
 
 out:
 	rcu_read_unlock();
-
 	return work_done;
 }
 

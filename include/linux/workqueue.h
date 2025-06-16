@@ -557,18 +557,14 @@ static inline bool schedule_work_on(int cpu, struct work_struct *work)
 }
 
 /**
- * schedule_work - put work task in global workqueue
- * @work: job to be done
+ * schedule_work - 将工作任务放入全局工作队列中
+ * @work: 待执行的工作任务
  *
- * Returns %false if @work was already on the kernel-global workqueue and
- * %true otherwise.
+ * 如果 @work 已经在全局工作队列中，则返回 false，否则返回 true。
  *
- * This puts a job in the kernel-global workqueue if it was not already
- * queued and leaves it in the same position on the kernel-global
- * workqueue otherwise.
+ * 如果该任务尚未排队，则将其加入内核全局工作队列；如果已排队，则保持其原有位置不变。
  *
- * Shares the same memory-ordering properties of queue_work(), cf. the
- * DocBook header of queue_work().
+ * 它具有与 queue_work() 相同的内存排序特性；详见 queue_work() 的 DocBook 头部注释。
  */
 static inline bool schedule_work(struct work_struct *work)
 {
