@@ -6674,7 +6674,7 @@ static bool sd_has_rps_ipi_waiting(struct softnet_data *sd)
 	return false;
 #endif
 }
-// lookback 设备收包
+// lookback、veth 设备收包
 static int process_backlog(struct napi_struct *napi, int quota)
 {
 	struct softnet_data *sd = container_of(napi, struct softnet_data, backlog);
@@ -11088,7 +11088,7 @@ struct net_device *alloc_netdev_mqs(int sizeof_priv, const char *name,
 
 	dev_mc_init(dev);
 	dev_uc_init(dev);
-
+	//设置设备的网络命名空间
 	dev_net_set(dev, &init_net);
 
 	dev->gso_max_size = GSO_MAX_SIZE;
@@ -11489,6 +11489,7 @@ int __dev_change_net_namespace(struct net_device *dev, struct net *net,
 	move_netdevice_notifiers_dev_net(dev, net);
 
 	/* Actually switch the network namespace */
+	//修改设备网络命名空间
 	dev_net_set(dev, net);
 	dev->ifindex = new_ifindex;
 
@@ -11912,7 +11913,7 @@ static int __init net_dev_init(void)
 		INIT_CSD(&sd->csd, rps_trigger_softirq, sd);
 		sd->cpu = i;
 #endif
-		pr_err("%s: softnet_data: on CPU %d\n", __func__, i);
+		pr_err("%s: [wangs] softnet_data: on CPU %d poll: process_backlog\n", __func__, i);
 		init_gro_hash(&sd->backlog);
 		sd->backlog.poll = process_backlog;
 		sd->backlog.weight = weight_p;

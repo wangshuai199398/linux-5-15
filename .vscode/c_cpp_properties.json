@@ -46,7 +46,11 @@
                 "CONFIG_GENEVE",
                 "CONFIG_SYN_COOKIES",
                 "CONFIG_BQL",
-                "CONFIG_MODULES"
+                "CONFIG_MODULES",
+                "CONFIG_NET_NS",
+                "CONFIG_SYSCTL",
+                "CONFIG_IP_MULTIPLE_TABLES",
+                "CONFIG_NET"
             ],
             "compilerPath": "/usr/bin/clang",
             "cStandard": "c17",

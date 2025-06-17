@@ -68,6 +68,7 @@ struct veth_rq {
 };
 
 struct veth_priv {
+	//另一端设备
 	struct net_device __rcu	*peer;
 	atomic64_t		dropped;
 	struct bpf_prog		*_xdp_prog;
@@ -292,6 +293,7 @@ static int veth_xdp_rx(struct veth_rq *rq, struct sk_buff *skb)
 static int veth_forward_skb(struct net_device *dev, struct sk_buff *skb,
 			    struct veth_rq *rq, bool xdp)
 {
+	//__dev_forward_skb 中将skb的所属设备改为刚刚获取的veth对端设备rcv
 	return __dev_forward_skb(dev, skb) ?: xdp ?
 		veth_xdp_rx(rq, skb) :
 		netif_rx(skb);
@@ -327,6 +329,7 @@ static netdev_tx_t veth_xmit(struct sk_buff *skb, struct net_device *dev)
 	int rxq;
 
 	rcu_read_lock();
+	//获取veth设备的对端
 	rcv = rcu_dereference(priv->peer);
 	if (unlikely(!rcv) || !pskb_may_pull(skb, ETH_HLEN)) {
 		kfree_skb(skb);
@@ -347,6 +350,7 @@ static netdev_tx_t veth_xmit(struct sk_buff *skb, struct net_device *dev)
 	}
 
 	skb_tx_timestamp(skb);
+	//调用 dev_forward_skb 向对端发包
 	if (likely(veth_forward_skb(rcv, skb, rq, use_napi) == NET_RX_SUCCESS)) {
 		if (!use_napi)
 			dev_lstats_add(dev, length);
@@ -1552,7 +1556,7 @@ static void veth_setup(struct net_device *dev)
 	dev->priv_flags |= IFF_LIVE_ADDR_CHANGE;
 	dev->priv_flags |= IFF_NO_QUEUE;
 	dev->priv_flags |= IFF_PHONY_HEADROOM;
-
+	// veth 的操作列表，其中包括veth的发送函数 veth_xmit
 	dev->netdev_ops = &veth_netdev_ops;
 	dev->ethtool_ops = &veth_ethtool_ops;
 	dev->features |= NETIF_F_LLTX;
@@ -1617,6 +1621,7 @@ static int veth_init_queues(struct net_device *dev, struct nlattr *tb[])
 	return 0;
 }
 
+//veth 设备创建
 static int veth_newlink(struct net *src_net, struct net_device *dev,
 			struct nlattr *tb[], struct nlattr *data[],
 			struct netlink_ext_ack *extack)
@@ -1663,7 +1668,7 @@ static int veth_newlink(struct net *src_net, struct net_device *dev,
 	net = rtnl_link_get_net(src_net, tbp);
 	if (IS_ERR(net))
 		return PTR_ERR(net);
-
+	//创建
 	peer = rtnl_create_link(net, ifname, name_assign_type,
 				&veth_link_ops, tbp, extack);
 	if (IS_ERR(peer)) {
@@ -1679,7 +1684,7 @@ static int veth_newlink(struct net *src_net, struct net_device *dev,
 
 	peer->gso_max_size = dev->gso_max_size;
 	peer->gso_max_segs = dev->gso_max_segs;
-
+	//注册
 	err = register_netdevice(peer);
 	put_net(net);
 	net = NULL;
@@ -1717,10 +1722,7 @@ static int veth_newlink(struct net *src_net, struct net_device *dev,
 
 	netif_carrier_off(dev);
 
-	/*
-	 * tie the deviced together
-	 */
-
+	/* 把两个设备关联到一起 */
 	priv = netdev_priv(dev);
 	rcu_assign_pointer(priv->peer, peer);
 	err = veth_init_queues(dev, tb);
@@ -1807,10 +1809,7 @@ static struct rtnl_link_ops veth_link_ops = {
 	.get_num_rx_queues	= veth_get_num_queues,
 };
 
-/*
- * init/fini
- */
-
+/* init/fini veth_wangs */
 static __init int veth_init(void)
 {
 	return rtnl_link_register(&veth_link_ops);

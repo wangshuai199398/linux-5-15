@@ -193,6 +193,7 @@ struct sock_common {
 		struct hlist_node	skc_portaddr_node;
 	};
 	struct proto		*skc_prot;
+	//网络命名空间 net
 	possible_net_t		skc_net;
 
 #if IS_ENABLED(CONFIG_IPV6)

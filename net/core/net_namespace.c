@@ -308,6 +308,7 @@ struct net *get_net_ns_by_id(const struct net *net, int id)
 
 /*
  * setup_net runs the initializers for the network namespace object.
+ * 对默认网络命名空间进行初始化
  */
 static __net_init int setup_net(struct net *net, struct user_namespace *user_ns)
 {
@@ -328,7 +329,7 @@ static __net_init int setup_net(struct net *net, struct user_namespace *user_ns)
 	idr_init(&net->netns_ids);
 	spin_lock_init(&net->nsid_lock);
 	mutex_init(&net->ipv4.ra_mutex);
-
+	//遍历所有网络子系统，把它们都用init初始化一遍 比如路由子系统 fib_net_init iptable nat表 iptable_nat_net_init
 	list_for_each_entry(ops, &pernet_list, list) {
 		error = ops_init(ops, net);
 		if (error < 0)
@@ -479,14 +480,14 @@ struct net *copy_net_ns(unsigned long flags,
 	struct ucounts *ucounts;
 	struct net *net;
 	int rv;
-
+	//不指定 CLONE_NEWNET 就不会创建新的网络命名空间
 	if (!(flags & CLONE_NEWNET))
 		return get_net(old_net);
 
 	ucounts = inc_net_namespaces(user_ns);
 	if (!ucounts)
 		return ERR_PTR(-ENOSPC);
-
+	//申请新网络命名空间并初始化
 	net = net_alloc();
 	if (!net) {
 		rv = -ENOMEM;
@@ -1128,6 +1129,7 @@ out:
 	rtnl_set_sk_err(net, RTNLGRP_NSID, err);
 }
 
+//net_ns_init_wangs
 void __init net_ns_init(void)
 {
 	struct net_generic *ng;
@@ -1193,7 +1195,7 @@ static int __register_pernet_operations(struct list_head *list,
 	struct net *net;
 	int error;
 	LIST_HEAD(net_exit_list);
-
+	//将子系统传入的pernet_operations *ops 链入pernet_list中
 	list_add_tail(&ops->list, list);
 	if (ops->init || (ops->id && ops->size)) {
 		/* We held write locked pernet_ops_rwsem, and parallel
@@ -1309,6 +1311,7 @@ static void unregister_pernet_operations(struct pernet_operations *ops)
  *	When a network namespace is destroyed all of the exit methods
  *	are called in the reverse of the order with which they were
  *	registered.
+ *  将子系统初始化函数注册到网络命名空间系统的全局链表pernet_list中
  */
 int register_pernet_subsys(struct pernet_operations *ops)
 {

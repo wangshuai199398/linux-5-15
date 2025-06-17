@@ -113,7 +113,7 @@ struct net {
 	 * it is critical that it is on a read_mostly cache line.
 	 */
 	u32			hash_mix;
-
+	//每个net中都有一个回环设备
 	struct net_device       *loopback_dev;          /* The loopback */
 
 	/* core fib_rules */
@@ -124,6 +124,7 @@ struct net {
 	struct netns_packet	packet;
 	struct netns_unix	unx;
 	struct netns_nexthop	nexthop;
+	//路由表、netfiletr都在这里
 	struct netns_ipv4	ipv4;
 #if IS_ENABLED(CONFIG_IPV6)
 	struct netns_ipv6	ipv6;
@@ -149,6 +150,7 @@ struct net {
 #ifdef CONFIG_WEXT_CORE
 	struct sk_buff_head	wext_nlevents;
 #endif
+	//IP表
 	struct net_generic __rcu	*gen;
 
 	/* Used to store attached BPF programs */
@@ -386,8 +388,10 @@ struct pernet_operations {
 	 * be used, since a synchronize_rcu() is guaranteed between
 	 * the calls.
 	 */
+	//子系统初始化函数
 	int (*init)(struct net *net);
 	void (*pre_exit)(struct net *net);
+	//网络命名空间每个子系统的退出函数
 	void (*exit)(struct net *net);
 	void (*exit_batch)(struct list_head *net_exit_list);
 	/* Following method is called with RTNL held. */

@@ -30,10 +30,15 @@ struct fs_struct;
  */
 struct nsproxy {
 	atomic_t count;
+	//主机名
 	struct uts_namespace *uts_ns;
+	//IPC
 	struct ipc_namespace *ipc_ns;
+	//文件系统挂载点
 	struct mnt_namespace *mnt_ns;
+	//进程标号
 	struct pid_namespace *pid_ns_for_children;
+	//网络协议栈
 	struct net 	     *net_ns;
 	struct time_namespace *time_ns;
 	struct time_namespace *time_ns_for_children;

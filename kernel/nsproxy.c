@@ -38,6 +38,7 @@ struct nsproxy init_nsproxy = {
 	.mnt_ns			= NULL,
 	.pid_ns_for_children	= &init_pid_ns,
 #ifdef CONFIG_NET
+	//默认网络命名空间
 	.net_ns			= &init_net,
 #endif
 #ifdef CONFIG_CGROUPS

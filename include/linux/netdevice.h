@@ -1904,6 +1904,7 @@ enum netdev_ml_priv_type {
  */
 
 struct net_device {
+	//设备名
 	char			name[IFNAMSIZ];
 	struct netdev_name_node	*name_node;
 	struct dev_ifalias	__rcu *ifalias;
@@ -2159,7 +2160,7 @@ struct net_device {
 #ifdef CONFIG_NETPOLL
 	struct netpoll_info __rcu	*npinfo;
 #endif
-
+	//网络命名空间 net
 	possible_net_t			nd_net;
 
 	/* mid-layer private */
@@ -4951,7 +4952,7 @@ static inline netdev_tx_t __netdev_start_xmit(const struct net_device_ops *ops,
 {
 	//设置当前 CPU 的 softnet_data 结构中的 xmit.more 字段,表示“是否还有更多包要发送”
 	__this_cpu_write(softnet_data.xmit.more, more);
-	return ops->ndo_start_xmit(skb, dev);//igb_xmit_frame 回环: loopback_xmit
+	return ops->ndo_start_xmit(skb, dev);//igb_xmit_frame 回环: loopback_xmit veth: veth_xmit
 }
 //发送合并优化，（即驱动还将继续发更多包），可以延迟写 doorbell 减少 PCIe 压力
 static inline bool netdev_xmit_more(void)
