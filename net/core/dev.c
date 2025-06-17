@@ -11382,19 +11382,16 @@ void unregister_netdev(struct net_device *dev)
 EXPORT_SYMBOL(unregister_netdev);
 
 /**
- *	__dev_change_net_namespace - move device to different nethost namespace
+ *	将设备移动到不同的网络命名空间
  *	@dev: device
- *	@net: network namespace
- *	@pat: If not NULL name pattern to try if the current device name
- *	      is already taken in the destination network namespace.
- *	@new_ifindex: If not zero, specifies device index in the target
- *	              namespace.
+ *	@net: 目标网络命名空间
+ *	@pat: 如果不为 NULL，则为名称模式；当目标命名空间中当前设备名称已被占用时，尝试使用该模式生成新名称
+ *	@new_ifindex: 如果不为 0，表示在目标命名空间中指定的设备索引
  *
- *	This function shuts down a device interface and moves it
- *	to a new network namespace. On success 0 is returned, on
- *	a failure a netagive errno code is returned.
+ *	该函数会关闭一个设备接口并将其移动到一个新的网络命名空间。
+ *  如果操作成功，返回 0；如果失败，返回一个负的错误码（errno）。
  *
- *	Callers must hold the rtnl semaphore.
+ *	调用该函数前，必须持有 rtnl 信号量semaphore.
  */
 
 int __dev_change_net_namespace(struct net_device *dev, struct net *net,
