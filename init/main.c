@@ -830,7 +830,7 @@ static void __init report_meminit(void)
 
 	pr_info("mem auto-init: stack:%s, heap alloc:%s, heap free:%s\n",
 		stack, want_init_on_alloc(GFP_KERNEL) ? "on" : "off",
-		want_init_on_free() ? "on" : "off");
+		want_init_on_free() ? "on" : "off");//mem auto-init: stack:off, heap alloc:on, heap free:off
 	if (want_init_on_free())
 		pr_info("mem auto-init: clearing system memory may take some time...\n");
 }
@@ -908,10 +908,14 @@ static void __init print_unknown_bootoptions(void)
 	 * before each
 	 */
 	len = 1; /* null terminator */
+	//argv_init[0] 是内核名，例如 "vmlinuz"
 	for (p = &argv_init[1]; *p; p++) {
-		len++;
-		len += strlen(*p);
+		len++;//为每个参数前面加一个空格
+		len += strlen(*p);//加上这个参数自身的长度
 	}
+	//遍历内核启动时的环境变量列表 envp_init[]，从第 3 个元素 (envp_init[2]) 开始，计算拼接字符串所需的长度
+	//envp_init[0] 是 "HOME=/"（固定的默认值）
+	//envp_init[1] 是 "TERM=linux"（默认终端类型）；
 	for (p = &envp_init[2]; *p; p++) {
 		len++;
 		len += strlen(*p);
@@ -957,7 +961,7 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 	 */
 	boot_cpu_init();
 	page_address_init();
-	pr_notice("%s", linux_banner);
+	pr_notice("%s", linux_banner);//Linux version 5.15.178+ (root@yusur) (gcc (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0, GNU ld (GNU Binutils for Ubuntu) 2.38) #114 SMP Tue Jun 17 02:10:48 UTC 2025 (Ubuntu 5.15.0-138.148-generic 5.15.178)
 	early_security_init();
 	setup_arch(&command_line);
 	setup_boot_config();
@@ -970,7 +974,7 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 	build_all_zonelists(NULL);
 	page_alloc_init();
 
-	pr_notice("Kernel command line: %s\n", saved_command_line);
+	pr_notice("Kernel command line: %s\n", saved_command_line);//BOOT_IMAGE=/vmlinuz-5.15.178+ root=/dev/mapper/ubuntu--vg-ubuntu--lv ro debug systemd.log_level=debug systemd.log_target=console
 	/* parameters may set static keys */
 	jump_label_init();
 	parse_early_param();
@@ -986,10 +990,7 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 		parse_args("Setting extra init args", extra_init_args,
 			   NULL, 0, -1, -1, NULL, set_init_arg);
 
-	/*
-	 * These use large bootmem allocations and must precede
-	 * kmem_cache_init()
-	 */
+	/* 这些（哈希表等）使用了较大的 bootmem 分配，因此必须在 kmem_cache_init() 之前执行 */
 	setup_log_buf(0);
 	vfs_caches_init_early();
 	sort_main_extable();
@@ -1049,11 +1050,11 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 	time_init();
 
 	/*
-	 * For best initial stack canary entropy, prepare it after:
-	 * - setup_arch() for any UEFI RNG entropy and boot cmdline access
-	 * - timekeeping_init() for ktime entropy used in random_init()
-	 * - time_init() for making random_get_entropy() work on some platforms
-	 * - random_init() to initialize the RNG from from early entropy sources
+	 * 为了获得尽可能好的初始 stack canary（栈金丝雀） 熵值，应该在以下几个初始化步骤之后再进行其准备工作：
+	 * - setup_arch() 此时可以获取来自 UEFI 随机数生成器（RNG） 的熵，以及访问启动命令行参数；
+	 * - timekeeping_init() 此函数提供 ktime 时间熵，被 random_init() 用作随机性来源；
+	 * - time_init() 使某些平台上的 random_get_entropy() 可以正常工作
+	 * - random_init() 从早期熵源中初始化随机数生成器（RNG）。
 	 */
 	random_init(command_line);
 	boot_init_stack_canary();
@@ -1068,11 +1069,8 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 
 	kmem_cache_init_late();
 
-	/*
-	 * HACK ALERT! This is early. We're enabling the console before
-	 * we've done PCI setups etc, and console_init() must be aware of
-	 * this. But we do want output early, in case something goes wrong.
-	 */
+	/* 这段注释是 Linux 内核启动早期的 “黑客式紧急处理（HACK ALERT）”，用于解释 为何在非常早的阶段就初始化控制台（console）
+	   为了能看到早期阶段的错误信息，如内存映射错误、EFI/ACPI 失败、内核崩溃（panic）发生在 start_kernel() 初期 */
 	console_init();
 	if (panic_later)
 		panic("Too many boot %s vars at `%s'", panic_later,
@@ -1098,7 +1096,7 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 #endif
 	setup_per_cpu_pageset();
 	numa_policy_init();
-	acpi_early_init();
+	acpi_early_init();//
 	if (late_time_init)
 		late_time_init();
 	sched_clock_init();

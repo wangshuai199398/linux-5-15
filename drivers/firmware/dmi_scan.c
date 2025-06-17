@@ -625,7 +625,7 @@ static int __init dmi_present(const u8 *buf)
 					dmi_ver >> 16, (dmi_ver >> 8) & 0xFF);
 			}
 			dmi_format_ids(dmi_ids_string, sizeof(dmi_ids_string));
-			pr_info("DMI: %s\n", dmi_ids_string);
+			pr_info("DMI: %s\n", dmi_ids_string);//DMI: ASUS System Product Name/TUF GAMING B560M-PLUS WIFI, BIOS 1017 07/13/2021
 			return 0;
 		}
 	}
@@ -815,12 +815,13 @@ static int __init dmi_init(void)
 subsys_initcall(dmi_init);
 
 /**
- *	dmi_setup - scan and setup DMI system information
+ *	用于扫描并设置 DMI 系统信息
  *
- *	Scan the DMI system information. This setups DMI identifiers
- *	(dmi_system_id) for printing it out on task dumps and prepares
- *	DIMM entry information (dmi_memdev_info) from the SMBIOS table
- *	for using this when reporting memory errors.
+ *	执行 DMI 系统信息扫描。该过程主要完成以下两项任务：
+ *		设置 DMI 标识符（dmi_system_id），用于在任务转储（task dump）中输出系统相关信息；
+ *		从 SMBIOS 表 中提取 DIMM（内存模块）项信息（dmi_memdev_info），为后续内存错误报告时提供硬件级的内存条信息支持。
+ *  什么是 DMI？
+ * 		DMI（Desktop Management Interface）是一种由 BIOS/UEFI 提供的系统硬件信息接口，标准由 SMBIOS 维护
  */
 void __init dmi_setup(void)
 {

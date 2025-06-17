@@ -172,7 +172,7 @@ void __init setup_per_cpu_areas(void)
 	int rc;
 
 	pr_info("NR_CPUS:%d nr_cpumask_bits:%d nr_cpu_ids:%u nr_node_ids:%u\n",
-		NR_CPUS, nr_cpumask_bits, nr_cpu_ids, nr_node_ids);
+		NR_CPUS, nr_cpumask_bits, nr_cpu_ids, nr_node_ids);//NR_CPUS:8192 nr_cpumask_bits:12 nr_cpu_ids:12 nr_node_ids:1
 
 	/*
 	 * Allocate percpu area.  Embedding allocator is our favorite;

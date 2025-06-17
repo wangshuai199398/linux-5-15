@@ -2271,6 +2271,7 @@ void __init hrtimers_init(void)
 {
 	hrtimers_prepare_cpu(smp_processor_id());
 	hrtimers_cpu_starting(smp_processor_id());
+	//HRTIMER_SOFTIRQ 类型软中断处理 hrtimer_run_softirq
 	open_softirq(HRTIMER_SOFTIRQ, hrtimer_run_softirq);
 }
 

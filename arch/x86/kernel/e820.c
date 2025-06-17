@@ -648,12 +648,24 @@ static int __init e820_search_gap(unsigned long *gapstart, unsigned long *gapsiz
 }
 
 /*
- * Search for the biggest gap in the low 32 bits of the E820
- * memory space. We pass this space to the PCI subsystem, so
- * that it can assign MMIO resources for hotplug or
- * unconfigured devices in.
+ * 在 E820 内存空间的低 32 位地址范围内，查找最大的空闲间隙（gap）
  *
- * Hopefully the BIOS let enough space left.
+ * 我们会将这段空间传递给 PCI 子系统，用于为热插拔设备（hotplug）或尚未配置的设备分配 MMIO（内存映射 I/O）资源
+ * 希望 BIOS 留下了足够的空闲空间吧……
+ * 
+ * 为什么只在“低 32 位地址”范围内找？
+ * 		某些 PCI 设备只能使用 32 位地址空间；
+ * 		尤其是老旧设备或运行在 32 位固件环境下的系统；
+ * 		所以必须保证有一块可用的、连续的、未被 RAM 占用的地址空间，用于 MMIO 分配。
+ * 什么是 MMIO？
+ * 		Memory-Mapped I/O：设备通过占用内存地址空间进行通信；
+ * 		比如网卡、显卡、存储控制器等，都会映射一块“设备专属的物理地址”用于控制和数据交换；
+ * 		PCI 系统会扫描设备并为它们自动分配 MMIO 地址段。
+ * 为什么需要“gap”？
+ * 		E820 映射中可能大部分地址都被标为 RAM；
+ * 		但 PCI 设备的 MMIO 区域不能与 RAM 冲突；
+ * 		所以我们必须寻找“RAM 之间的空隙”来放置 MMIO；
+ * 		找到的这块 gap 会传给 PCI 管理器作为 IO资源分配池。
  */
 __init void e820__setup_pci_gap(void)
 {
@@ -679,7 +691,7 @@ __init void e820__setup_pci_gap(void)
 	pci_mem_start = gapstart;
 
 	pr_info("[mem %#010lx-%#010lx] available for PCI devices\n",
-		gapstart, gapstart + gapsize - 1);
+		gapstart, gapstart + gapsize - 1);//[mem 0x9f800000-0xdfffffff] available for PCI devices
 }
 
 /*
@@ -743,12 +755,15 @@ void __init e820__memory_setup_extended(u64 phys_addr, u32 data_len)
 }
 
 /*
- * Find the ranges of physical addresses that do not correspond to
- * E820 RAM areas and register the corresponding pages as 'nosave' for
- * hibernation (32-bit) or software suspend and suspend to RAM (64-bit).
- *
- * This function requires the E820 map to be sorted and without any
- * overlapping entries.
+ * 查找那些物理地址范围不属于 E820 所标记的 RAM 区域，并将这些地址范围对应的内存页注册为 “不可保存（nosave）” 区域，
+ * 用于：32 位系统中的 休眠（hibernation），或 64 位系统中的 软件挂起（software suspend） 和 挂起到内存（suspend to RAM）。
+ * 此函数要求：
+ * 		E820 内存映射表必须是 有序的（已排序）；
+ * 		并且其中的条目 不能有重叠（overlapping entries）
+ * 什么是 E820 表？
+ * 		E820 是 BIOS 提供给操作系统的物理内存布局表；
+ * 		包括哪些区域是可用 RAM、哪些是保留（reserved）、设备映射（MMIO）等；
+ * 		Linux 在启动早期解析它来建立内存管理模型
  */
 void __init e820__register_nosave_regions(unsigned long limit_pfn)
 {
@@ -1291,9 +1306,9 @@ char *__init e820__memory_setup_default(void)
 }
 
 /*
- * Calls e820__memory_setup_default() in essence to pick up the firmware/bootloader
- * E820 map - with an optional platform quirk available for virtual platforms
- * to override this method of boot environment processing:
+ * 本质上，这里调用了 e820__memory_setup_default()，用于获取固件或引导程序提供的 E820 内存映射表（E820 map）。
+ * 同时也为虚拟平台（如虚拟机）提供了一种可选的平台特殊处理方式（platform quirk），可以覆盖默认的引导环境处理方法。
+ * E820 表：传统 BIOS 或 EFI 提供给操作系统的内存布局表（告诉系统哪些内存是可用的、保留的、设备专用等）。
  */
 void __init e820__memory_setup(void)
 {

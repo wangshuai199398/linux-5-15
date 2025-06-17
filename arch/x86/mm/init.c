@@ -980,13 +980,13 @@ void __ref free_initmem(void)
 void __init free_initrd_mem(unsigned long start, unsigned long end)
 {
 	/*
-	 * end could be not aligned, and We can not align that,
-	 * decompressor could be confused by aligned initrd_end
-	 * We already reserve the end partial page before in
+	 * end（即 initrd_end）可能没有对齐到页面边界，而我们不能主动对齐它，
+	 * 因为解压器（decompressor）可能会因为一个“对齐过的 initrd_end”而产生误判或出错。
+	 * 不过我们已经在早期的几个地方预留了末尾的那一部分未对齐的页面：
 	 *   - i386_start_kernel()
 	 *   - x86_64_start_kernel()
 	 *   - relocate_initrd()
-	 * So here We can do PAGE_ALIGN() safely to get partial page to be freed
+	 * 所以在这里（当前这个位置）我们可以安全地使用 PAGE_ALIGN()，把那部分没有对齐的末尾页对齐后释放掉（回收内存）
 	 */
 	free_init_pages("initrd", start, PAGE_ALIGN(end));
 }

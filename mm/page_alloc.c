@@ -296,18 +296,22 @@ int sysctl_lowmem_reserve_ratio[MAX_NR_ZONES] = {
 };
 
 static char * const zone_names[MAX_NR_ZONES] = {
+	//用于老式 DMA 设备的低端内存区域（0x1000 到 16MB）
 #ifdef CONFIG_ZONE_DMA
 	 "DMA",
 #endif
+	//32位地址设备可用内存区域（16MB 到 4GB）
 #ifdef CONFIG_ZONE_DMA32
 	 "DMA32",
 #endif
+	//普通内存区域（高于 4GB，内核用于常规内存分配）
 	 "Normal",
 #ifdef CONFIG_HIGHMEM
 	 "HighMem",
 #endif
 	 "Movable",
 #ifdef CONFIG_ZONE_DEVICE
+	//用于特殊设备映射的物理内存（此处为空，代表没有）
 	 "Device",
 #endif
 };
@@ -6540,11 +6544,15 @@ build_all_zonelists_init(void)
 	cpuset_init_current_mems_allowed();
 }
 
-/*
- * unless system_state == SYSTEM_BOOTING.
+/* 为系统中的所有 NUMA 节点构建“内存区域优先级列表”，这些列表用于指导内核在分配内存页时如何选择 Zone 和节点（如 DMA、Normal 区）
+ * 除非 system_state == SYSTEM_BOOTING（系统正在引导阶段）
  *
- * __ref due to call of __init annotated helper build_all_zonelists_init
- * [protected by SYSTEM_BOOTING].
+ * 使用 __ref 标记，是因为调用了带 __init 标注的辅助函数 build_all_zonelists_init，该调用仅在 SYSTEM_BOOTING 状态下发生，因此是安全的。
+ * 1.	遍历系统中所有 NUMA 节点；
+ * 2.	对每个节点调用 build_zonelists()
+ * 3.	为每个节点建立一个 优先访问的内存 Zone 列表（zonelist），以实现高效的内存分配策略；
+ * 4.	根据策略选择：先尝试本地节点,如果本地资源不足，则查找“邻近节点”
+ * 5.	最终生成的 zonelist 用于 __alloc_pages()、kmalloc() 等调用内存分配时参考
  */
 void __ref build_all_zonelists(pg_data_t *pgdat)
 {
@@ -6573,9 +6581,9 @@ void __ref build_all_zonelists(pg_data_t *pgdat)
 	pr_info("Built %u zonelists, mobility grouping %s.  Total pages: %ld\n",
 		nr_online_nodes,
 		page_group_by_mobility_disabled ? "off" : "on",
-		vm_total_pages);
+		vm_total_pages);//Built 1 zonelists, mobility grouping on.  Total pages: 4081324
 #ifdef CONFIG_NUMA
-	pr_info("Policy zone: %s\n", zone_names[policy_zone]);
+	pr_info("Policy zone: %s\n", zone_names[policy_zone]);//Policy zone: Normal
 #endif
 }
 
@@ -8053,18 +8061,17 @@ bool __weak arch_has_descending_max_zone_pfns(void)
 	return false;
 }
 
-/**
- * free_area_init - Initialise all pg_data_t and zone data
- * @max_zone_pfn: an array of max PFNs for each zone
+/** 对内存区域和各个内存 zone（DMA、DMA32、Normal）进行初始化和校验
+ * 初始化所有的 pg_data_t 和 zone 数据
+ * @max_zone_pfn: 每个内存 zone 对应的最大 PFN（页帧号）数组
  *
- * This will call free_area_init_node() for each active node in the system.
- * Using the page ranges provided by memblock_set_node(), the size of each
- * zone in each node and their holes is calculated. If the maximum PFN
- * between two adjacent zones match, it is assumed that the zone is empty.
- * For example, if arch_max_dma_pfn == arch_max_dma32_pfn, it is assumed
- * that arch_max_dma32_pfn has no pages. It is also assumed that a zone
- * starts where the previous one ended. For example, ZONE_DMA32 starts
- * at arch_max_dma_pfn.
+ * 这个函数会为系统中的每个活动节点（active node）调用 free_area_init_node()。
+ * 利用 memblock_set_node() 提供的页范围信息，来计算每个节点中每个 zone 的大小以及空洞（holes）。
+ * 
+ * 如果两个相邻 zone 的最大 PFN 相等，就会认为后一段 zone 是空的。例如：如果 arch_max_dma_pfn == arch_max_dma32_pfn，
+ * 就认为 arch_max_dma32_pfn 这个 zone 没有页（为空）。
+ * 
+ * 另外，zone 的起始地址也是假设为前一个 zone 结束的位置：例如，ZONE_DMA32 将从 arch_max_dma_pfn 处开始。
  */
 void __init free_area_init(unsigned long *max_zone_pfn)
 {
@@ -8103,6 +8110,12 @@ void __init free_area_init(unsigned long *max_zone_pfn)
 
 	/* Print out the zone ranges */
 	pr_info("Zone ranges:\n");
+	/*
+		DMA      [mem 0x0000000000001000-0x0000000000ffffff]
+		DMA32    [mem 0x0000000001000000-0x00000000ffffffff]
+		Normal   [mem 0x0000000100000000-0x000000045c7fffff]
+		Device   empty
+	*/
 	for (i = 0; i < MAX_NR_ZONES; i++) {
 		if (i == ZONE_MOVABLE)
 			continue;
@@ -8126,11 +8139,8 @@ void __init free_area_init(unsigned long *max_zone_pfn)
 			       (u64)zone_movable_pfn[i] << PAGE_SHIFT);
 	}
 
-	/*
-	 * Print out the early node map, and initialize the
-	 * subsection-map relative to active online memory ranges to
-	 * enable future "sub-section" extensions of the memory map.
-	 */
+	/* 打印早期的节点映射（early node map），并根据当前已激活的在线内存范围，初始化子节映射（subsection-map），
+	   以支持未来对内存映射结构的“子节（sub-section）扩展” */
 	pr_info("Early memory node ranges\n");
 	for_each_mem_pfn_range(i, MAX_NUMNODES, &start_pfn, &end_pfn, &nid) {
 		pr_info("  node %3d: [mem %#018Lx-%#018Lx]\n", nid,
@@ -8308,7 +8318,7 @@ void __init mem_init_print_info(void)
 #ifdef	CONFIG_HIGHMEM
 		, totalhigh_pages() << (PAGE_SHIFT - 10)
 #endif
-		);
+		);//Memory: 15337688K/16585076K available (16392K kernel code, 4384K rwdata, 5628K rodata, 3320K init, 16712K bss, 1247132K reserved, 0K cma-reserved)
 }
 
 /**
@@ -8795,10 +8805,9 @@ static unsigned long __init arch_reserved_kernel_pages(void)
 #endif
 
 /*
- * allocate a large system hash table from bootmem
- * - it is assumed that the hash table must contain an exact power-of-2
- *   quantity of entries
- * - limit is the number of hash buckets, not the total allocation size
+ * 从 bootmem（启动内存）中分配一个大的系统哈希表
+ * - 假设哈希表的条目数必须是 2 的整数次幂（power-of-2）
+ * - limit 表示的是 哈希桶（hash buckets）的数量，而不是总分配的字节数
  */
 void *__init alloc_large_system_hash(const char *tablename,
 				     unsigned long bucketsize,
@@ -8900,7 +8909,7 @@ void *__init alloc_large_system_hash(const char *tablename,
 
 	pr_info("%s hash table entries: %ld (order: %d, %lu bytes, %s)\n",
 		tablename, 1UL << log2qty, ilog2(size) - PAGE_SHIFT, size,
-		virt ? (huge ? "vmalloc hugepage" : "vmalloc") : "linear");
+		virt ? (huge ? "vmalloc hugepage" : "vmalloc") : "linear");//Dentry cache hash table entries: 2097152 (order: 12, 16777216 bytes, linear)
 
 	if (_hash_shift)
 		*_hash_shift = log2qty;

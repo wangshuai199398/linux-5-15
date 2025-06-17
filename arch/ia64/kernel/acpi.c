@@ -608,6 +608,23 @@ int __init early_acpi_boot_init(void)
 	return 0;
 }
 
+/*
+ACPI 是现代操作系统与底层硬件通信与管理的标准接口，提供了电源控制、设备发现、硬件配置、CPU/内存拓扑等能力，是让 Linux 能识别并管理硬件的关键机制
+	电源管理      进入/退出睡眠（S1–S5）、待机、关机等状态
+	CPU 管理     启动/关闭 CPU 核心，管理 C-states / P-states
+	设备枚举      枚举 PCI、USB、显示器等设备的存在与资源
+	中断路由      告诉内核如何配置中断控制器（APIC、GSI 等）
+	内存拓扑      提供 NUMA 结构信息（哪段内存在哪个节点）
+	热管理        风扇控制、温度传感器信息
+	电池管理      电量、充电状态等信息（笔记本常用）
+	热插拔支持    支持 CPU、内存、PCI 设备热插拔
+	固件配置      操作系统可以调用 ACPI 方法配置硬件参数
+ACPI 如何实现？
+	• BIOS / UEFI 固件在启动时，将一组 ACPI 表 提供给操作系统；
+	• 操作系统读取这些表（如 RSDP、FADT、DSDT、MADT、SRAT 等）；
+	• ACPI 表中包含了设备的描述、硬件资源、控制方法（AML 脚本）等；
+	• 内核会通过 ACPI 驱动和解释器（如 acpi.ko）与硬件交互。
+*/
 int __init acpi_boot_init(void)
 {
 
@@ -754,6 +771,9 @@ early_param("additional_cpus", setup_additional_cpus);
  * - If the BIOS specified disabled CPUs in ACPI/mptables use that.
  * - The user can overwrite it with additional_cpus=NUM
  * - Otherwise don't reserve additional CPUs.
+ * 用于初始化 cpu_possible_map
+ * 映射用于记录系统可能存在的所有 CPU（即使还没启动）
+ * 有时候这个函数会通过读取 Local APIC 来判断 CPU ID 或存在性
  */
 __init void prefill_possible_map(void)
 {

@@ -973,10 +973,17 @@ static void memory_bm_recycle(struct memory_bitmap *bm)
 }
 
 /**
- * register_nosave_region - Register a region of unsaveable memory.
+ * 注册一个 不可保存的内存区域
  *
- * Register a range of page frames the contents of which should not be saved
- * during hibernation (to be used in the early initialization code).
+ * 注册一段内存页帧范围，在 休眠（hibernation）期间不应保存其内容。
+ * 该函数用于内核的早期初始化阶段。
+ *  什么是“不可保存的内存”？
+ * 		在系统进入休眠（hibernation）时，Linux 会将当前内存内容写入磁盘（生成镜像），以便在下次开机时恢复到之前的状态。
+ * 	  但某些内存区域：
+ * 		可能是 设备映射内存（如 MMIO）；
+ * 		或是 运行中不稳定的数据结构（如 trampoline、early boot code）；
+ * 		又或是内核自身正在使用的低级区域（如 identity mapping）；
+ * 	  这些内存如果保存并恢复，可能导致崩溃、不可预测行为、甚至硬件问题。
  */
 void __init register_nosave_region(unsigned long start_pfn, unsigned long end_pfn)
 {

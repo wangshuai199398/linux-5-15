@@ -459,6 +459,24 @@ static void __init copy_bootdata(char *real_mode_data)
 	sme_unmap_bootdata(real_mode_data);
 }
 
+/* 系统启动 start_kernel_wangs
+   Linux 内核进入正式 C 语言环境的起点（在 64 位系统）
+	BIOS/UEFI
+		|
+	Bootloader(GRUB, etc.)
+		|
+	Linux kernel(in compressed form)
+		|
+	arch/x86/boot/compressed/head_64.S
+		|
+	decompress kernel -> jump to x86_64_start_kernel
+		|
+	x86_64_start_kernel -> start_kernel()
+		|
+	初始化子系统、驱动、挂载根文件系统
+		|
+	启动 init 进程(PID 1)
+*/
 asmlinkage __visible void __init x86_64_start_kernel(char * real_mode_data)
 {
 	/*
@@ -528,16 +546,19 @@ void __init x86_64_start_reservations(char *real_mode_data)
 }
 
 /*
- * Data structures and code used for IDT setup in head_64.S. The bringup-IDT is
- * used until the idt_table takes over. On the boot CPU this happens in
- * x86_64_start_kernel(), on secondary CPUs in start_secondary(). In both cases
- * this happens in the functions called from head_64.S.
+ * 用于 IDT（中断描述符表）设置的数据结构和代码位于 head_64.S 中
+ * 在正式使用 idt_table 之前，系统会使用一个 临时的 bringup-IDT
+ * 对于 引导 CPU（BSP），这个切换过程发生在 x86_64_start_kernel() 中
+ * 对于 其他的辅助 CPU（AP），这个切换过程发生在 start_secondary() 中
+ * 两种情况中的函数调用都源自 head_64.S
  *
- * The idt_table can't be used that early because all the code modifying it is
- * in idt.c and can be instrumented by tracing or KASAN, which both don't work
- * during early CPU bringup. Also the idt_table has the runtime vectors
- * configured which require certain CPU state to be setup already (like TSS),
- * which also hasn't happened yet in early CPU bringup.
+ * idt_table 在内核启动的早期阶段不能直接使用，原因如下：
+ * 1. 所有对 idt_table 的修改操作都在 idt.c 中进行，而这些操作可能被追踪（tracing）或 KASAN（内核地址消毒器）检测；
+ * 2. 而在早期 CPU 启动阶段，追踪和 KASAN 都还没准备好；
+ * 3. 此外，idt_table 设置的是运行时的中断向量（runtime vectors），这些向量需要特定的 CPU 状态（例如 TSS，任务状态段）才能正常使用；
+ * 4. 而这些状态在早期 CPU 启动阶段也尚未初始化。
+ * 总结一句话：
+ * 		在 Linux 内核的早期启动阶段，系统先使用临时 IDT 来处理中断，因为真正的 IDT 依赖于系统后续才能提供的功能和状态。
  */
 static gate_desc bringup_idt_table[NUM_EXCEPTION_VECTORS] __page_aligned_data;
 

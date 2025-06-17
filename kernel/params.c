@@ -157,7 +157,8 @@ static int parse_one(char *param,
 	return -ENOENT;
 }
 
-/* Args looks like "foo=bar,bar2 baz=fuz wiz". */
+/* Args looks like "foo=bar,bar2 baz=fuz wiz". 
+   params: __setup中 设置的 */
 char *parse_args(const char *doing,
 		 char *args,
 		 const struct kernel_param *params,

@@ -479,7 +479,7 @@ print_ucode_info(struct ucode_cpu_info *uci, unsigned int date)
 		     uci->cpu_sig.rev,
 		     date & 0xffff,
 		     date >> 24,
-		     (date >> 16) & 0xff);
+		     (date >> 16) & 0xff);//revision 0x100, date = 2024-11-14
 }
 
 #ifdef CONFIG_X86_32
@@ -634,7 +634,7 @@ static struct microcode_intel *__load_ucode_intel(struct ucode_cpu_info *uci)
 
 	return scan_microcode(cp.data, cp.size, uci, false);
 }
-
+//系统正在为 BSP（Boot Strap Processor） 加载微代码。BSP 是多核 CPU 中启动操作系统的主核心
 void __init load_ucode_intel_bsp(void)
 {
 	struct microcode_intel *patch;
@@ -648,7 +648,7 @@ void __init load_ucode_intel_bsp(void)
 
 	apply_microcode_early(&uci, true);
 }
-
+//系统正在为 AP（Application Processor） 加载微代码，AP 是剩余的其它核心
 void load_ucode_intel_ap(void)
 {
 	struct microcode_intel *patch, **iup;

@@ -214,7 +214,7 @@ static void __init alloc_node_data(int nid)
 
 	/* report and initialize */
 	printk(KERN_INFO "NODE_DATA(%d) allocated [mem %#010Lx-%#010Lx]\n", nid,
-	       nd_pa, nd_pa + nd_size - 1);
+	       nd_pa, nd_pa + nd_size - 1);//NODE_DATA(0) allocated [mem 0x45c7d4000-0x45c7fdfff]
 	tnid = early_pfn_to_nid(nd_pa >> PAGE_SHIFT);
 	if (tnid != nid)
 		printk(KERN_INFO "    NODE_DATA(%d) on node %d\n", nid, tnid);
@@ -689,18 +689,17 @@ static int __init numa_init(int (*init_func)(void))
 /**
  * dummy_numa_init - Fallback dummy NUMA init
  *
- * Used if there's no underlying NUMA architecture, NUMA initialization
- * fails, or NUMA is disabled on the command line.
+ * 当系统没有底层 NUMA 架构、NUMA 初始化失败，或者用户在启动命令行中禁用了 NUMA 时，就会使用这个回退函数。
  *
- * Must online at least one node and add memory blocks that cover all
- * allowed memory.  This function must not fail.
+ * 该函数必须至少启用（online）一个节点，并添加能覆盖所有允许内存的内存块（memory blocks）。
+ * 此函数不能失败，必须保证 NUMA 结构在逻辑上是可用的
  */
 static int __init dummy_numa_init(void)
 {
 	printk(KERN_INFO "%s\n",
 	       numa_off ? "NUMA turned off" : "No NUMA configuration found");
 	printk(KERN_INFO "Faking a node at [mem %#018Lx-%#018Lx]\n",
-	       0LLU, PFN_PHYS(max_pfn) - 1);
+	       0LLU, PFN_PHYS(max_pfn) - 1);//Faking a node at [mem 0x0000000000000000-0x000000045c7fffff]
 
 	node_set(0, numa_nodes_parsed);
 	numa_add_memblk(0, 0, PFN_PHYS(max_pfn));
@@ -711,9 +710,8 @@ static int __init dummy_numa_init(void)
 /**
  * x86_numa_init - Initialize NUMA
  *
- * Try each configured NUMA initialization method until one succeeds.  The
- * last fallback is dummy single node config encompassing whole memory and
- * never fails.
+ * 尝试每一种已配置的 NUMA 初始化方法，直到其中一种成功为止。
+ * 最后的回退方案是一个虚拟的单节点配置，它会涵盖整个内存区域，并且永远不会失败。
  */
 void __init x86_numa_init(void)
 {
@@ -767,16 +765,9 @@ void __init init_gi_nodes(void)
 /*
  * Setup early cpu_to_node.
  *
- * Populate cpu_to_node[] only if x86_cpu_to_apicid[],
- * and apicid_to_node[] tables have valid entries for a CPU.
- * This means we skip cpu_to_node[] initialisation for NUMA
- * emulation and faking node case (when running a kernel compiled
- * for NUMA on a non NUMA box), which is OK as cpu_to_node[]
- * is already initialized in a round robin manner at numa_init_array,
- * prior to this call, and this initialization is good enough
- * for the fake NUMA cases.
- *
- * Called before the per_cpu areas are setup.
+ * 在 NUMA 初始化早期，会根据 APIC ID 映射表来建立 CPU 到 NUMA 节点的映射。
+ * 如果处于 NUMA 仿真或非 NUMA 环境中，就不会使用真实映射表，而是保留之前轮询生成的默认值。
+ * 此操作发生在 per_cpu 区域建立之前。
  */
 void __init init_cpu_to_node(void)
 {

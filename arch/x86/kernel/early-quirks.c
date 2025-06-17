@@ -610,7 +610,7 @@ intel_graphics_stolen(int num, int slot, int func,
 	intel_graphics_stolen_res.end = end;
 
 	printk(KERN_INFO "Reserving Intel graphics memory at %pR\n",
-	       &intel_graphics_stolen_res);
+	       &intel_graphics_stolen_res);//Reserving Intel graphics memory at [mem 0x9d800000-0x9f7fffff]
 
 	/* Mark this space as reserved */
 	e820__range_add(base, size, E820_TYPE_RESERVED);

@@ -49,7 +49,7 @@ asm (".pushsection .entry.text, \"ax\"\n"
 void __init default_banner(void)
 {
 	printk(KERN_INFO "Booting paravirtualized kernel on %s\n",
-	       pv_info.name);
+	       pv_info.name);//Booting paravirtualized kernel on bare hardware
 }
 
 /* Undefined instruction for dealing with missing ops pointers. */

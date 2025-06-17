@@ -2506,7 +2506,7 @@ static void pcpu_dump_alloc_info(const char *lvl,
 
 	printk("%spcpu-alloc: s%zu r%zu d%zu u%zu alloc=%zu*%zu",
 	       lvl, ai->static_size, ai->reserved_size, ai->dyn_size,
-	       ai->unit_size, ai->alloc_size / ai->atom_size, ai->atom_size);
+	       ai->unit_size, ai->alloc_size / ai->atom_size, ai->atom_size);//pcpu-alloc: s217088 r8192 d28672 u262144 alloc=1*2097152
 
 	for (group = 0; group < ai->nr_groups; group++) {
 		const struct pcpu_group_info *gi = &ai->groups[group];
@@ -2519,7 +2519,7 @@ static void pcpu_dump_alloc_info(const char *lvl,
 				pr_cont("\n");
 				printk("%spcpu-alloc: ", lvl);
 			}
-			pr_cont("[%0*d] ", group_width, group);
+			pr_cont("[%0*d] ", group_width, group);//pcpu-alloc: [0] 00 01 02 03 04 05 06 07 [0] 08 09 10 11 -- -- -- --
 
 			for (unit_end += upa; unit < unit_end; unit++)
 				if (gi->cpu_map[unit] != NR_CPUS)
@@ -2996,34 +2996,29 @@ static struct pcpu_alloc_info * __init __flatten pcpu_build_alloc_info(
 
 #if defined(BUILD_EMBED_FIRST_CHUNK)
 /**
- * pcpu_embed_first_chunk - embed the first percpu chunk into bootmem
- * @reserved_size: the size of reserved percpu area in bytes
- * @dyn_size: minimum free size for dynamic allocation in bytes
- * @atom_size: allocation atom size
- * @cpu_distance_fn: callback to determine distance between cpus, optional
- * @alloc_fn: function to allocate percpu page
- * @free_fn: function to free percpu page
+ * 将第一个 percpu 区块嵌入到 bootmem 中
+ * @reserved_size: 预留的 percpu 区域大小（单位：字节）
+ * @dyn_size: 用于动态分配的最小空闲大小（单位：字节）
+ * @atom_size: 分配的原子对齐单位大小
+ * @cpu_distance_fn: 用于判断 CPU 之间距离的回调函数（可选）
+ * @alloc_fn: 用于分配 percpu 页的函数
+ * @free_fn: 用于释放 percpu 页的函数
  *
- * This is a helper to ease setting up embedded first percpu chunk and
- * can be called where pcpu_setup_first_chunk() is expected.
+ * 这个函数是个辅助函数，用于更方便地设置嵌入式的第一个 percpu 区块（chunk），可以在 pcpu_setup_first_chunk() 被期望调用的地方调用它。
  *
- * If this function is used to setup the first chunk, it is allocated
- * by calling @alloc_fn and used as-is without being mapped into
- * vmalloc area.  Allocations are always whole multiples of @atom_size
- * aligned to @atom_size.
+ * 如果使用本函数来初始化第一个 chunk：它将通过 @alloc_fn 分配内存；不再映射到 vmalloc 区域，而是原样使用；所有分配都必须是 @atom_size 的整数倍，并且 按 @atom_size 对齐。
  *
- * This enables the first chunk to piggy back on the linear physical
- * mapping which often uses larger page size.  Please note that this
- * can result in very sparse cpu->unit mapping on NUMA machines thus
- * requiring large vmalloc address space.  Don't use this allocator if
- * vmalloc space is not orders of magnitude larger than distances
- * between node memory addresses (ie. 32bit NUMA machines).
+ * 这样做的好处是：
+ * 		第一个 chunk 可以利用系统的 线性物理映射（如大页映射），提高性能；
+ * 	但请注意：
+ * 		在 NUMA 系统中，这可能导致 CPU 到 unit 的映射非常稀疏；
+ * 		从而导致对 vmalloc 地址空间的需求非常大；
+ * 		所以：不建议在 vmalloc 空间较小的系统上使用此方法，例如 32 位 NUMA 系统。
  *
- * @dyn_size specifies the minimum dynamic area size.
+ * @dyn_size 表示需要预留的 动态分配区最小大小
  *
- * If the needed size is smaller than the minimum or specified unit
- * size, the leftover is returned using @free_fn.
- *
+ * 如果最终分配的大小 大于实际所需，剩余空间会通过 @free_fn 释放回去。
+ * pcpu_embed_first_chunk() 是用于初始化 第一个 per-CPU chunk 的内存分配器，它允许将该 chunk 直接嵌入线性物理映射中，避免使用 vmalloc，但在 NUMA 架构或地址空间紧张的平台上要谨慎使用
  * RETURNS:
  * 0 on success, -errno on failure.
  */
@@ -3121,7 +3116,7 @@ int __init pcpu_embed_first_chunk(size_t reserved_size, size_t dyn_size,
 
 	pr_info("Embedded %zu pages/cpu s%zu r%zu d%zu u%zu\n",
 		PFN_DOWN(size_sum), ai->static_size, ai->reserved_size,
-		ai->dyn_size, ai->unit_size);
+		ai->dyn_size, ai->unit_size);//Embedded 62 pages/cpu s217088 r8192 d28672 u262144
 
 	pcpu_setup_first_chunk(ai, base);
 	goto out_free;

@@ -3474,9 +3474,8 @@ static void vc_init(struct vc_data *vc, unsigned int rows,
 }
 
 /*
- * This routine initializes console interrupts, and does nothing
- * else. If you want the screen to clear, call tty_write with
- * the appropriate escape-sequence.
+ * 这个函数只用于初始化控制台的中断，它不会做任何其它操作。
+ * 如果你想清屏，请通过 tty_write() 写入适当的转义序列（escape-sequence）
  */
 
 static int __init con_init(void)
@@ -3536,7 +3535,7 @@ static int __init con_init(void)
 	update_screen(vc);
 	pr_info("Console: %s %s %dx%d\n",
 		vc->vc_can_do_color ? "colour" : "mono",
-		display_desc, vc->vc_cols, vc->vc_rows);
+		display_desc, vc->vc_cols, vc->vc_rows);//Console: colour dummy device 80x25
 	printable = 1;
 
 	console_unlock();

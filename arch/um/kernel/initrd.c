@@ -13,7 +13,7 @@
 /* Changed by uml_initrd_setup, which is a setup */
 static char *initrd __initdata = NULL;
 static int load_initrd(char *filename, void *buf, int size);
-
+/* initrd：初始内存盘（initial RAM disk），系统启动时挂载根文件系统之前临时用的内存文件系统 */
 int __init read_initrd(void)
 {
 	void *area;

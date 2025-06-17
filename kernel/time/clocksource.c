@@ -1087,16 +1087,18 @@ static void clocksource_enqueue(struct clocksource *cs)
 }
 
 /**
- * __clocksource_update_freq_scale - Used update clocksource with new freq
- * @cs:		clocksource to be registered
- * @scale:	Scale factor multiplied against freq to get clocksource hz
- * @freq:	clocksource frequency (cycles per second) divided by scale
+ * 用于以新的频率更新时钟源（clocksource）
+ * @cs:		要注册的时钟源（clocksource）
+ * @scale:	缩放因子，与频率相乘得到最终的时钟源频率（Hz）
+ * @freq:	时钟源频率（单位：每秒的周期数），已被 scale 除过
  *
- * This should only be called from the clocksource->enable() method.
+ * 此函数只能在 clocksource->enable() 方法中调用
  *
- * This *SHOULD NOT* be called directly! Please use the
- * __clocksource_update_freq_hz() or __clocksource_update_freq_khz() helper
- * functions.
+ * 严禁直接调用这个函数！
+ * 请使用以下两个辅助函数中的一个来更新频率：
+ * __clocksource_update_freq_hz()（以 Hz 为单位）
+ * __clocksource_update_freq_khz()（以 kHz 为单位）
+ * __clocksource_update_freq_scale() 是用于内部更新时钟源频率的函数，它只能在启用时钟源（enable()）的过程中调用，且不应直接调用，应通过封装的 Hz 或 kHz 辅助函数进行使用，以提高安全性和可读性。
  */
 void __clocksource_update_freq_scale(struct clocksource *cs, u32 scale, u32 freq)
 {
@@ -1170,19 +1172,19 @@ void __clocksource_update_freq_scale(struct clocksource *cs, u32 scale, u32 freq
 	clocksource_update_max_deferment(cs);
 
 	pr_info("%s: mask: 0x%llx max_cycles: 0x%llx, max_idle_ns: %lld ns\n",
-		cs->name, cs->mask, cs->max_cycles, cs->max_idle_ns);
+		cs->name, cs->mask, cs->max_cycles, cs->max_idle_ns);//refined-jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 7645519600211568 ns
 }
 EXPORT_SYMBOL_GPL(__clocksource_update_freq_scale);
 
 /**
- * __clocksource_register_scale - Used to install new clocksources
- * @cs:		clocksource to be registered
- * @scale:	Scale factor multiplied against freq to get clocksource hz
- * @freq:	clocksource frequency (cycles per second) divided by scale
+ * 用于注册新的时钟源（clocksource）
+ * @cs:		要注册的时钟源结构体（clocksource）
+ * @scale:	缩放因子，与 freq 相乘得到最终的时钟源频率（单位 Hz）
+ * @freq:	时钟源频率（单位：每秒周期数），这里已被 scale 除过
  *
- * Returns -EBUSY if registration fails, zero otherwise.
+ * 如果注册失败，返回 -EBUSY（表示资源忙）；否则返回 0，表示注册成功。
  *
- * This *SHOULD NOT* be called directly! Please use the
+ * 不要直接调用这个函数！请使用以下高层辅助函数之一来进行时钟源注册：
  * clocksource_register_hz() or clocksource_register_khz helper functions.
  */
 int __clocksource_register_scale(struct clocksource *cs, u32 scale, u32 freq)

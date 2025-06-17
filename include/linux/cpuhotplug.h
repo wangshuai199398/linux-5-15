@@ -304,15 +304,14 @@ static inline int cpuhp_setup_state_cpuslocked(enum cpuhp_state state,
 }
 
 /**
- * cpuhp_setup_state_nocalls - Setup hotplug state callbacks without calling the
- *			       @startup callback
- * @state:	The state for which the calls are installed
- * @name:	Name of the callback.
- * @startup:	startup callback function or NULL if not required
- * @teardown:	teardown callback function or NULL if not required
+ * 设置 CPU 热插拔状态回调（不调用 startup 回调）
+ * @state:	要安装回调的 CPU 热插拔状态编号
+ * @name:	该回调的名称（用于调试或日志）
+ * @startup:	启动（上线）阶段的回调函数；如果不需要可为 NULL
+ * @teardown:	下线阶段的回调函数；如果不需要可为 NULL
  *
- * Same as cpuhp_setup_state() except that the @startup callback is not
- * invoked during installation. NOP if SMP=n or HOTPLUG_CPU=n.
+ * 与 cpuhp_setup_state() 类似，但 不会在注册时立即调用 startup 回调。
+ * 如果配置项 CONFIG_SMP=n 或 CONFIG_HOTPLUG_CPU=n，则此函数为 空操作（NOP）。
  */
 static inline int cpuhp_setup_state_nocalls(enum cpuhp_state state,
 					    const char *name,

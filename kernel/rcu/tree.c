@@ -508,7 +508,7 @@ static void adjust_jiffies_till_sched_qs(void)
 		      2 * READ_ONCE(jiffies_till_next_fqs);
 	if (j < HZ / 10 + nr_cpu_ids / RCU_JIFFIES_FQS_DIV)
 		j = HZ / 10 + nr_cpu_ids / RCU_JIFFIES_FQS_DIV;
-	pr_info("RCU calculated value of scheduler-enlistment delay is %ld jiffies.\n", j);
+	pr_info("RCU calculated value of scheduler-enlistment delay is %ld jiffies.\n", j);//RCU calculated value of scheduler-enlistment delay is 25 jiffies
 	WRITE_ONCE(jiffies_to_sched_qs, j);
 }
 
@@ -4643,7 +4643,7 @@ void rcu_init_geometry(void)
 	    nr_cpu_ids == NR_CPUS)
 		return;
 	pr_info("Adjusting geometry for rcu_fanout_leaf=%d, nr_cpu_ids=%u\n",
-		rcu_fanout_leaf, nr_cpu_ids);
+		rcu_fanout_leaf, nr_cpu_ids);//Adjusting geometry for rcu_fanout_leaf=16, nr_cpu_ids=12
 
 	/*
 	 * The boot-time rcu_fanout_leaf parameter must be at least two

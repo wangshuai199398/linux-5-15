@@ -706,6 +706,7 @@ void __raise_softirq_irqoff(unsigned int nr)
 	or_softirq_pending(1UL << nr);
 }
 
+//软中断_wangs
 void open_softirq(int nr, void (*action)(struct softirq_action *))
 {
 	softirq_vec[nr].action = action;
@@ -906,8 +907,9 @@ void __init softirq_init(void)
 		per_cpu(tasklet_hi_vec, cpu).tail =
 			&per_cpu(tasklet_hi_vec, cpu).head;
 	}
-
+	//软中断 TASKLET_SOFTIRQ tasklet_action
 	open_softirq(TASKLET_SOFTIRQ, tasklet_action);
+	//软中断 HI_SOFTIRQ tasklet_hi_action
 	open_softirq(HI_SOFTIRQ, tasklet_hi_action);
 }
 

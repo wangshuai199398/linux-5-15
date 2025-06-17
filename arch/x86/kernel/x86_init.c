@@ -41,9 +41,8 @@ static __initconst const struct of_device_id of_cmos_match[] = {
 };
 
 /*
- * Allow devicetree configured systems to disable the RTC by setting the
- * corresponding DT node's status property to disabled. Code is optimized
- * out for CONFIG_OF=n builds.
+ * 允许通过 设备树（Device Tree）配置的系统，通过设置对应设备树节点（DT node）的 status 属性为 "disabled"，来禁用 RTC（实时时钟）。
+ * 当内核配置为 CONFIG_OF=n（即不启用设备树支持）时，与此相关的代码会被优化掉（编译时剔除）。
  */
 static __init void x86_wallclock_init(void)
 {
@@ -56,8 +55,7 @@ static __init void x86_wallclock_init(void)
 }
 
 /*
- * The platform setup functions are preset with the default functions
- * for standard PC hardware.
+ * 平台设置函数（platform setup functions）预先配置为标准 PC 硬件的默认函数。
  */
 struct x86_init_ops x86_init __initdata = {
 

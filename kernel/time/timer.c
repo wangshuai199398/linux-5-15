@@ -2255,6 +2255,7 @@ void __init init_timers(void)
 {
 	init_timer_cpus();
 	posix_cputimers_init_work();
+	//这行代码将 run_timer_softirq 注册为 TIMER_SOFTIRQ 类型软中断的处理函数
 	open_softirq(TIMER_SOFTIRQ, run_timer_softirq);
 }
 

@@ -2080,6 +2080,15 @@ no_apic:
 
 /**
  * init_apic_mappings - initialize APIC mappings
+ * Local APIC 是什么？
+ * 		Local APIC 是每个 CPU 上的 本地中断控制器；
+ * 		用于处理本地中断、发送 IPI（inter-processor interrupt，多核间通信）；
+ * 		必须在内核初始化 SMP（多处理器）时进行正确配置
+ * 	 ACPI 和 MP 表
+ * 		通常，系统通过 ACPI 的 MADT 表 或传统的 MP 表（MultiProcessor Table） 来告知内核：
+ * 			有哪些 CPU
+ * 			每个 CPU 的 APIC ID
+ * 			如何访问本地 APIC
  */
 void __init init_apic_mappings(void)
 {

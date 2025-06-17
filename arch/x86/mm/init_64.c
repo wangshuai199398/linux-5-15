@@ -815,12 +815,8 @@ void __init paging_init(void)
 {
 	sparse_init();
 
-	/*
-	 * clear the default setting with node 0
-	 * note: don't use nodes_clear here, that is really clearing when
-	 *	 numa support is not compiled in, and later node_set_state
-	 *	 will not set it back.
-	 */
+	/* 清除默认的 node 0 设置
+	 * 注意：不要在这里使用 nodes_clear，因为在未编译 NUMA 支持的情况下，它会真正清空所有节点状态，而后续的 node_set_state 将无法再把它设置回来 */
 	node_clear_state(0, N_MEMORY);
 	node_clear_state(0, N_NORMAL_MEMORY);
 

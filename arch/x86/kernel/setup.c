@@ -756,16 +756,20 @@ dump_kernel_offset(struct notifier_block *self, unsigned long v, void *p)
 }
 
 /*
- * Determine if we were loaded by an EFI loader.  If so, then we have also been
- * passed the efi memmap, systab, etc., so we should use these data structures
- * for initialization.  Note, the efi init code path is determined by the
- * global efi_enabled. This allows the same kernel image to be used on existing
- * systems (with a traditional BIOS) as well as on EFI systems.
+ * 判断我们是否是由 EFI 引导程序加载的。如果是，那么我们也被传递了 EFI 的内存映射（efi memmap）、系统表（systab）等数据，
+ * 因此我们在初始化时应该使用这些数据结构。
+ * 注意：是否走 EFI 初始化路径由全局变量 efi_enabled 决定。
+ * 这样就允许同一个内核镜像同时兼容：
+ * 	使用传统 BIOS 的系统
+ * 	使用 EFI 的系统
  */
 /*
- * setup_arch - architecture-specific boot-time initializations
+ * setup_arch —— 架构相关的启动初始化函数
  *
- * Note: On x86_64, fixmaps are ready for use even before this is called.
+ * 注意：在 x86_64 架构上，即使在调用这个函数之前，fixmap（固定映射区）就已经准备好了
+ * 
+ * EFI（Extensible Firmware Interface）：现代系统的引导方式，替代传统 BIOS。
+ * fixmap：内核在早期引导阶段使用的一段固定虚拟地址区域，用于映射某些特殊用途的内存（如 ACPI、页表、I/O 区域等）。
  */
 
 void __init setup_arch(char **cmdline_p)
@@ -793,14 +797,13 @@ void __init setup_arch(char **cmdline_p)
 	 */
 	__flush_tlb_all();
 #else
-	printk(KERN_INFO "Command line: %s\n", boot_command_line);
+	printk(KERN_INFO "Command line: %s\n", boot_command_line);//Command line: BOOT_IMAGE=/vmlinuz-5.15.178+ root=/dev/mapper/ubuntu--vg-ubuntu--lv ro debug systemd.log_level=debug systemd.log_target=console
 	boot_cpu_data.x86_phys_bits = MAX_PHYSMEM_BITS;
 #endif
 
-	/*
-	 * If we have OLPC OFW, we might end up relocating the fixmap due to
-	 * reserve_top(), so do this before touching the ioremap area.
-	 */
+	/* 如果我们运行在 OLPC（One Laptop Per Child）平台上的 OFW（Open Firmware）环境中，
+	 * 那么由于 reserve_top() 的调用，可能会导致 fixmap（固定映射区）被重新定位。
+	 * 因此，在访问 ioremap 区域之前，要先执行这一步操作 */
 	olpc_ofw_detect();
 
 	idt_setup_early_traps();
@@ -844,16 +847,20 @@ void __init setup_arch(char **cmdline_p)
 	x86_init.oem.arch_setup();
 
 	/*
-	 * Do some memory reservations *before* memory is added to memblock, so
-	 * memblock allocations won't overwrite it.
+	 * 在将内存加入 memblock 之前，先进行一些内存保留操作，这样可以防止后续的 memblock 分配过程覆盖这些关键区域。
 	 *
-	 * After this point, everything still needed from the boot loader or
-	 * firmware or kernel text should be early reserved or marked not RAM in
-	 * e820. All other memory is free game.
+	 * 从这一步开始，凡是启动加载器（boot loader）、固件（firmware）或内核文本（kernel text）中仍然需要保留的内容，
+	 * 要么通过 早期保留机制（early reserved），要么在 E820 表中标记为非 RAM（not RAM）。
+	 * 除此之外的所有内存，内核就可以自由使用了。
 	 *
-	 * This call needs to happen before e820__memory_setup() which calls the
-	 * xen_memory_setup() on Xen dom0 which relies on the fact that those
-	 * early reservations have happened already.
+	 * 这一步的调用必须发生在 e820__memory_setup() 之前，因为在 Xen 的 dom0（宿主域）上，e820__memory_setup() 
+	 * 会调用 xen_memory_setup()，而后者依赖于这些早期内存保留操作已经完成。
+	 * memblock：Linux 在早期内核启动阶段用于管理物理内存的分配器（比页分配器更早启用）；
+	 * early reserved：在系统初始化早期就标记为“保留”的内存区域，防止被误用；
+	 * E820 表：BIOS 或 UEFI 提供的内存分布表；
+	 * not RAM：在 E820 中表示该区域不是普通可用内存；
+	 * Xen dom0：Xen 虚拟化系统中的宿主系统（控制虚拟机的主操作系统）；
+	 * xen_memory_setup()：Xen 平台特有的内存初始化函数，它依赖内核已知哪些区域被保留。
 	 */
 	early_reserve_memory();
 
@@ -893,11 +900,9 @@ void __init setup_arch(char **cmdline_p)
 	*cmdline_p = command_line;
 
 	/*
-	 * x86_configure_nx() is called before parse_early_param() to detect
-	 * whether hardware doesn't support NX (so that the early EHCI debug
-	 * console setup can safely call set_fixmap()). It may then be called
-	 * again from within noexec_setup() during parsing early parameters
-	 * to honor the respective command line option.
+	 * x86_configure_nx() 会在 parse_early_param() 之前被调用，其目的是检测硬件是否支持 NX（No-eXecute） 特性，
+	 * 从而使得早期的 EHCI 调试控制台初始化时，能安全地调用 set_fixmap()。
+	 * 后续在解析 early 参数期间，x86_configure_nx() 可能会再次被调用，这次是在 noexec_setup() 中，根据命令行参数中的相关选项进行设置。
 	 */
 	x86_configure_nx();
 
@@ -907,25 +912,15 @@ void __init setup_arch(char **cmdline_p)
 		efi_memblock_x86_reserve_range();
 
 #ifdef CONFIG_MEMORY_HOTPLUG
-	/*
-	 * Memory used by the kernel cannot be hot-removed because Linux
-	 * cannot migrate the kernel pages. When memory hotplug is
-	 * enabled, we should prevent memblock from allocating memory
-	 * for the kernel.
+	/* 内核所使用的内存无法被热拔除，因为 Linux 无法迁移内核页。
+	 * 当启用了内存热插拔功能时，我们应当防止 memblock 为内核分配那些可热拔除的内存区域。
 	 *
-	 * ACPI SRAT records all hotpluggable memory ranges. But before
-	 * SRAT is parsed, we don't know about it.
+	 * ACPI 的 SRAT 表记录了所有可热插拔的内存区域，但在解析 SRAT 之前，我们并不知道哪些内存是可热拔除的。
 	 *
-	 * The kernel image is loaded into memory at very early time. We
-	 * cannot prevent this anyway. So on NUMA system, we set any
-	 * node the kernel resides in as un-hotpluggable.
+	 * 内核镜像在非常早期就已经加载到内存中，这一步无论如何都无法避免。因此在 NUMA 系统上，我们将内核所在节点（node）标记为不可热拔除。
 	 *
-	 * Since on modern servers, one node could have double-digit
-	 * gigabytes memory, we can assume the memory around the kernel
-	 * image is also un-hotpluggable. So before SRAT is parsed, just
-	 * allocate memory near the kernel image to try the best to keep
-	 * the kernel away from hotpluggable memory.
-	 */
+	 * 鉴于现代服务器中，一个 NUMA 节点可能拥有十几 GB 的内存，我们可以假设内核镜像周围的内存也是不可热拔除的。
+	 * 所以在 SRAT 被解析之前，我们就只在靠近内核镜像的区域分配内存，尽最大可能避免将内核分配到未来可能被热拔除的内存中 */
 	if (movable_node_is_enabled())
 		memblock_set_bottom_up(true);
 #endif
@@ -952,12 +947,9 @@ void __init setup_arch(char **cmdline_p)
 		security_lock_kernel_down("EFI Secure Boot mode", LOCKDOWN_INTEGRITY_MAX);
 #endif
 
-	dmi_setup();
+	dmi_setup();//SMBIOS 3.3.0 present.
 
-	/*
-	 * VMware detection requires dmi to be available, so this
-	 * needs to be done after dmi_setup(), for the boot CPU.
-	 */
+	/* VMware 检测依赖于 DMI 信息，因此这一步必须在 dmi_setup() 之后执行，并且是在 启动 CPU（boot CPU）上完成的 */
 	init_hypervisor_platform();
 
 	tsc_early_init();
@@ -983,30 +975,21 @@ void __init setup_arch(char **cmdline_p)
 	early_gart_iommu_check();
 #endif
 
-	/*
-	 * partially used pages are not usable - thus
-	 * we are rounding upwards:
-	 */
+	/* 部分使用的页面（partially used pages）是不可用的，因此我们需要将大小向上取整（rounding upwards）*/
 	max_pfn = e820__end_of_ram_pfn();
 
-	/* update e820 for memory not covered by WB MTRRs */
+	/* 更新 E820 内存表，以标记那些未被 MTRR 设置为 WB（Write-Back）缓存类型的内存区域 */
 	mtrr_bp_init();
 	if (mtrr_trim_uncached_memory(max_pfn))
 		max_pfn = e820__end_of_ram_pfn();
 
 	max_possible_pfn = max_pfn;
 
-	/*
-	 * This call is required when the CPU does not support PAT. If
-	 * mtrr_bp_init() invoked it already via pat_init() the call has no
-	 * effect.
-	 */
+	/* 当 CPU 不支持 PAT（Page Attribute Table） 时，必须调用这个函数。如果之前 mtrr_bp_init() 已经通过 
+	 * pat_init() 调用了它，那么这次调用将不会产生任何效果 */
 	init_cache_modes();
 
-	/*
-	 * Define random base addresses for memory sections after max_pfn is
-	 * defined and before each memory section base is used.
-	 */
+	/* 在 max_pfn 被定义之后、每个内存段的基地址被实际使用之前，为这些内存段定义一个随机的基地址（random base address）*/
 	kernel_randomize_memory();
 
 #ifdef CONFIG_X86_32
@@ -1025,18 +1008,13 @@ void __init setup_arch(char **cmdline_p)
 	high_memory = (void *)__va(max_pfn * PAGE_SIZE - 1) + 1;
 #endif
 
-	/*
-	 * Find and reserve possible boot-time SMP configuration:
-	 */
+	/* 查找并保留可能存在的 启动时 SMP（对称多处理器）配置 */
 	find_smp_config();
 
 	early_alloc_pgt_buf();
 
-	/*
-	 * Need to conclude brk, before e820__memblock_setup()
-	 * it could use memblock_find_in_range, could overlap with
-	 * brk area.
-	 */
+	/* 需要在调用 e820__memblock_setup() 之前结束 brk 区域的使用（conclude brk），因为后者可能会调用 memblock_find_in_range()
+	   而这有可能会与 brk 区域发生重叠 */
 	reserve_brk();
 
 	cleanup_highmap();
@@ -1044,10 +1022,7 @@ void __init setup_arch(char **cmdline_p)
 	memblock_set_current_limit(ISA_END_ADDRESS);
 	e820__memblock_setup();
 
-	/*
-	 * Needs to run after memblock setup because it needs the physical
-	 * memory size.
-	 */
+	/* 需要在 memblock 初始化之后运行，因为它依赖于物理内存大小的信息 */
 	sev_setup_arch();
 
 	efi_fake_memmap();
@@ -1055,10 +1030,7 @@ void __init setup_arch(char **cmdline_p)
 	efi_esrt_init();
 	efi_mokvar_table_init();
 
-	/*
-	 * The EFI specification says that boot service code won't be
-	 * called after ExitBootServices(). This is, in fact, a lie.
-	 */
+	/* EFI 规范宣称，在调用 ExitBootServices() 之后，启动服务代码（boot service code）将不再被调用。但事实上，这并不是真的 */
 	efi_reserve_boot_services();
 
 	/* preallocate 4k for mptable mpc */
@@ -1073,35 +1045,25 @@ void __init setup_arch(char **cmdline_p)
 			(max_pfn_mapped<<PAGE_SHIFT) - 1);
 #endif
 
-	/*
-	 * Find free memory for the real mode trampoline and place it there. If
-	 * there is not enough free memory under 1M, on EFI-enabled systems
-	 * there will be additional attempt to reclaim the memory for the real
-	 * mode trampoline at efi_free_boot_services().
+	/* 为 实模式引导跳板代码（real mode trampoline） 查找可用内存并将其放置到合适的位置。如果在 1MB 以下找不到足够的空闲内存，
+	 * 那么在启用了 EFI 的系统上，会在调用 efi_free_boot_services() 时尝试额外回收内存以放置实模式跳板。
 	 *
-	 * Unconditionally reserve the entire first 1M of RAM because BIOSes
-	 * are known to corrupt low memory and several hundred kilobytes are not
-	 * worth complex detection what memory gets clobbered. Windows does the
-	 * same thing for very similar reasons.
+	 * 无条件保留整个前 1MB 的 RAM，因为已知某些 BIOS 会破坏低端内存区域，而这几百 KB 的内存并不值得我们费力去精确检测哪些被破坏了。
+	 * Windows 也出于类似原因采取了相同的做法。
 	 *
-	 * Moreover, on machines with SandyBridge graphics or in setups that use
-	 * crashkernel the entire 1M is reserved anyway.
-	 */
+	 * 此外，在使用 SandyBridge 集成显卡 的机器上，或者启用了 crashkernel 的系统中，整个 1MB 区域也无论如何都会被保留 */
 	reserve_real_mode();
 
 	init_mem_mapping();
 
 	idt_setup_early_pf();
 
-	/*
-	 * Update mmu_cr4_features (and, indirectly, trampoline_cr4_features)
-	 * with the current CR4 value.  This may not be necessary, but
-	 * auditing all the early-boot CR4 manipulation would be needed to
-	 * rule it out.
+	/* 使用当前的 CR4 寄存器值来更新 mmu_cr4_features（以及间接地 trampoline_cr4_features）。
+	 * 虽然这可能不是绝对必要的，但要确认这一点就需要审查整个早期引导阶段对 CR4 的所有修改操作。
 	 *
-	 * Mask off features that don't work outside long mode (just
-	 * PCIDE for now).
-	 */
+	 * 屏蔽掉那些在非 long mode（非长模式）下无效的特性 —— 目前仅限于 PCIDE 
+	 * CR4 是 x86 架构的控制寄存器之一，用于启用或禁用处理器的某些特性；
+	 * 例如：物理地址扩展（PAE）、页全局启用（PGE）、PCID（进程上下文标识）等 */
 	mmu_cr4_features = __read_cr4() & ~X86_CR4_PCIDE;
 
 	memblock_set_current_limit(get_max_mapped());
@@ -1139,10 +1101,7 @@ void __init setup_arch(char **cmdline_p)
 	if (boot_cpu_has(X86_FEATURE_GBPAGES))
 		hugetlb_cma_reserve(PUD_SHIFT - PAGE_SHIFT);
 
-	/*
-	 * Reserve memory for crash kernel after SRAT is parsed so that it
-	 * won't consume hotpluggable memory.
-	 */
+	/* 在 SRAT 表（System Resource Affinity Table）解析完成之后，再为 crash kernel（崩溃内核）预留内存，以避免它占用 可热插拔的内存区域 */
 	reserve_crashkernel();
 
 	memblock_find_dma_reserve();
@@ -1150,15 +1109,13 @@ void __init setup_arch(char **cmdline_p)
 	if (!early_xdbc_setup_hardware())
 		early_xdbc_register_console();
 
-	x86_init.paging.pagetable_init();
+	x86_init.paging.pagetable_init();// xen_pagetable_init
 
 	kasan_init();
 
-	/*
-	 * Sync back kernel address range.
+	/* 同步内核地址范围（kernel address range）
 	 *
-	 * FIXME: Can the later sync in setup_cpu_entry_areas() replace
-	 * this call?
+	 * FIXME: 后面 setup_cpu_entry_areas() 中的同步操作是否可以替代这里这次的调用？
 	 */
 	sync_initial_page_table();
 
@@ -1170,21 +1127,14 @@ void __init setup_arch(char **cmdline_p)
 
 	early_quirks();
 
-	/*
-	 * Read APIC and some other early information from ACPI tables.
-	 */
+	/* 从 ACPI 表 中读取 APIC（高级可编程中断控制器） 以及其他一些早期信息 */
 	acpi_boot_init();
 	x86_dtb_init();
 
-	/*
-	 * get boot-time SMP configuration:
-	 */
+	/* 获取引导时的 SMP（对称多处理器）配置信息 */
 	get_smp_config();
 
-	/*
-	 * Systems w/o ACPI and mptables might not have it mapped the local
-	 * APIC yet, but prefill_possible_map() might need to access it.
-	 */
+	/* 没有 ACPI 和 MP 表（mptables） 的系统，可能尚未映射本地 APIC（Local APIC），但 prefill_possible_map() 可能会需要访问它 */
 	init_apic_mappings();
 
 	prefill_possible_map();
@@ -1199,7 +1149,7 @@ void __init setup_arch(char **cmdline_p)
 	e820__reserve_resources();
 	e820__register_nosave_regions(max_pfn);
 
-	x86_init.resources.reserve_resources();
+	x86_init.resources.reserve_resources();// reserve_standard_io_resources
 
 	e820__setup_pci_gap();
 
@@ -1209,15 +1159,12 @@ void __init setup_arch(char **cmdline_p)
 		conswitchp = &vga_con;
 #endif
 #endif
-	x86_init.oem.banner();
+	x86_init.oem.banner();//default_banner
 
 	x86_init.timers.wallclock_init();
 
-	/*
-	 * This needs to run before setup_local_APIC() which soft-disables the
-	 * local APIC temporarily and that masks the thermal LVT interrupt,
-	 * leading to softlockups on machines which have configured SMI
-	 * interrupt delivery.
+	/* 这段代码必须在 setup_local_APIC() 调用之前运行，因为 setup_local_APIC() 会暂时软禁用（soft-disable）本地 APIC（Local APIC），
+	   而这会屏蔽（mask）热感中断（thermal LVT interrupt），从而在某些配置了 SMI（系统管理中断）方式的中断传送机制的机器上，导致 软死锁（soft lockups）。
 	 */
 	therm_lvt_init();
 

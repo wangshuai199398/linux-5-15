@@ -722,7 +722,7 @@ void __init efi_systab_report_header(const efi_table_hdr_t *systab_hdr,
 	pr_info("EFI v%u.%.02u by %s\n",
 		systab_hdr->revision >> 16,
 		systab_hdr->revision & 0xffff,
-		vendor);
+		vendor);//efi: EFI v2.70 by American Megatrends
 
 	if (IS_ENABLED(CONFIG_X86_64) &&
 	    systab_hdr->revision > EFI_1_10_SYSTEM_TABLE_REVISION &&

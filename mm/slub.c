@@ -4850,7 +4850,7 @@ void __init kmem_cache_init(void)
 	pr_info("SLUB: HWalign=%d, Order=%u-%u, MinObjects=%u, CPUs=%u, Nodes=%u\n",
 		cache_line_size(),
 		slub_min_order, slub_max_order, slub_min_objects,
-		nr_cpu_ids, nr_node_ids);
+		nr_cpu_ids, nr_node_ids);//HWalign=64, Order=0-3, MinObjects=0, CPUs=12, Nodes=1
 }
 
 void __init kmem_cache_init_late(void)

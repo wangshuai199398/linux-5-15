@@ -1467,12 +1467,12 @@ static bool __init determine_cpu_tsc_frequencies(bool early)
 
 	pr_info("Detected %lu.%03lu MHz processor\n",
 		(unsigned long)cpu_khz / KHZ,
-		(unsigned long)cpu_khz % KHZ);
+		(unsigned long)cpu_khz % KHZ);//Detected 2900.000 MHz processor
 
 	if (cpu_khz != tsc_khz) {
 		pr_info("Detected %lu.%03lu MHz TSC",
 			(unsigned long)tsc_khz / KHZ,
-			(unsigned long)tsc_khz % KHZ);
+			(unsigned long)tsc_khz % KHZ);//Detected 2899.886 MHz TSC
 	}
 	return true;
 }

@@ -1110,14 +1110,18 @@ static int __init acpi_bus_init_irq(void)
 }
 
 /**
- * acpi_early_init - Initialize ACPICA and populate the ACPI namespace.
+ * 初始化 ACPICA，并填充 ACPI 命名空间。
  *
- * The ACPI tables are accessible after this, but the handling of events has not
- * been initialized and the global lock is not available yet, so AML should not
- * be executed at this point.
+ * 调用这个函数之后，ACPI 表就可以访问了，但事件处理功能尚未初始化，全局锁（global lock）也还不可用，
+ * 因此这个阶段不能执行 AML（ACPI Machine Language）代码
  *
- * Doing this before switching the EFI runtime services to virtual mode allows
- * the EfiBootServices memory to be freed slightly earlier on boot.
+ * 在将 EFI 运行时服务切换到虚拟地址模式之前完成这一步，可以让 EfiBootServices 类型的内存更早地释放，从而加快启动速度。
+ * 什么是 ACPI 命名空间？
+ * 		ACPI（Advanced Configuration and Power Interface）通过表格描述硬件，表格中使用一种类似树状结构的命名方式来组织设备信息，
+ * 		这称为 ACPI 命名空间，比如：_SB.PCI0.SATA.PRIM 就表示主板上的主 SATA 控制器。
+ * 什么是 AML？
+ * 		AML（ACPI Machine Language）是 ACPI 使用的一种“硬件中立”的脚本语言，
+ * 		在内核中通过 ACPICA（ACPI Component Architecture）解释器运行。
  */
 void __init acpi_early_init(void)
 {
@@ -1126,7 +1130,7 @@ void __init acpi_early_init(void)
 	if (acpi_disabled)
 		return;
 
-	pr_info("Core revision %08x\n", ACPI_CA_VERSION);
+	pr_info("Core revision %08x\n", ACPI_CA_VERSION);//Core revision 20210730
 
 	/* enable workarounds, unless strict ACPI spec. compliance */
 	if (!acpi_strict)

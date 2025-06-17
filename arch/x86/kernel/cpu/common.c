@@ -1616,6 +1616,12 @@ void __init early_cpu_init(void)
 	unsigned int i, j;
 
 	pr_info("KERNEL supported cpus:\n");
+	/* Intel GenuineIntel 
+	   AMD AuthenticAMD
+	   Hygon HygonGenuine
+	   Centaur CentaurHauls
+	   zhaoxin   Shanghai
+	*/
 #endif
 
 	init_cpu_devs();

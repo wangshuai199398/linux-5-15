@@ -330,7 +330,7 @@ void __init efi_esrt_init(void)
 	esrt_data_size = size;
 
 	end = esrt_data + size;
-	pr_info("Reserving ESRT space from %pa to %pa.\n", &esrt_data, &end);
+	pr_info("Reserving ESRT space from %pa to %pa.\n", &esrt_data, &end);//Reserving ESRT space from 0x0000000095989b18 to 0x0000000095989b50.
 	if (md.type == EFI_BOOT_SERVICES_DATA)
 		efi_mem_reserve(esrt_data, esrt_data_size);
 

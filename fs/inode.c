@@ -2146,7 +2146,7 @@ void __init inode_init_early(void)
 					&i_hash_shift,
 					&i_hash_mask,
 					0,
-					0);
+					0);//Inode-cache hash table entries: 1048576 (order: 11, 8388608 bytes, linear)
 }
 
 void __init inode_init(void)

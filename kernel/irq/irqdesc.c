@@ -38,6 +38,7 @@ static int __init irq_affinity_setup(char *str)
 }
 __setup("irqaffinity=", irq_affinity_setup);
 
+//初始化默认中断亲和性（通常为所有在线 CPU，或者受 irqaffinity= 参数影响）
 static void __init init_irq_default_affinity(void)
 {
 	if (!cpumask_available(irq_default_affinity))
@@ -523,6 +524,7 @@ static int irq_expand_nr_irqs(unsigned int nr)
 	return 0;
 }
 
+//预先分配中断描述符（irq_desc）并建立中断号与描述符的映射
 int __init early_irq_init(void)
 {
 	int i, initcnt, node = first_online_node;
@@ -533,7 +535,7 @@ int __init early_irq_init(void)
 	/* Let arch update nr_irqs and return the nr of preallocated irqs */
 	initcnt = arch_probe_nr_irqs();
 	printk(KERN_INFO "NR_IRQS: %d, nr_irqs: %d, preallocated irqs: %d\n",
-	       NR_IRQS, nr_irqs, initcnt);
+	       NR_IRQS, nr_irqs, initcnt);//NR_IRQS: 524544, nr_irqs: 2152, preallocated irqs: 16
 
 	if (WARN_ON(nr_irqs > IRQ_BITMAP_BITS))
 		nr_irqs = IRQ_BITMAP_BITS;

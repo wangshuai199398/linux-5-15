@@ -1453,21 +1453,21 @@ early_param("possible_cpus", _setup_possible_cpus);
 
 
 /*
- * cpu_possible_mask should be static, it cannot change as cpu's
- * are onlined, or offlined. The reason is per-cpu data-structures
- * are allocated by some modules at init time, and don't expect to
- * do this dynamically on cpu arrival/departure.
- * cpu_present_mask on the other hand can change dynamically.
- * In case when cpu_hotplug is not compiled, then we resort to current
- * behaviour, which is cpu_possible == cpu_present.
- * - Ashok Raj
+ * cpu_possible_mask 应该是静态的，它不能在 CPU 被上线（onlined）或下线（offlined）时改变。
+ * 原因是：一些模块在初始化阶段会根据 cpu_possible_mask 分配每个 CPU 的数据结构（per-cpu structures），
+ * 而这些模块不期望在 CPU 动态插拔时再去动态地分配这些结构。
  *
- * Three ways to find out the number of additional hotplug CPUs:
- * - If the BIOS specified disabled CPUs in ACPI/mptables use that.
- * - The user can overwrite it with possible_cpus=NUM
- * - Otherwise don't reserve additional CPUs.
- * We do this because additional CPUs waste a lot of memory.
- * -AK
+ * 而 cpu_present_mask 是可以动态变化的 —— 它表示当前实际存在（插入）且可用的 CPU。
+ * 如果内核没有编译支持 CPU 热插拔（cpu_hotplug），那么我们就退而求其次：让 cpu_possible == cpu_present。
+ * 
+ * 有三种方式可以确定是否预留额外的热插拔 CPU：
+ * 	1.	如果 BIOS 在 ACPI / MP 表中列出了“禁用的 CPU”，我们就据此预留；
+ * 	2.	用户可以通过启动参数 possible_cpus=NUM 来覆盖；
+ * 	3.  如果都没有，那就不额外预留。
+ * 我们这么做是因为：为额外 CPU 保留资源会浪费大量内存。
+ * 
+ * 内核在引导阶段会确定哪些 CPU 是“可能存在的”，并据此分配关键的 per-CPU 数据结构，所以 cpu_possible_mask 必须在启动期固定，不能因为 CPU 热插拔而改变。
+ * 但 cpu_present_mask 可以变化，表示实际插入的 CPU。另外，为了避免内存浪费，除非硬件或用户明确指定，不会预留太多“额外 CPU 插槽”。
  */
 __init void prefill_possible_map(void)
 {
@@ -1525,7 +1525,7 @@ __init void prefill_possible_map(void)
 	nr_cpu_ids = possible;
 
 	pr_info("Allowing %d CPUs, %d hotplug CPUs\n",
-		possible, max_t(int, possible - num_processors, 0));
+		possible, max_t(int, possible - num_processors, 0));//smpboot: Allowing 12 CPUs, 0 hotplug CPUs
 
 	reset_cpu_possible_mask();
 

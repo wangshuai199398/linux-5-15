@@ -6934,7 +6934,7 @@ void __init ftrace_init(void)
 	}
 
 	pr_info("ftrace: allocating %ld entries in %ld pages\n",
-		count, DIV_ROUND_UP(count, ENTRIES_PER_PAGE));
+		count, DIV_ROUND_UP(count, ENTRIES_PER_PAGE));//ftrace: allocating 47972 entries in 188 pages
 
 	last_ftrace_enabled = ftrace_enabled = 1;
 
@@ -6943,7 +6943,7 @@ void __init ftrace_init(void)
 				  __stop_mcount_loc);
 
 	pr_info("ftrace: allocated %ld pages with %ld groups\n",
-		ftrace_number_of_pages, ftrace_number_of_groups);
+		ftrace_number_of_pages, ftrace_number_of_groups);//ftrace: allocated 188 pages with 5 groups
 
 	set_ftrace_early_filters();
 

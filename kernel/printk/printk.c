@@ -3106,7 +3106,7 @@ void register_console(struct console *newcon)
 	 */
 	pr_info("%sconsole [%s%d] enabled\n",
 		(newcon->flags & CON_BOOT) ? "boot" : "" ,
-		newcon->name, newcon->index);
+		newcon->name, newcon->index);//console [tty0] enabled
 	if (bcon &&
 	    ((newcon->flags & (CON_CONSDEV | CON_BOOT)) == CON_CONSDEV) &&
 	    !keep_bootcon) {
@@ -3201,9 +3201,11 @@ void __init console_init(void)
 	 */
 	ce = __con_initcall_start;
 	trace_initcall_level("console");
+	//console_initcall(con_init);
 	while (ce < __con_initcall_end) {
 		call = initcall_from_entry(ce);
 		trace_initcall_start(call);
+		pr_info("console_init: calling initcall %px\n", call);
 		ret = call();
 		trace_initcall_finish(call, ret);
 		ce++;
