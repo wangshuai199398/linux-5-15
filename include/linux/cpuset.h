@@ -151,7 +151,7 @@ static inline bool read_mems_allowed_retry(unsigned int seq)
 
 	return read_seqcount_retry(&current->mems_allowed_seq, seq);
 }
-
+//设置可用内存节点掩码，防止其在非法 NUMA 节点上运行
 static inline void set_mems_allowed(nodemask_t nodemask)
 {
 	unsigned long flags;

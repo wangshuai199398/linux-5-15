@@ -697,20 +697,18 @@ noinline void __ref rest_init(void)
 
 	rcu_scheduler_starting();
 	/*
-	 * We need to spawn init first so that it obtains pid 1, however
-	 * the init task will end up wanting to create kthreads, which, if
-	 * we schedule it before we create kthreadd, will OOPS.
+	 * 我们需要先启动 init 进程，以便它获得 PID 1，然而，init 任务最终会尝试创建内核线程（kthreads），
+	 * 如果我们在创建 kthreadd 之前调度执行 init，将会导致内核崩溃（OOPS）
 	 */
 	pid = kernel_thread(kernel_init, NULL, CLONE_FS);
 	/*
-	 * Pin init on the boot CPU. Task migration is not properly working
-	 * until sched_init_smp() has been run. It will set the allowed
-	 * CPUs for init to the non isolated CPUs.
+	 * 将 init 进程固定（pin）在引导 CPU（boot CPU）上。在 sched_init_smp() 被执行之前，任务迁移（task migration）尚未正常工作。
+	 * 该函数会为 init 设置允许运行的 CPU，即那些**非隔离（non-isolated）**的 CPU。
 	 */
 	rcu_read_lock();
 	tsk = find_task_by_pid_ns(pid, &init_pid_ns);
 	tsk->flags |= PF_NO_SETAFFINITY;
-	set_cpus_allowed_ptr(tsk, cpumask_of(smp_processor_id()));
+	set_cpus_allowed_ptr(tsk, cpumask_of(smp_processor_id()));//把任务限制为只能运行在当前CPU上
 	rcu_read_unlock();
 
 	numa_default_policy();
@@ -720,23 +718,18 @@ noinline void __ref rest_init(void)
 	rcu_read_unlock();
 
 	/*
-	 * Enable might_sleep() and smp_processor_id() checks.
-	 * They cannot be enabled earlier because with CONFIG_PREEMPTION=y
-	 * kernel_thread() would trigger might_sleep() splats. With
-	 * CONFIG_PREEMPT_VOLUNTARY=y the init task might have scheduled
-	 * already, but it's stuck on the kthreadd_done completion.
+	 * 启用 might_sleep() 和 smp_processor_id() 的检查。这些检查不能更早启用，因为在配置了 CONFIG_PREEMPTION=y 的情况下，
+	 * kernel_thread() 会触发 might_sleep() 的警告（splat）。而在配置了 CONFIG_PREEMPT_VOLUNTARY=y 的情况下，
+	 * init 任务可能已经发生了调度，但此时它仍然阻塞在 kthreadd_done 的 completion 上
 	 */
 	system_state = SYSTEM_SCHEDULING;
 
-	complete(&kthreadd_done);
+	complete(&kthreadd_done);//kthreadd 线程已初始化完成，并唤醒所有等待这个事件的线程（如 kernel_init）
 
-	/*
-	 * The boot idle thread must execute schedule()
-	 * at least once to get things moving:
-	 */
+	/* 引导阶段的 idle 线程必须至少执行一次 schedule()，才能让系统运行起来 */
 	schedule_preempt_disabled();
-	/* Call into cpu_idle with preempt disabled */
-	cpu_startup_entry(CPUHP_ONLINE);
+	/* 在禁用抢占（preempt）的情况下调用 cpu_idle 函数 */
+	cpu_startup_entry(CPUHP_ONLINE);//让当前CPU(Boot CPU)进入空闲执行循环，状态为CPUHP_ONLINE，表示它已经上线、初始化完成
 }
 
 /* Check for early params. */
@@ -1135,7 +1128,7 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 
 	/* Do the rest non-__init'ed, we're now alive */
 	arch_call_rest_init();//
-
+	//禁止尾调用优化，保留当前函数栈帧，mb: 之前的内存操作都完成并对其他CPU可见，然后执行之后的内存操作
 	prevent_tail_call_optimization();
 }
 
@@ -1371,7 +1364,17 @@ static void __init do_initcall_level(int level, char *command_line)
 	for (fn = initcall_levels[level]; fn < initcall_levels[level+1]; fn++)
 		do_one_initcall(initcall_from_entry(fn));
 }
-
+//执行由宏如 core_initcall()、device_initcall() 等注册的初始化函数
+/* early_initcall     .initcall0.init
+   pure_initcall      .initcall0.init
+   core_initcall      .initcall1.init
+   postcore_initcall  .initcall2.init
+   arch_initcall      .initcall3.init
+   subsys_initcall    .initcall4.init
+   fs_initcall        .initcall5.init
+   device_initcall    .initcall6.init
+   late_initcall      .initcall7.init
+*/
 static void __init do_initcalls(void)
 {
 	int level;
@@ -1381,10 +1384,11 @@ static void __init do_initcalls(void)
 	command_line = kzalloc(len, GFP_KERNEL);
 	if (!command_line)
 		panic("%s: Failed to allocate %zu bytes\n", __func__, len);
-
+	//0~3 在 do_pre_smp_initcalls() 中已经执行过，这里实际生效的是调用 4~7
 	for (level = 0; level < ARRAY_SIZE(initcall_levels) - 1; level++) {
-		/* Parser modifies command_line, restore it each time */
+		/* 某些 initcall 可能会修改命令行，所以每轮都恢复成原始的 */
 		strcpy(command_line, saved_command_line);
+		//执行当前级别对应的初始化函数组
 		do_initcall_level(level, command_line);
 	}
 
@@ -1392,11 +1396,11 @@ static void __init do_initcalls(void)
 }
 
 /*
- * Ok, the machine is now initialized. None of the devices
- * have been touched yet, but the CPU subsystem is up and
- * running, and memory and process management works.
+ * 机器现在已经完成初始化, 各种设备还没有开始初始化，
+ * 但 CPU 子系统已经启动，内存和进程管理功能也已就绪
  *
- * Now we can finally start doing some real work..
+ * 现在我们终于可以开始做一些真正的“实质性工作”了
+ * setup_wangs
  */
 static void __init do_basic_setup(void)
 {
@@ -1491,29 +1495,30 @@ void __weak free_initmem(void)
 	free_initmem_default(POISON_FREE_INITMEM);
 }
 
+// init 内核线程入口函数，PID 1
 static int __ref kernel_init(void *unused)
 {
 	int ret;
-
 	/*
-	 * Wait until kthreadd is all set-up.
+	 * 等待 kthreadd 内核线程完全初始化完成后，才会继续执行
 	 */
 	wait_for_completion(&kthreadd_done);
-
+	//完成内核启动后期任务，清理初始化内存，并启动用户空间进程
 	kernel_init_freeable();
-	/* need to finish all async __init code before freeing the memory */
+	//等待所有异步的 __init 初始化任务完成，例如某些异步子系统初始化（如 PCI、设备）会异步完成，必须等它们都结束后，才可以释放内存
 	async_synchronize_full();
-	kprobe_free_init_mem();
-	ftrace_free_init_mem();
-	kgdb_free_init_mem();
+	//释放用于调试和初始化阶段的特殊内存区域
+	kprobe_free_init_mem();//Kprobes 初始化内存
+	ftrace_free_init_mem();//Ftrace 初始化路径
+	kgdb_free_init_mem();//KGDB 调试器用到的初始化内容
+	//处理并清理内核启动时加载的 boot 配置参数（来自早期启动阶段）；一旦 init 启动完成，就不再需要这些数据
 	exit_boot_config();
+	//释放所有使用了 __init 标记的初始化代码和数据段，内核启动后这些就不再需要，释放它们可以节省内存
 	free_initmem();
+	//将一些关键内核内存区域（如只读数据段）标记为只读，防止后续运行中被意外或恶意修改，提高内核安全性
 	mark_readonly();
 
-	/*
-	 * Kernel mappings are now finalized - update the userspace page-table
-	 * to finalize PTI.
-	 */
+	/* 内核映射现在已经确定 —— 更新用户空间页表，以完成 PTI 的最终设置 */
 	pti_finalize();
 
 	system_state = SYSTEM_RUNNING;
@@ -1522,7 +1527,7 @@ static int __ref kernel_init(void *unused)
 	rcu_end_inkernel_boot();
 
 	do_sysctl_args();
-
+	//如果有 init=/earlyinit 参数，执行
 	if (ramdisk_execute_command) {
 		ret = run_init_process(ramdisk_execute_command);
 		if (!ret)
@@ -1532,10 +1537,8 @@ static int __ref kernel_init(void *unused)
 	}
 
 	/*
-	 * We try each of these until one succeeds.
-	 *
-	 * The Bourne shell can be used instead of init if we are
-	 * trying to recover a really broken machine.
+	 * 我们会依次尝试下面这些（init 程序路径），直到其中一个成功为止
+	 * 如果系统损坏严重、无法启动常规的 init 程序，可以使用 Bourne shell 来代替 init 进行恢复
 	 */
 	if (execute_command) {
 		ret = run_init_process(execute_command);
@@ -1581,44 +1584,46 @@ void __init console_on_rootfs(void)
 
 static noinline void __init kernel_init_freeable(void)
 {
-	/* Now the scheduler is fully set up and can do blocking allocations */
+	/* 调度器已经完全初始化，可以执行可能阻塞的内存分配了（比如等待 I/O） */
 	gfp_allowed_mask = __GFP_BITS_MASK;
 
-	/*
-	 * init can allocate pages on any node
-	 */
+	/* 允许 init 任务在所有可用 NUMA 内存节点上分配页（恢复默认内存节点掩码）*/
 	set_mems_allowed(node_states[N_MEMORY]);
 
 	cad_pid = get_pid(task_pid(current));
-
+	//准备所有可能上线的 CPU，主要涉及多核支持
 	smp_prepare_cpus(setup_max_cpus);
-
+	//初始化内核中的 workqueue 子系统（延迟任务调度机制）
 	workqueue_init();
-
+	//初始化与内存管理有关的内部结构，如页表管理器、虚拟内存布局等
 	init_mm_internals();
-
+	//初始化 RCU 用于追踪和保护任务创建/退出
 	rcu_init_tasks_generic();
+	//执行所有早于 SMP 初始化的内核初始化函数，调用早期 initcall 函数（等级 ≤ 3）
 	do_pre_smp_initcalls();
+	//初始化“死锁/锁死检测”机制，如 NMI watchdog，用于侦测系统软/硬卡死
 	lockup_detector_init();
-
+	//真正开始启用多核调度器支持
 	smp_init();
 	sched_init_smp();
-
+	//初始化 padata 子系统（用于并行数据处理，如加密算法）
 	padata_init();
+	//继续内存页分配系统的后期初始化，包括 struct page 结构后的附加信息（page_ext）
 	page_alloc_init_late();
-	/* Initialize page ext after all struct pages are initialized. */
+	/* 在所有 struct page 初始化完成后，再初始化 page ext（页扩展信息）*/
 	page_ext_init();
-
+	//执行绝大多数核心子系统的初始化（设备驱动、字符设备、VFS、网络栈等），相当于 “initcall” 的核心执行点
 	do_basic_setup();
-
+	//启动内核自测框架（KUnit）中定义的所有测试（如果启用了 CONFIG_KUNIT）
 	kunit_run_all_tests();
-
+	//等待初始 ramdisk 解包并挂载根文件系统
 	wait_for_initramfs();
+	//切换 console 到根文件系统环境下
 	console_on_rootfs();
 
 	/*
-	 * check if there is an early userspace init.  If yes, let it do all
-	 * the work
+	 * 检查是否提供了 early user-space init 程序（如 init=/bin/sh）
+	 * 若没有，则调用 prepare_namespace() 设置标准的根文件系统和挂载点
 	 */
 	if (init_eaccess(ramdisk_execute_command) != 0) {
 		ramdisk_execute_command = NULL;
@@ -1626,13 +1631,12 @@ static noinline void __init kernel_init_freeable(void)
 	}
 
 	/*
-	 * Ok, we have completed the initial bootup, and
-	 * we're essentially up and running. Get rid of the
-	 * initmem segments and start the user-mode stuff..
+	 * 系统的初始引导已经完成, 我们基本上已经启动并运行起来了
+	 * 接下来，释放用于初始化阶段的内存段，并启动用户空间的程序
 	 *
-	 * rootfs is available now, try loading the public keys
-	 * and default modules
+	 * 此时根文件系统（rootfs）已经可用
+	 * 尝试加载公钥和默认的内核模块
 	 */
-
+	//如果启用了安全模块（如 IMA/EVM），尝试从 rootfs 中加载签名验证的公钥
 	integrity_load_keys();
 }

@@ -358,7 +358,7 @@ static inline int restart_syscall(void)
 	set_tsk_thread_flag(current, TIF_SIGPENDING);
 	return -ERESTARTNOINTR;
 }
-
+//如果当前任务有挂起信号（task_sigpending() 为真）
 static inline int task_sigpending(struct task_struct *p)
 {
 	return unlikely(test_tsk_thread_flag(p,TIF_SIGPENDING));

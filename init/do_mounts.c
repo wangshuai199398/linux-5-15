@@ -596,29 +596,28 @@ void __init mount_root(void)
 }
 
 /*
- * Prepare the namespace - decide what/where to mount, load ramdisks, etc.
+ * 准备命名空间 —— 决定挂载什么、挂载到哪里，加载内存盘等操作
+ * 挂载根文件系统（rootfs）并准备进入用户空间
  */
 void __init prepare_namespace(void)
 {
 	int err;
-
+	//延时等待几秒钟再继续挂载根文件系统
 	if (root_delay) {
 		printk(KERN_INFO "Waiting %d sec before mounting root device...\n",
 		       root_delay);
 		ssleep(root_delay);
 	}
 
-	/*
-	 * wait for the known devices to complete their probing
+	/* 等待设备初始化
 	 *
-	 * Note: this is a potential source of long boot delays.
-	 * For example, it is not atypical to wait 5 seconds here
-	 * for the touchpad of a laptop to initialize.
+	 * 注意：这是引导过程中可能导致启动延迟的重要来源
+	 * 等待所有设备驱动的 probe 操作完成。某些硬件（比如触摸板）可能会导致这里延迟几秒
 	 */
 	wait_for_device_probe();
-
+	//启动 md 子系统（多磁盘阵列，如软件 RAID）相关的设备准备
 	md_run_setup();
-
+	//如果指定了 root=/dev/xxx 参数，尝试从中解析设备号 root=/dev/mapper/ubuntu--vg-ubuntu--lv
 	if (saved_root_name[0]) {
 		root_device_name = saved_root_name;
 		if (!strncmp(root_device_name, "mtd", 3) ||
@@ -630,11 +629,11 @@ void __init prepare_namespace(void)
 		if (strncmp(root_device_name, "/dev/", 5) == 0)
 			root_device_name += 5;
 	}
-
+	//如果存在 initrd/initramfs 并成功加载，直接退出，不需要挂真实磁盘根文件系统
 	if (initrd_load())
 		goto out;
 
-	/* wait for any asynchronous scanning to complete */
+	//等待所有异步扫描操作完成，如果还未找到根设备，并启用了 rootwait 参数，就不断等待设备识别完成
 	if ((ROOT_DEV == 0) && root_wait) {
 		printk(KERN_INFO "Waiting for root device %s...\n",
 			saved_root_name);
@@ -643,14 +642,18 @@ void __init prepare_namespace(void)
 			msleep(5);
 		async_synchronize_full();
 	}
-
+	//真正挂载根文件系统，常用的如 ext4、squashfs、btrfs 等
 	mount_root();
+//设置用户空间看到的 / 根目录，挂载 /dev，切换根环境
 out:
+	// 挂载 devtmpfs 到 /dev
 	devtmpfs_mount();
+	// 把当前挂载点移动为 /
 	init_mount(".", "/", NULL, MS_MOVE, NULL);
+	// 设置当前目录为根 chroot()
 	init_chroot(".");
 #ifdef CONFIG_BLOCK
-	/* recreate the /dev/root */
+	//如果启用了块设备支持，创建 /dev/root 节点，供兼容老式用户态脚本使用
 	err = create_dev("/dev/root", ROOT_DEV);
 
 	if (err < 0)

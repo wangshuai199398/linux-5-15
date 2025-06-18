@@ -178,7 +178,7 @@ void recalc_sigpending_and_wake(struct task_struct *t)
 	if (recalc_sigpending_tsk(t))
 		signal_wake_up(t, 0);
 }
-
+//重新计算当前任务是否有待处理信号
 void recalc_sigpending(void)
 {
 	if (!recalc_sigpending_tsk(current) && !freezing(current))
@@ -520,7 +520,7 @@ void flush_itimer_signals(void)
 	spin_unlock_irqrestore(&tsk->sighand->siglock, flags);
 }
 #endif
-
+//忽略所有信号（它是内核线程，不该被中断或杀死）
 void ignore_signals(struct task_struct *t)
 {
 	int i;

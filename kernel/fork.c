@@ -217,7 +217,7 @@ static int free_vm_stack_cache(unsigned int cpu)
 	return 0;
 }
 #endif
-
+//分配内核线程的栈空间
 static unsigned long *alloc_thread_stack_node(struct task_struct *tsk, int node)
 {
 #ifdef CONFIG_VMAP_STACK
@@ -398,7 +398,7 @@ static void account_kernel_stack(struct task_struct *tsk, int account)
 				      account * (THREAD_SIZE / 1024));
 	}
 }
-
+//向内存控制组（memory cgroup）为这个栈计费
 static int memcg_charge_kernel_stack(struct task_struct *tsk)
 {
 #ifdef CONFIG_VMAP_STACK
@@ -887,7 +887,7 @@ void set_task_stack_end_magic(struct task_struct *tsk)
 	stackend = end_of_stack(tsk);
 	*stackend = STACK_END_MAGIC;	/* for overflow detection */
 }
-
+//复制当前任务的 task_struct 结构到新的进程中
 static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
 {
 	struct task_struct *tsk;
@@ -2033,8 +2033,9 @@ static __latent_entropy struct task_struct *copy_process(
 	INIT_HLIST_NODE(&delayed.node);
 
 	spin_lock_irq(&current->sighand->siglock);
+	//如果不是线程创建（即是创建新进程）
 	if (!(clone_flags & CLONE_THREAD))
-		hlist_add_head(&delayed.node, &current->signal->multiprocess);
+		hlist_add_head(&delayed.node, &current->signal->multiprocess);//就把 delayed 节点挂到 multiprocess 链表上
 	recalc_sigpending();
 	spin_unlock_irq(&current->sighand->siglock);
 	retval = -ERESTARTNOINTR;
@@ -2561,12 +2562,11 @@ struct task_struct *create_io_thread(int (*fn)(void *), void *arg, int node)
 }
 
 /*
- *  Ok, this is the main fork-routine.
+ * 这是主要的 fork 例程
  *
- * It copies the process, and if successful kick-starts
- * it and waits for it to finish using the VM if required.
+ * 它会复制当前进程，如果成功，就启动这个新进程，并在需要使用虚拟内存（VM）的情况下，等待其完成
  *
- * args->exit_signal is expected to be checked for sanity by the caller.
+ * args->exit_signal 应该由调用者提前进行合法性检查
  */
 pid_t kernel_clone(struct kernel_clone_args *args)
 {

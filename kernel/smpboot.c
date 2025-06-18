@@ -295,7 +295,7 @@ int smpboot_register_percpu_thread(struct smp_hotplug_thread *plug_thread)
 	cpus_read_lock();
 	mutex_lock(&smpboot_threads_lock);
 	for_each_online_cpu(cpu) {
-		pr_err("%s: early_initcall Registering ksoftirqd thread on CPU %u\n", __func__, cpu);
+		pr_err("%s: early_initcall Create thread on CPU %u name: %s\n", __func__, cpu, plug_thread->thread_comm);
 		ret = __smpboot_create_thread(plug_thread, cpu);
 		if (ret) {
 			smpboot_destroy_threads(plug_thread);

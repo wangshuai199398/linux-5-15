@@ -188,7 +188,7 @@ int copy_thread(unsigned long clone_flags, unsigned long sp, unsigned long arg,
 	*childregs = *current_pt_regs();
 	childregs->ax = 0;
 	if (sp)
-		childregs->sp = sp;
+		childregs->sp = sp;//传入的函数stack入口地址
 
 #ifdef CONFIG_X86_32
 	task_user_gs(p) = get_user_gs(current_pt_regs());

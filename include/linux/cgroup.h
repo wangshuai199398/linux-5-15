@@ -679,7 +679,7 @@ static inline struct psi_group *cgroup_psi(struct cgroup *cgrp)
 }
 
 bool cgroup_psi_enabled(void);
-
+//将 kthreadd 移动到特定 cgroup 的 kthread 子层级，用于资源隔离和管控
 static inline void cgroup_init_kthreadd(void)
 {
 	/*

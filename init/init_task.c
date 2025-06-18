@@ -58,8 +58,9 @@ unsigned long init_shadow_call_stack[SCS_SIZE / sizeof(long)]
 #endif
 
 /*
- * Set up the first task table, touch at your own risk!. Base=0,
- * limit=0x1fffff (=2MB)
+ * 设置第一个任务表（Task Table），请勿随意更改！
+ * Base = 0，Limit = 0x1FFFFF（= 2MB）
+ * idle进程，swapper，pid: 0
  * 默认命名空间初始化 init_task_wangs
  */
 struct task_struct init_task

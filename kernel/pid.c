@@ -409,6 +409,7 @@ EXPORT_SYMBOL(pid_task);
 
 /*
  * Must be called under rcu_read_lock().
+ * 根据 PID 和命名空间找到对应进程（task_struct） 的函数
  */
 struct task_struct *find_task_by_pid_ns(pid_t nr, struct pid_namespace *ns)
 {
@@ -482,7 +483,7 @@ pid_t pid_nr_ns(struct pid *pid, struct pid_namespace *ns)
 	return nr;
 }
 EXPORT_SYMBOL_GPL(pid_nr_ns);
-
+//获取一个 struct pid 在特定命名空间中的虚拟 PID（vpid），通常用于查看一个任务在其进程命名空间（PID namespace）中的编号
 pid_t pid_vnr(struct pid *pid)
 {
 	return pid_nr_ns(pid, task_active_pid_ns(current));

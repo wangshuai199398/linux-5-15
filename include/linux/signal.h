@@ -188,7 +188,7 @@ _SIG_SET_OP(signotset, _sig_not)
 
 #undef _SIG_SET_OP
 #undef _sig_not
-
+//将信号集合清空
 static inline void sigemptyset(sigset_t *set)
 {
 	switch (_NSIG_WORDS) {

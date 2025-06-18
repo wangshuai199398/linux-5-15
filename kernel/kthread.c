@@ -683,27 +683,28 @@ int kthread_stop(struct task_struct *k)
 	return ret;
 }
 EXPORT_SYMBOL(kthread_stop);
-
+//PID 2，负责统一处理所有通过 kthread_create 发起的内核线程创建请求
 int kthreadd(void *unused)
 {
 	struct task_struct *tsk = current;
 
-	/* Setup a clean context for our children to inherit. */
+	/* 为我们的子进程设置一个干净的上下文供其继承 */
 	set_task_comm(tsk, "kthreadd");
 	ignore_signals(tsk);
-	set_cpus_allowed_ptr(tsk, housekeeping_cpumask(HK_FLAG_KTHREAD));
+	set_cpus_allowed_ptr(tsk, housekeeping_cpumask(HK_FLAG_KTHREAD));//将kthreadd固定在允许执行内核线程的CPU集合上运行
 	set_mems_allowed(node_states[N_MEMORY]);
 
-	current->flags |= PF_NOFREEZE;
+	current->flags |= PF_NOFREEZE;//表示在系统 suspend（挂起）过程中不能冻结该线程（它必须一直工作）
 	cgroup_init_kthreadd();
-
+	//如果没有任何 kthread_create() 请求，它就进入休眠状态，一旦有任务创建请求，会被唤醒，开始处理
 	for (;;) {
 		set_current_state(TASK_INTERRUPTIBLE);
 		if (list_empty(&kthread_create_list))
-			schedule();
+			schedule();//阻塞等待任务到来
 		__set_current_state(TASK_RUNNING);
 
 		spin_lock(&kthread_create_lock);
+		//遍历并处理 kthread_create_list 中的所有创建请求
 		while (!list_empty(&kthread_create_list)) {
 			struct kthread_create_info *create;
 
@@ -711,7 +712,7 @@ int kthreadd(void *unused)
 					    struct kthread_create_info, list);
 			list_del_init(&create->list);
 			spin_unlock(&kthread_create_lock);
-
+			//真正创建线程
 			create_kthread(create);
 
 			spin_lock(&kthread_create_lock);

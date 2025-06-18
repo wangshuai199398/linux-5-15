@@ -148,6 +148,7 @@ out_ns:
 /*
  * called from clone.  This now handles copy for nsproxy and all
  * namespaces therein.
+ * copy_namespaces_wangs
  */
 int copy_namespaces(unsigned long flags, struct task_struct *tsk)
 {

@@ -2758,7 +2758,7 @@ void __init numa_policy_init(void)
 	check_numabalancing_enable();
 }
 
-/* Reset policy of current process to default */
+/* 将当前进程的调度策略重置为默认设置，即恢复到普通的 SCHED_NORMAL（也叫 SCHED_OTHER）调度策略，并使用默认优先级 */
 void numa_default_policy(void)
 {
 	do_set_mempolicy(MPOL_DEFAULT, 0, NULL);

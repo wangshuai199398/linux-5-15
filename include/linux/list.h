@@ -809,6 +809,7 @@ static inline void list_splice_tail_init(struct list_head *list,
 #define HLIST_HEAD_INIT { .first = NULL }
 #define HLIST_HEAD(name) struct hlist_head name = {  .first = NULL }
 #define INIT_HLIST_HEAD(ptr) ((ptr)->first = NULL)
+//初始化链表节点，用于挂接进多进程信号处理列表
 static inline void INIT_HLIST_NODE(struct hlist_node *h)
 {
 	h->next = NULL;

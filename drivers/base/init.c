@@ -13,10 +13,10 @@
 #include "base.h"
 
 /**
- * driver_init - initialize driver model.
+ * 初始化驱动模型
  *
- * Call the driver model init functions to initialize their
- * subsystems. Called early from init/main.c.
+ * 调用驱动模型的初始化函数来初始化其各个子系统
+ * 它在内核启动早期由 init/main.c 调用
  */
 void __init driver_init(void)
 {

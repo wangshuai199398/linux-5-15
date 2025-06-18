@@ -733,6 +733,9 @@ do {									      \
  * implementations in real-time (with -rt patchset) kernel builds, RCU
  * read-side critical sections may be preempted and they may also block, but
  * only when acquiring spinlocks that are subject to priority inheritance.
+ * 
+ * rcu读锁，是一个轻量级同步原语不是传统锁（不会阻塞），告诉内核：当前任务正在读取受 RCU 管理的数据
+ * 期间：RCU 更新方（rcu_assign_pointer() + 删除）不能释放旧数据
  */
 static __always_inline void rcu_read_lock(void)
 {

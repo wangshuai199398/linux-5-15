@@ -845,6 +845,7 @@ int __init random_init(const char *command_line)
  * None of this adds any entropy; it is meant to avoid the problem of
  * the entropy pool having similar initial state across largely
  * identical devices.
+ * 内核随机数池添加熵（entropy）
  */
 void add_device_randomness(const void *buf, size_t len)
 {

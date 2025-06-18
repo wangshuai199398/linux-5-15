@@ -2864,13 +2864,13 @@ out:
 }
 
 /*
- * Change a given task's CPU affinity. Migrate the thread to a
- * proper CPU and schedule it away if the CPU it's executing on
- * is removed from the allowed bitmask.
+ * 更改指定任务的 CPU 亲和性（affinity）
+ * 如果该任务当前运行的 CPU 不再包含在允许的掩码（bitmask）中，
+ * 则会将该线程迁移到一个合适的 CPU，并将其从当前 CPU 上调度出去
  *
- * NOTE: the caller must have a valid reference to the task, the
- * task must not exit() & deallocate itself prematurely. The
- * call is not atomic; no spinlocks may be held.
+ * NOTE: 调用者必须持有对该任务的有效引用
+ * 任务在调用过程中不能提前执行 exit() 并释放自身
+ * 此调用不是原子的；调用时不能持有自旋锁（spinlock）
  */
 static int __set_cpus_allowed_ptr(struct task_struct *p,
 				  const struct cpumask *new_mask, u32 flags)
@@ -4497,11 +4497,11 @@ unsigned long to_ratio(u64 period, u64 runtime)
 }
 
 /*
- * wake_up_new_task - wake up a newly created task for the first time.
+ * 首次唤醒一个新创建的任务
  *
- * This function will do some initial scheduler statistics housekeeping
- * that must be done for every newly created context, then puts the task
- * on the runqueue and wakes it.
+ * 此函数会为每一个新创建的执行上下文做一些初始调度器统计信息的维护工作，然后将该任务放入运行队列（runqueue）并唤醒它
+ * 
+ * 在 创建新进程/线程之后将其加入运行队列，把新线程加入调度器
  */
 void wake_up_new_task(struct task_struct *p)
 {

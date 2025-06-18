@@ -400,7 +400,7 @@ void cpu_startup_entry(enum cpuhp_state state)
 	arch_cpu_idle_prepare();
 	cpuhp_online_idle(state);
 	while (1)
-		do_idle();
+		do_idle();//进入空闲循环（只要没有任务就不会退出）
 }
 
 /*

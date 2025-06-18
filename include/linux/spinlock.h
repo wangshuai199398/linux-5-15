@@ -382,7 +382,7 @@ do {								\
 do {									\
 	raw_spin_lock_nest_lock(spinlock_check(lock), nest_lock);	\
 } while (0)
-
+//关闭中断并加锁 siglock，这是保护信号处理结构的自旋锁，防止并发修改
 static __always_inline void spin_lock_irq(spinlock_t *lock)
 {
 	raw_spin_lock_irq(&lock->rlock);
@@ -407,7 +407,7 @@ static __always_inline void spin_unlock_bh(spinlock_t *lock)
 {
 	raw_spin_unlock_bh(&lock->rlock);
 }
-
+//解锁并恢复中断
 static __always_inline void spin_unlock_irq(spinlock_t *lock)
 {
 	raw_spin_unlock_irq(&lock->rlock);

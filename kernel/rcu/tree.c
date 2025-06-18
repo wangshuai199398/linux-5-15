@@ -4499,14 +4499,10 @@ static int __init rcu_spawn_gp_kthread(void)
 early_initcall(rcu_spawn_gp_kthread);
 
 /*
- * This function is invoked towards the end of the scheduler's
- * initialization process.  Before this is called, the idle task might
- * contain synchronous grace-period primitives (during which time, this idle
- * task is booting the system, and such primitives are no-ops).  After this
- * function is called, any synchronous grace-period primitives are run as
- * expedited, with the requesting task driving the grace period forward.
- * A later core_initcall() rcu_set_runtime_mode() will switch to full
- * runtime RCU functionality.
+ * 此函数在调度器初始化过程的后期被调用。在调用它之前，idle（空闲）任务中可能会包含同步 RCU 宽限期原语（grace-period primitives）；
+ * 在此期间，idle 任务正在引导系统启动，这些同步原语实际上是无操作（no-ops）
+ * 在调用此函数之后，任何同步的宽限期原语都将以加速模式（expedited）运行，由请求该原语的任务主动驱动宽限期的推进。
+ * 稍后，内核通过一个 core_initcall() 注册的 rcu_set_runtime_mode() 函数，将 RCU 切换为完整的运行时功能模式（full runtime RCU functionality）
  */
 void rcu_scheduler_starting(void)
 {

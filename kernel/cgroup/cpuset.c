@@ -3441,9 +3441,9 @@ static struct notifier_block cpuset_track_online_nodes_nb = {
 };
 
 /**
- * cpuset_init_smp - initialize cpus_allowed
+ * 初始化 cpus_allowed
  *
- * Description: Finish top cpuset after cpu, node maps are initialized
+ * 说明: 在 CPU 和节点映射初始化完成之后, 最后对顶层 cpuset（CPU 集合）进行初始化
  */
 void __init cpuset_init_smp(void)
 {
