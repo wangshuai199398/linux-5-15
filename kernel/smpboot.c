@@ -217,7 +217,7 @@ int smpboot_create_threads(unsigned int cpu)
 
 	mutex_lock(&smpboot_threads_lock);
 	list_for_each_entry(cur, &hotplug_threads, list) {
-		pr_err("%s: CONFIG_SMP startup.single Registering ksoftirqd thread on CPU %u\n", __func__, cpu);
+		pr_err("%s: startup.single Registering thread on CPU %u name: %s\n", __func__, cpu, cur->thread_comm);
 		ret = __smpboot_create_thread(cur, cpu);
 		if (ret)
 			break;
@@ -281,11 +281,10 @@ static void smpboot_destroy_threads(struct smp_hotplug_thread *ht)
 }
 
 /**
- * smpboot_register_percpu_thread - Register a per_cpu thread related
- * 					    to hotplug
- * @plug_thread:	Hotplug thread descriptor
+ * 注册一个与热插拔相关的 per-CPU 线程
+ * @plug_thread:	热插拔线程描述符
  *
- * Creates and starts the threads on all online cpus.
+ * 在所有在线 CPU 上创建并启动这些线程
  */
 int smpboot_register_percpu_thread(struct smp_hotplug_thread *plug_thread)
 {

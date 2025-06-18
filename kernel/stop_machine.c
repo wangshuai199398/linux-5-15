@@ -577,7 +577,7 @@ static int __init cpu_stop_init(void)
 		raw_spin_lock_init(&stopper->lock);
 		INIT_LIST_HEAD(&stopper->works);
 	}
-
+	//migration 线程负责在不同 CPU 之间安全地迁移任务（进程/线程）
 	BUG_ON(smpboot_register_percpu_thread(&cpu_stop_threads));
 	stop_machine_unpark(raw_smp_processor_id());
 	stop_machine_initialized = true;

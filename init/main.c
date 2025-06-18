@@ -930,26 +930,22 @@ static void __init print_unknown_bootoptions(void)
 		&unknown_options[1]);
 	memblock_free_ptr(unknown_options, len);
 }
-
+// x86_64_start_kernel ->
 asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 {
 	char *command_line;
 	char *after_dashes;
-
-	set_task_stack_end_magic(&init_task);
-	smp_setup_processor_id();
+	set_task_stack_end_magic(&init_task);//设置当前任务栈末的魔术数，用于栈溢出检测 init_task.c
+	smp_setup_processor_id();//初始化当前 CPU 的 ID
 	debug_objects_early_init();
-	init_vmlinux_build_id();
+	init_vmlinux_build_id();//设置构建 ID（调试用）
 
 	cgroup_init_early();
 
 	local_irq_disable();
 	early_boot_irqs_disabled = true;
 
-	/*
-	 * Interrupts are still disabled. Do necessary setups, then
-	 * enable them.
-	 */
+	/* 中断仍然是关闭的。请完成必要的设置，然后再开启中断 */
 	boot_cpu_init();
 	page_address_init();
 	pr_notice("%s", linux_banner);//Linux version 5.15.178+ (root@yusur) (gcc (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0, GNU ld (GNU Binutils for Ubuntu) 2.38) #114 SMP Tue Jun 17 02:10:48 UTC 2025 (Ubuntu 5.15.0-138.148-generic 5.15.178)
@@ -958,7 +954,7 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 	setup_boot_config();
 	setup_command_line(command_line);
 	setup_nr_cpu_ids();
-	setup_per_cpu_areas();
+	setup_per_cpu_areas();//为每个 CPU 分配私有空间
 	smp_prepare_boot_cpu();	/* arch-specific boot-cpu hooks */
 	boot_cpu_hotplug_init();
 
@@ -994,9 +990,7 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 	early_trace_init();
 
 	/*
-	 * Set up the scheduler prior starting any interrupts (such as the
-	 * timer interrupt). Full topology setup happens at smp_init()
-	 * time - but meanwhile we still have a functioning scheduler.
+	 * 在启动任何中断（例如定时器中断）之前设置调度器。完整的拓扑结构会在 smp_init() 阶段完成——但在此期间，我们已经拥有一个functioning调度器
 	 */
 	sched_init();
 
@@ -1005,17 +999,11 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 		local_irq_disable();
 	radix_tree_init();
 
-	/*
-	 * Set up housekeeping before setting up workqueues to allow the unbound
-	 * workqueue to take non-housekeeping into account.
-	 */
+	/* 在设置 workqueue 之前先设置 housekeeping，以便 unbound workqueue 能够考虑非 housekeeping CPU
+	 * housekeeping：指的是负责系统后台任务（如定时器处理、RCU 回调等）的 CPU 集合 */
 	housekeeping_init();
 
-	/*
-	 * Allow workqueue creation and work item queueing/cancelling
-	 * early.  Work item execution depends on kthreads and starts after
-	 * workqueue_init().
-	 */
+	/* 允许在早期创建工作队列并进行工作项的排队/取消。工作项的真正执行依赖于内核线程（kthreads），会在 workqueue_init() 之后开始 */
 	workqueue_init_early();
 
 	rcu_init();
@@ -1040,13 +1028,11 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 	kfence_init();
 	time_init();
 
-	/*
-	 * 为了获得尽可能好的初始 stack canary（栈金丝雀） 熵值，应该在以下几个初始化步骤之后再进行其准备工作：
+	/* 为了获得尽可能好的初始 stack canary（栈金丝雀） 熵值，应该在以下几个初始化步骤之后再进行其准备工作：
 	 * - setup_arch() 此时可以获取来自 UEFI 随机数生成器（RNG） 的熵，以及访问启动命令行参数；
 	 * - timekeeping_init() 此函数提供 ktime 时间熵，被 random_init() 用作随机性来源；
 	 * - time_init() 使某些平台上的 random_get_entropy() 可以正常工作
-	 * - random_init() 从早期熵源中初始化随机数生成器（RNG）。
-	 */
+	 * - random_init() 从早期熵源中初始化随机数生成器（RNG）*/
 	random_init(command_line);
 	boot_init_stack_canary();
 
@@ -1069,11 +1055,7 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 
 	lockdep_init();
 
-	/*
-	 * Need to run this when irqs are enabled, because it wants
-	 * to self-test [hard/soft]-irqs on/off lock inversion bugs
-	 * too:
-	 */
+	/* 需要在中断（irqs）已启用的情况下运行这个函数，因为它还要自检硬/软中断开启与关闭过程中可能出现的锁反转（lock inversion）问题 */
 	locking_selftest();
 
 #ifdef CONFIG_BLK_DEV_INITRD

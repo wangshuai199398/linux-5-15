@@ -188,7 +188,8 @@ static int cpuhp_invoke_callback(unsigned int cpu, enum cpuhp_state state,
 		cb = bringup ? step->startup.single : step->teardown.single;
 
 		trace_cpuhp_enter(cpu, st->target, state, cb);
-		ret = cb(cpu);
+		//创建非0CPU的 ksoftirqd
+		ret = cb(cpu);//smpboot_create_threads
 		trace_cpuhp_exit(cpu, st->state, state, ret);
 		return ret;
 	}
@@ -910,7 +911,7 @@ static int cpuhp_kick_ap_work(unsigned int cpu)
 
 	return ret;
 }
-
+//cpuhp内核线程用于在 CPU 上线或下线过程中异步执行 CPU 状态变更处理任务
 static struct smp_hotplug_thread cpuhp_threads = {
 	.store			= &cpuhp_state.thread,
 	.create			= &cpuhp_create,

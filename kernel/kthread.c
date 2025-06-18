@@ -526,14 +526,13 @@ void kthread_bind(struct task_struct *p, unsigned int cpu)
 EXPORT_SYMBOL(kthread_bind);
 
 /**
- * kthread_create_on_cpu - Create a cpu bound kthread
- * @threadfn: the function to run until signal_pending(current).
- * @data: data ptr for @threadfn.
- * @cpu: The cpu on which the thread should be bound,
- * @namefmt: printf-style name for the thread. Format is restricted
- *	     to "name.*%u". Code fills in cpu number.
+ * 创建一个绑定到指定 CPU 的内核线程
+ * @threadfn: 线程执行的函数，直到 signal_pending(current) 为真时退出
+ * @data:     传递给 @threadfn 的参数
+ * @cpu:      希望线程绑定到的目标 CPU
+ * @namefmt:  线程的名字格式，类似 printf 的格式字符串，但格式必须为 "name.*%u"，其中 %u 会被代码自动替换为 CPU 编号
  *
- * Description: This helper function creates and names a kernel thread
+ * 描述：这个辅助函数用于创建一个绑定到指定 CPU 并带有指定名称的内核线程
  */
 struct task_struct *kthread_create_on_cpu(int (*threadfn)(void *data),
 					  void *data, unsigned int cpu,

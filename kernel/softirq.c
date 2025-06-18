@@ -936,6 +936,7 @@ static void run_ksoftirqd(unsigned int cpu)
 }
 
 #ifdef CONFIG_HOTPLUG_CPU
+//把即将下线 CPU 上挂起的 tasklet 迁移到其他 CPU 上继续执行
 static int takeover_tasklets(unsigned int cpu)
 {
 	/* CPU is dead, so no lock needed. */

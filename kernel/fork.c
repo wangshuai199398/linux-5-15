@@ -879,12 +879,12 @@ int __weak arch_dup_task_struct(struct task_struct *dst,
 	*dst = *src;
 	return 0;
 }
-
+//设置任务栈末的魔术数，用于栈溢出检测
 void set_task_stack_end_magic(struct task_struct *tsk)
 {
 	unsigned long *stackend;
 
-	stackend = end_of_stack(tsk);
+	stackend = end_of_stack(tsk);//栈空间的末尾stack，栈的使用范围：stack+THREAD_SIZE - stack(从高到低增长)
 	*stackend = STACK_END_MAGIC;	/* for overflow detection */
 }
 //复制当前任务的 task_struct 结构到新的进程中

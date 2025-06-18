@@ -362,7 +362,7 @@ static struct smp_hotplug_thread idle_inject_threads = {
 	.thread_comm = "idle_inject/%u",
 	.thread_should_run = idle_inject_should_run,
 };
-
+//主动注入空闲周期的PER-CPU 内核线程，通常用于实现 CPU 降温（thermal throttling）或功耗管理（power capping）策略
 static int __init idle_inject_init(void)
 {
 	return smpboot_register_percpu_thread(&idle_inject_threads);
