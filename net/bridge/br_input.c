@@ -75,6 +75,7 @@ static int br_pass_frame_up(struct sk_buff *skb, bool promisc)
 /* note: already called with rcu_read_lock */
 int br_handle_frame_finish(struct net *net, struct sock *sk, struct sk_buff *skb)
 {
+	//获取 veth 所连接的网桥端口
 	struct net_bridge_port *p = br_port_get_rcu(skb->dev);
 	enum br_pkt_type pkt_type = BR_PKT_UNICAST;
 	struct net_bridge_fdb_entry *dst = NULL;
@@ -101,7 +102,9 @@ int br_handle_frame_finish(struct net *net, struct sock *sk, struct sk_buff *skb
 	nbp_switchdev_frame_mark(p, skb);
 
 	/* insert into forwarding database after filtering to avoid spoofing */
+	//获取 Bridge
 	br = p->br;
+	//更新转发表
 	if (p->flags & BR_LEARNING)
 		br_fdb_update(br, p, eth_hdr(skb)->h_source, vid, 0);
 
@@ -160,6 +163,7 @@ int br_handle_frame_finish(struct net *net, struct sock *sk, struct sk_buff *skb
 		}
 		break;
 	case BR_PKT_UNICAST:
+		//查找转发表
 		dst = br_fdb_find_rcu(br, eth_hdr(skb)->h_dest, vid);
 		break;
 	default:
@@ -174,6 +178,7 @@ int br_handle_frame_finish(struct net *net, struct sock *sk, struct sk_buff *skb
 
 		if (now != dst->used)
 			dst->used = now;
+		//转发
 		br_forward(dst->dst, skb, local_rcv, false);
 	} else {
 		if (!mcast_hit)
@@ -380,7 +385,7 @@ forward:
 	case BR_STATE_LEARNING:
 		if (ether_addr_equal(p->br->dev->dev_addr, dest))
 			skb->pkt_type = PACKET_HOST;
-
+		//转发
 		return nf_hook_bridge_pre(skb, pskb);
 	default:
 drop:

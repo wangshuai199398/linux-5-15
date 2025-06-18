@@ -723,7 +723,7 @@ void intel_init_thermal(struct cpuinfo_x86 *c)
 	wrmsr(MSR_IA32_MISC_ENABLE, l | MSR_IA32_MISC_ENABLE_TM1, h);
 
 	pr_info_once("CPU0: Thermal monitoring enabled (%s)\n",
-		      tm2 ? "TM2" : "TM1");
+		      tm2 ? "TM2" : "TM1");//Thermal monitoring enabled (TM1)
 
 	/* enable thermal throttle processing */
 	atomic_set(&therm_throt_en, 1);

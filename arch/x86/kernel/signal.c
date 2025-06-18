@@ -734,7 +734,7 @@ static int __init init_sigframe_size(void)
 	/* Userspace expects an aligned size. */
 	max_frame_size = round_up(max_frame_size, FRAME_ALIGNMENT);
 
-	pr_info("max sigframe size: %lu\n", max_frame_size);
+	pr_info("max sigframe size: %lu\n", max_frame_size);//max sigframe size: 2032
 	return 0;
 }
 early_initcall(init_sigframe_size);

@@ -232,7 +232,7 @@ static void __init print_xstate_feature(u64 xstate_mask)
 	const char *feature_name;
 
 	if (cpu_has_xfeatures(xstate_mask, &feature_name))
-		pr_info("x86/fpu: Supporting XSAVE feature 0x%03Lx: '%s'\n", xstate_mask, feature_name);
+		pr_info("x86/fpu: Supporting XSAVE feature 0x%03Lx: '%s'\n", xstate_mask, feature_name);//Supporting XSAVE feature 0x001: 'x87 floating point registers'
 }
 
 /*

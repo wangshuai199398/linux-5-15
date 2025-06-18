@@ -5491,7 +5491,7 @@ skip_classify:
 			goto out;
 	}
 	//获取网络设备的接收处理函数，特殊处理：网桥（bridge）设备会注册一个RX handler来拦截包并转发；bonding/macvlan设备也会注册；普通物理设备默认是没有RX handler的
-	/* 如果一个dev被添加到一个bridge（做为bridge的一个接口)，这个接口设备的rx_handler将被设置为br_handle_frame函数，这是在br_add_if函数中设置的，
+	/* 如果一个dev被添加到一个bridge（做为bridge的一个接口)，这个接口设备的rx_handler将被设置为 br_handle_frame 函数，这是在br_add_if函数中设置的，
 	 * 而br_add_if (net/bridge/br_if.c)是在向网桥设备上添加接口时设置的。进入br_handle_frame也就进入了bridge的逻辑代码。
      * OVS 使用 rx_handler 拦截来自物理设备（如 eth0）的数据包，并在内核中处理这些包是否送到虚拟交换机（桥）、用户空间或原始协议栈。
 	 * 添加端口到 bridge（网桥）的时候，OVS 通过调用内核 API - netdev_rx_handler_register 添加rx_handler
@@ -11113,6 +11113,7 @@ struct net_device *alloc_netdev_mqs(int sizeof_priv, const char *name,
 	hash_init(dev->qdisc_hash);
 #endif
 	dev->priv_flags = IFF_XMIT_DST_RELEASE | IFF_XMIT_DST_RELEASE_PERM;
+	//传进来的启动函数
 	setup(dev);
 
 	if (!dev->tx_queue_len) {

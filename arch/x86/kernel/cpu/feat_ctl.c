@@ -168,7 +168,7 @@ update_caps:
 	    (!tboot && !(msr & FEAT_CTL_VMX_ENABLED_OUTSIDE_SMX))) {
 		if (IS_ENABLED(CONFIG_KVM_INTEL))
 			pr_err_once("VMX (%s TXT) disabled by BIOS\n",
-				    tboot ? "inside" : "outside");
+				    tboot ? "inside" : "outside");//VMX (outside TXT) disabled by BIOS
 		clear_cpu_cap(c, X86_FEATURE_VMX);
 	} else {
 #ifdef CONFIG_X86_VMX_FEATURE_NAMES

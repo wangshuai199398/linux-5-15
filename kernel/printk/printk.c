@@ -3181,10 +3181,8 @@ out_disable_unlock:
 EXPORT_SYMBOL(unregister_console);
 
 /*
- * Initialize the console device. This is called *early*, so
- * we can't necessarily depend on lots of kernel help here.
- * Just do some early initializations, and do the complex setup
- * later.
+ * 这个函数是在 非常早期 被调用的，因此我们不能依赖内核的许多支持功能。
+ * 这里只做一些早期的初始化，复杂的控制台设置会在之后完成。
  */
 void __init console_init(void)
 {

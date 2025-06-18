@@ -3077,7 +3077,7 @@ static void irq_remapping_prepare_irte(struct amd_ir_data *data,
 	data->irq_2_irte.index = index + sub_handle;
 	iommu->irte_ops->prepare(data->entry, apic->delivery_mode,
 				 apic->dest_mode_logical, irq_cfg->vector,
-				 irq_cfg->dest_apicid, devid);
+				 irq_cfg->dest_apicid, devid);//intel_prepare_irq_remapping
 
 	switch (info->type) {
 	case X86_IRQ_ALLOC_TYPE_IOAPIC:

@@ -414,15 +414,15 @@ static struct net_bridge_port *new_nbp(struct net_bridge *br,
 {
 	struct net_bridge_port *p;
 	int index, err;
-
+	//在当前bridge下寻找一个可用的端口号
 	index = find_portno(br);
 	if (index < 0)
 		return ERR_PTR(index);
-
+	//申请插口对象
 	p = kzalloc(sizeof(*p), GFP_KERNEL);
 	if (p == NULL)
 		return ERR_PTR(-ENOMEM);
-
+	//初始化插口
 	p->br = br;
 	dev_hold(dev);
 	p->dev = dev;
@@ -442,12 +442,12 @@ static struct net_bridge_port *new_nbp(struct net_bridge *br,
 
 	return p;
 }
-
+//bridge_wangs
 int br_add_bridge(struct net *net, const char *name)
 {
 	struct net_device *dev;
 	int res;
-
+	//申请网桥设备，并用br_dev_setup来启动它，最终创建的大小是 net_device+net_bridge
 	dev = alloc_netdev(sizeof(struct net_bridge), name, NET_NAME_UNKNOWN,
 			   br_dev_setup);
 
@@ -456,7 +456,7 @@ int br_add_bridge(struct net *net, const char *name)
 
 	dev_net_set(dev, net);
 	dev->rtnl_link_ops = &br_link_ops;
-
+	//注册网桥设备
 	res = register_netdevice(dev);
 	if (res)
 		free_netdev(dev);
@@ -555,6 +555,7 @@ netdev_features_t br_features_recompute(struct net_bridge *br,
 }
 
 /* called with RTNL */
+//brctl addif br0 veth0
 int br_add_if(struct net_bridge *br, struct net_device *dev,
 	      struct netlink_ext_ack *extack)
 {
@@ -606,7 +607,7 @@ int br_add_if(struct net_bridge *br, struct net_device *dev,
 			       "Device does not allow enslaving to a bridge");
 		return -EOPNOTSUPP;
 	}
-
+	//申请一个 net_bridge_port
 	p = new_nbp(br, dev);
 	if (IS_ERR(p))
 		return PTR_ERR(p);
@@ -632,7 +633,7 @@ int br_add_if(struct net_bridge *br, struct net_device *dev,
 	err = br_netpoll_enable(p);
 	if (err)
 		goto err3;
-
+	// 注册设备帧接收函数
 	err = netdev_rx_handler_register(dev, br_get_rx_handler(dev), p);
 	if (err)
 		goto err4;
@@ -644,7 +645,7 @@ int br_add_if(struct net_bridge *br, struct net_device *dev,
 		goto err5;
 
 	dev_disable_lro(dev);
-
+	//添加到 bridge 的已用端口列表中
 	list_add_rcu(&p->list, &br->port_list);
 
 	nbp_update_port_count(br);

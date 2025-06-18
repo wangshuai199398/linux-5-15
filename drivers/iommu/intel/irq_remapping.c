@@ -845,7 +845,7 @@ static int __init intel_enable_irq_remapping(void)
 
 	set_irq_posting_cap();
 
-	pr_info("Enabled IRQ remapping in %s mode\n", eim_mode ? "x2apic" : "xapic");
+	pr_info("Enabled IRQ remapping in %s mode\n", eim_mode ? "x2apic" : "xapic");//Enabled IRQ remapping in x2apic mode
 
 	return eim_mode ? IRQ_REMAP_X2APIC_MODE : IRQ_REMAP_XAPIC_MODE;
 
@@ -894,7 +894,7 @@ static int ir_parse_one_hpet_scope(struct acpi_dmar_device_scope *scope,
 	ir_hpet[free].bus   = bus;
 	ir_hpet[free].devfn = PCI_DEVFN(path->device, path->function);
 	pr_info("HPET id %d under DRHD base 0x%Lx\n",
-		scope->enumeration_id, drhd->address);
+		scope->enumeration_id, drhd->address);//HPET id 0 under DRHD base 0xfed91000
 
 	return 0;
 }
@@ -939,7 +939,7 @@ static int ir_parse_one_ioapic_scope(struct acpi_dmar_device_scope *scope,
 	ir_ioapic[free].iommu = iommu;
 	ir_ioapic[free].id    = scope->enumeration_id;
 	pr_info("IOAPIC id %d under DRHD base  0x%Lx IOMMU %d\n",
-		scope->enumeration_id, drhd->address, iommu->seq_id);
+		scope->enumeration_id, drhd->address, iommu->seq_id);//IOAPIC id 2 under DRHD base  0xfed91000 IOMMU 1
 
 	return 0;
 }

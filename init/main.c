@@ -682,12 +682,10 @@ static void __init setup_command_line(char *command_line)
 }
 
 /*
- * We need to finalize in a non-__init function or else race conditions
- * between the root thread and the init thread may cause start_kernel to
- * be reaped by free_initmem before the root thread has proceeded to
- * cpu_idle.
+ * 我们需要在一个 非 __init 标记的函数 中完成最终处理，否则 root 线程和 init 线程之间的竞态条件，
+ * 可能会导致 start_kernel 在 root 线程进入 cpu_idle 之前，就被 free_initmem 回收掉。
  *
- * gcc-3.4 accidentally inlines this function, so use noinline.
+ * 由于 gcc 3.4 会意外地内联这个函数，所以我们使用 noinline 来防止它被内联
  */
 
 static __initdata DECLARE_COMPLETION(kthreadd_done);
@@ -1099,6 +1097,7 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 	acpi_early_init();//
 	if (late_time_init)
 		late_time_init();
+	//初始化 调度时钟（scheduler clock） 
 	sched_clock_init();
 	calibrate_delay();
 
@@ -1135,7 +1134,7 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 	kcsan_init();
 
 	/* Do the rest non-__init'ed, we're now alive */
-	arch_call_rest_init();
+	arch_call_rest_init();//
 
 	prevent_tail_call_optimization();
 }

@@ -1382,7 +1382,7 @@ void __init native_smp_prepare_cpus(unsigned int max_cpus)
 	smp_get_logical_apicid();
 
 	pr_info("CPU0: ");
-	print_cpu_info(&cpu_data(0));
+	print_cpu_info(&cpu_data(0));//Intel(R) Core(TM) i5-10400 CPU @ 2.90GHz (family: 0x6, model: 0xa5, stepping: 0x3)
 
 	uv_system_init();
 
@@ -2136,6 +2136,7 @@ static void init_freq_invariance(bool secondary, bool cppc_ready)
 		init_counter_refs();
 		static_branch_enable(&arch_scale_freq_key);
 		register_freq_invariance_syscore_ops();
+		//Estimated ratio of average max frequency by base frequency (times 1024): 1447
 		pr_info("Estimated ratio of average max frequency by base frequency (times 1024): %llu\n", arch_max_freq_ratio);
 	} else {
 		pr_debug("Couldn't determine max cpu frequency, necessary for scale-invariant accounting.\n");

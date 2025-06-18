@@ -819,11 +819,11 @@ static void cpu_detect_tlb(struct cpuinfo_x86 *c)
 
 	pr_info("Last level iTLB entries: 4KB %d, 2MB %d, 4MB %d\n",
 		tlb_lli_4k[ENTRIES], tlb_lli_2m[ENTRIES],
-		tlb_lli_4m[ENTRIES]);
+		tlb_lli_4m[ENTRIES]);//Last level iTLB entries: 4KB 64, 2MB 8, 4MB 8
 
 	pr_info("Last level dTLB entries: 4KB %d, 2MB %d, 4MB %d, 1GB %d\n",
 		tlb_lld_4k[ENTRIES], tlb_lld_2m[ENTRIES],
-		tlb_lld_4m[ENTRIES], tlb_lld_1g[ENTRIES]);
+		tlb_lld_4m[ENTRIES], tlb_lld_1g[ENTRIES]);//Last level dTLB entries: 4KB 64, 2MB 0, 4MB 0, 1GB 4
 }
 
 int detect_ht_early(struct cpuinfo_x86 *c)

@@ -27,7 +27,7 @@ void __init default_setup_apic_routing(void)
 			if (apic != *drv) {
 				apic = *drv;
 				pr_info("Switched APIC routing to %s.\n",
-					apic->name);
+					apic->name);//Switched APIC routing to cluster x2apic.
 			}
 			break;
 		}

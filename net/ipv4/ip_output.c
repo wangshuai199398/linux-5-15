@@ -489,6 +489,7 @@ int __ip_queue_xmit(struct sock *sk, struct sk_buff *skb, struct flowi *fl,
 		    __u8 tos)
 {
 	struct inet_sock *inet = inet_sk(sk);
+	//socket的网络命名空间
 	struct net *net = sock_net(sk);
 	struct ip_options_rcu *inet_opt;
 	struct flowi4 *fl4;

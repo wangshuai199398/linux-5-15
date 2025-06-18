@@ -206,17 +206,12 @@ static void __sched_clock_gtod_offset(void)
 
 void __init sched_clock_init(void)
 {
-	/*
-	 * Set __gtod_offset such that once we mark sched_clock_running,
-	 * sched_clock_tick() continues where sched_clock() left off.
-	 *
-	 * Even if TSC is buggered, we're still UP at this point so it
-	 * can't really be out of sync.
-	 */
+	/* 设置一个时间偏移值 __gtod_offset，用于把调度时钟（sched_clock()）和全局时间（GTOD，gettimeofday 基准）对齐；
+	 * 即便 TSC 不稳定，在这个阶段仍是单核（UP）系统，时间仍然一致 */
 	local_irq_disable();
 	__sched_clock_gtod_offset();
 	local_irq_enable();
-
+	//打开一个静态分支(static_branch)，告诉内核调度系统：“sched_clock 已经准备好了”
 	static_branch_inc(&sched_clock_running);
 }
 /*

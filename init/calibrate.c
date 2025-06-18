@@ -291,7 +291,7 @@ void calibrate_delay(void)
 	} else if ((!printed) && lpj_fine) {
 		lpj = lpj_fine;
 		pr_info("Calibrating delay loop (skipped), "
-			"value calculated using timer frequency.. ");
+			"value calculated using timer frequency.. ");//value calculated using timer frequency.. 5799.77 BogoMIPS (lpj=11599544)
 	} else if ((lpj = calibrate_delay_is_known())) {
 		;
 	} else if ((lpj = calibrate_delay_direct()) != 0) {

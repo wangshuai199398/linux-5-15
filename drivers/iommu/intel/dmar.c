@@ -532,14 +532,14 @@ dmar_table_print_dmar_entry(struct acpi_dmar_header *header)
 		drhd = container_of(header, struct acpi_dmar_hardware_unit,
 				    header);
 		pr_info("DRHD base: %#016Lx flags: %#x\n",
-			(unsigned long long)drhd->address, drhd->flags);
+			(unsigned long long)drhd->address, drhd->flags);//DRHD base: 0x000000fed90000 flags: 0x0
 		break;
 	case ACPI_DMAR_TYPE_RESERVED_MEMORY:
 		rmrr = container_of(header, struct acpi_dmar_reserved_memory,
 				    header);
 		pr_info("RMRR base: %#016Lx end: %#016Lx\n",
 			(unsigned long long)rmrr->base_address,
-			(unsigned long long)rmrr->end_address);
+			(unsigned long long)rmrr->end_address);//RMRR base: 0x0000009d000000 end: 0x0000009f7fffff
 		break;
 	case ACPI_DMAR_TYPE_ROOT_ATS:
 		atsr = container_of(header, struct acpi_dmar_atsr, header);
@@ -670,7 +670,7 @@ parse_dmar_table(void)
 		return -EINVAL;
 	}
 
-	pr_info("Host address width %d\n", dmar->width + 1);
+	pr_info("Host address width %d\n", dmar->width + 1);//Host address width 39
 	ret = dmar_walk_dmar_table(dmar, &cb);
 	if (ret == 0 && drhd_count == 0)
 		pr_warn(FW_BUG "No DRHD structure found in DMAR table\n");
@@ -1116,7 +1116,7 @@ static int alloc_iommu(struct dmar_drhd_unit *drhd)
 		(unsigned long long)drhd->reg_base_addr,
 		DMAR_VER_MAJOR(ver), DMAR_VER_MINOR(ver),
 		(unsigned long long)iommu->cap,
-		(unsigned long long)iommu->ecap);
+		(unsigned long long)iommu->ecap);//dmar0: reg_base_addr fed90000 ver 1:0 cap 1c0000c40660462 ecap 19e2ff0505e
 
 	/* Reflect status in gcmd */
 	sts = readl(iommu->reg + DMAR_GSTS_REG);

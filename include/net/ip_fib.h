@@ -362,6 +362,7 @@ struct fib_table *fib_get_table(struct net *net, u32 id);
 int __fib_lookup(struct net *net, struct flowi4 *flp,
 		 struct fib_result *res, unsigned int flags);
 
+//在net网络命名空间中查找路由表
 static inline int fib_lookup(struct net *net, struct flowi4 *flp,
 			     struct fib_result *res, unsigned int flags)
 {

@@ -1940,7 +1940,7 @@ struct sock *sk_alloc(struct net *net, int family, gfp_t priority,
 			get_net(net);
 			sock_inuse_add(net, 1);
 		}
-
+		//将socket所属进程的网络命名空间设置到socket
 		sock_net_set(sk, net);
 		refcount_set(&sk->sk_wmem_alloc, 1);
 

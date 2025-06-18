@@ -49,7 +49,7 @@ int br_dev_queue_push_xmit(struct net *net, struct sock *sk, struct sk_buff *skb
 	}
 
 	br_switchdev_frame_set_offload_fwd_mark(skb);
-
+	//发送 最终调用 dev_hard_start_xmit -> veth_xmit
 	dev_queue_xmit(skb);
 
 	return 0;
@@ -89,6 +89,7 @@ static void __br_forward(const struct net_bridge_port *to,
 		return;
 
 	indev = skb->dev;
+	//将skb中dev改成新的目的dev
 	skb->dev = to->dev;
 	if (!local_orig) {
 		if (skb_warn_if_lro(skb)) {
@@ -111,7 +112,7 @@ static void __br_forward(const struct net_bridge_port *to,
 		net = dev_net(skb->dev);
 		indev = NULL;
 	}
-
+	//发送
 	NF_HOOK(NFPROTO_BRIDGE, br_hook,
 		net, NULL, skb, indev, skb->dev,
 		br_forward_finish);

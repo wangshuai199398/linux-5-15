@@ -79,7 +79,7 @@ static __init void x86_late_time_init(void)
 	 * After PIT/HPET timers init, set up the final interrupt mode for
 	 * delivering IRQs.
 	 */
-	x86_init.irqs.intr_mode_init();
+	x86_init.irqs.intr_mode_init();//apic_intr_mode_init
 	tsc_init();
 
 	if (static_cpu_has(X86_FEATURE_WAITPKG))
