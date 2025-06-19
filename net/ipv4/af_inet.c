@@ -1957,7 +1957,7 @@ static int __init inet_init(void)
 	struct inet_protosw *q;
 	struct list_head *r;
 	int rc;
-
+	pr_info("%s %d \n", __func__, __LINE__);
 	sock_skb_cb_check_size(sizeof(struct inet_skb_parm));
 
 	rc = proto_register(&tcp_prot, 1);

@@ -1498,7 +1498,7 @@ static struct pernet_operations xsk_net_ops = {
 static int __init xsk_init(void)
 {
 	int err, cpu;
-
+	pr_info("%s %d \n", __func__, __LINE__);
 	err = proto_register(&xsk_proto, 0 /* no slab */);
 	if (err)
 		goto out;

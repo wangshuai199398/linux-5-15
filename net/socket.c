@@ -3093,13 +3093,11 @@ SYSCALL_DEFINE2(socketcall, int, call, unsigned long __user *, args)
 #endif				/* __ARCH_WANT_SYS_SOCKETCALL */
 
 /**
- *	sock_register - add a socket protocol handler
- *	@ops: description of protocol
+ *	添加一个套接字协议处理器
+ *	@ops: 协议的描述结构
  *
- *	This function is called by a protocol handler that wants to
- *	advertise its address family, and have it linked into the
- *	socket interface. The value ops->family corresponds to the
- *	socket system call protocol family.
+ *	这个函数由协议处理器调用，用于注册它所支持的地址族（address family），并将其连接进内核的套接字接口中
+ *  参数 ops->family 的值表示这个协议处理器所对应的协议族（如 AF_INET、AF_UNIX 等），它将会被 socket() 系统调用用于识别
  */
 int sock_register(const struct net_proto_family *ops)
 {

@@ -3412,7 +3412,7 @@ static int __init af_unix_init(void)
 	int rc = -1;
 
 	BUILD_BUG_ON(sizeof(struct unix_skb_parms) > sizeof_field(struct sk_buff, cb));
-
+	pr_info("%s %d \n", __func__, __LINE__);
 	rc = proto_register(&unix_dgram_proto, 1);
 	if (rc != 0) {
 		pr_crit("%s: Cannot create unix_sock SLAB cache!\n", __func__);

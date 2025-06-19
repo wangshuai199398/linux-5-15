@@ -1078,7 +1078,7 @@ static int __init inet6_init(void)
 {
 	struct list_head *r;
 	int err = 0;
-
+	pr_info("%s %d \n", __func__, __LINE__);
 	sock_skb_cb_check_size(sizeof(struct inet6_skb_parm));
 
 	/* Register the socket-side information for inet6_create.  */

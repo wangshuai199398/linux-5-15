@@ -4772,7 +4772,7 @@ static void __exit packet_exit(void)
 static int __init packet_init(void)
 {
 	int rc;
-
+	pr_info("%s %d \n", __func__, __LINE__);
 	rc = proto_register(&packet_proto, 0);
 	if (rc)
 		goto out;
