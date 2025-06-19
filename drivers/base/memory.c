@@ -807,9 +807,8 @@ static const struct attribute_group *memory_root_attr_groups[] = {
 };
 
 /*
- * Initialize the sysfs support for memory devices. At the time this function
- * is called, we cannot have concurrent creation/deletion of memory block
- * devices, the device_hotplug_lock is not needed.
+ * 为内存设备初始化 sysfs 支持
+ * 在调用这个函数的时候，不会有内存块设备的并发创建或删除，因此不需要使用 device_hotplug_lock 锁。
  */
 void __init memory_dev_init(void)
 {
@@ -827,8 +826,9 @@ void __init memory_dev_init(void)
 		panic("%s() failed to register subsystem: %d\n", __func__, ret);
 
 	/*
-	 * Create entries for memory sections that were found
-	 * during boot and have been initialized
+	 * 为在引导期间发现并已初始化的内存区段创建条目
+	 * 为支持内存热插拔将物理内存划分为多个“内存块（memory block）”设备，并将它们注册到 sysfs 目录下
+	 * /sys/devices/system/memory/
 	 */
 	for (nr = 0; nr <= __highest_present_section_nr;
 	     nr += sections_per_block) {
