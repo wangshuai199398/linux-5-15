@@ -856,7 +856,7 @@ early_param("debugfs", debugfs_kernel);
 static int __init debugfs_init(void)
 {
 	int retval;
-
+	pr_info("%s %d: \n", __func__, __LINE__);
 	if (!(debugfs_allow & DEBUGFS_ALLOW_MOUNT))
 		return -EPERM;
 

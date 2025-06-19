@@ -137,7 +137,7 @@
                 "CONFIG_KEXEC",
                 "CONFIG_MEMORY_HOTPLUG_SPARSE",
                 "CONFIG_SPARSEMEM_EXTREME",
-                "",
+                "CONFIG_ACPI_SLEEP",
                 "",
                 "",
                 "",

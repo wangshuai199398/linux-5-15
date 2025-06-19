@@ -665,7 +665,7 @@ static struct genl_family vdpa_nl_family __ro_after_init = {
 static int vdpa_init(void)
 {
 	int err;
-
+	pr_info("%s %d: \n", __func__, __LINE__);
 	err = bus_register(&vdpa_bus);
 	if (err)
 		return err;

@@ -5739,7 +5739,7 @@ static struct device_attribute wq_sysfs_cpumask_attr =
 static int __init wq_sysfs_init(void)
 {
 	int err;
-
+	pr_info("%s %d: \n", __func__, __LINE__);
 	err = subsys_virtual_register(&wq_subsys, NULL);
 	if (err)
 		return err;

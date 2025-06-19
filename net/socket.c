@@ -3160,6 +3160,7 @@ bool sock_is_registered(int family)
 static int __init sock_init(void)
 {
 	int err;
+	pr_info("%s %d: \n", __func__, __LINE__);
 	/*
 	 *      Initialize the network sysctl infrastructure.
 	 */
