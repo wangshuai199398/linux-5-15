@@ -3311,7 +3311,7 @@ int device_add(struct device *dev)
 		goto name_error;
 	}
 
-	pr_info("%s: device: '%s' \n", dev_name(dev), __func__);
+	pr_info("%s: device: '%s' init_name %s\n", __func__, dev_name(dev), dev->init_name);
 
 	parent = get_device(dev->parent);
 	kobj = get_device_parent(dev, parent);
