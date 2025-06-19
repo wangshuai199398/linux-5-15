@@ -5794,7 +5794,7 @@ int workqueue_sysfs_register(struct workqueue_struct *wq)
 	 * everything is ready.
 	 */
 	dev_set_uevent_suppress(&wq_dev->dev, true);
-	pr_info("%s %d: -> device_register wq->name %s\n", __func__, __LILNE__, wq->name);
+	pr_info("%s %d: -> device_register wq->name %s\n", __func__, __LINE__, wq->name);
 	ret = device_register(&wq_dev->dev);
 	if (ret) {
 		put_device(&wq_dev->dev);
