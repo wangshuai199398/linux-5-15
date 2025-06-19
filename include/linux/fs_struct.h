@@ -12,6 +12,7 @@ struct fs_struct {
 	seqcount_spinlock_t seq;
 	int umask;
 	int in_exec;
+	//root：根目录inode pwd：当前目录inode
 	struct path root, pwd;
 } __randomize_layout;
 

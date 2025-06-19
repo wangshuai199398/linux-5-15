@@ -152,16 +152,15 @@ static bool cpuhp_step_empty(bool bringup, struct cpuhp_step *step)
 }
 
 /**
- * cpuhp_invoke_callback - Invoke the callbacks for a given state
- * @cpu:	The cpu for which the callback should be invoked
- * @state:	The state to do callbacks for
- * @bringup:	True if the bringup callback should be invoked
- * @node:	For multi-instance, do a single entry callback for install/remove
- * @lastp:	For multi-instance rollback, remember how far we got
+ * 调用指定状态的回调函数
+ * @cpu:	要为其调用回调的目标 CPU
+ * @state:	需要处理回调的状态编号
+ * @bringup:	如果为 true，表示是上线（bringup）方向的回调
+ * @node:	用于多实例的情况，对 install/remove 做一次性回调
+ * @lastp:	用于多实例回滚，记录已经执行到的位置
  *
- * Called from cpu hotplug and from the state register machinery.
+ * 此函数由 CPU 热插拔流程或状态注册机制调用
  *
- * Return: %0 on success or a negative errno code
  */
 static int cpuhp_invoke_callback(unsigned int cpu, enum cpuhp_state state,
 				 bool bringup, struct hlist_node *node,
@@ -1393,9 +1392,7 @@ static int _cpu_up(unsigned int cpu, int tasks_frozen, enum cpuhp_state target)
 	}
 
 	/*
-	 * Try to reach the target state. We max out on the BP at
-	 * CPUHP_BRINGUP_CPU. After that the AP hotplug thread is
-	 * responsible for bringing it up to the target state.
+	 * 尝试将 CPU 迁移到目标状态。在引导处理器（BP）上最多只处理到CPUHP_BRINGUP_CPU 状态。之后，应用处理器（AP）上的热插拔线程将负责继续将其推进到目标状态。
 	 */
 	target = min((int)target, CPUHP_BRINGUP_CPU);
 	ret = cpuhp_up_callbacks(cpu, st, target);

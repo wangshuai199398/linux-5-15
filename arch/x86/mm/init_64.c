@@ -1507,7 +1507,7 @@ static unsigned long probe_memory_block_size(void)
 			break;
 	}
 done:
-	pr_info("x86/mm: Memory block size: %ldMB\n", bz >> 20);
+	pr_info("x86/mm: Memory block size: %ldMB\n", bz >> 20);//Memory block size: 128MB
 
 	return bz;
 }

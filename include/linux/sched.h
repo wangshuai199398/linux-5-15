@@ -722,6 +722,7 @@ struct task_struct {
 	 */
 	struct thread_info		thread_info;
 #endif
+	//进程、线程状态
 	unsigned int			__state;
 
 #ifdef CONFIG_PREEMPT_RT
@@ -763,10 +764,13 @@ struct task_struct {
 	int				wake_cpu;
 #endif
 	int				on_rq;
-
+	//进程调度动态优先级
 	int				prio;
+	//静态优先级 可以通过nice命令修改 范围：100-139
 	int				static_prio;
+	//值取决于静态优先级和调度策略
 	int				normal_prio;
+	//实时优先级 0-99
 	unsigned int			rt_priority;
 
 	const struct sched_class	*sched_class;
@@ -849,7 +853,7 @@ struct task_struct {
 	struct plist_node		pushable_tasks;
 	struct rb_node			pushable_dl_tasks;
 #endif
-
+	//进程地址空间
 	struct mm_struct		*mm;
 	struct mm_struct		*active_mm;
 
@@ -935,8 +939,9 @@ struct task_struct {
 	unsigned long			atomic_flags; /* Flags requiring atomic access. */
 
 	struct restart_block		restart_block;
-
+	//线程id
 	pid_t				pid;
+	//进程id，不同的线程这个值是一样的
 	pid_t				tgid;
 
 #ifdef CONFIG_STACKPROTECTOR
@@ -956,7 +961,7 @@ struct task_struct {
 	struct task_struct __rcu	*parent;
 
 	/*
-	 * Children/sibling form the list of natural children:
+	 * 子进程/兄弟进程 form the list of natural children:
 	 */
 	struct list_head		children;
 	struct list_head		sibling;
@@ -1059,17 +1064,17 @@ struct task_struct {
 	unsigned long			last_switch_count;
 	unsigned long			last_switch_time;
 #endif
-	/* Filesystem information: */
+	//进程文件系统信息（当前目录等）
 	struct fs_struct		*fs;
 
-	/* Open file information: */
+	//进程打开的文件信息
 	struct files_struct		*files;
 
 #ifdef CONFIG_IO_URING
 	struct io_uring_task		*io_uring;
 #endif
 
-	/* Namespaces: */
+	/* 命名空间 */
 	struct nsproxy			*nsproxy;
 
 	/* Signal handlers: */

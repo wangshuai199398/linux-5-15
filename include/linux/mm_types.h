@@ -500,8 +500,9 @@ struct mm_struct {
 		seqcount_t write_protect_seq;
 
 		spinlock_t arg_lock; /* protect the below fields */
-
+		//代码段的开始与结尾、数据段的区域
 		unsigned long start_code, end_code, start_data, end_data;
+		//start_brk到brk中间是堆内存的位置，start_stack是用户态栈的起始位置
 		unsigned long start_brk, brk, start_stack;
 		unsigned long arg_start, arg_end, env_start, env_end;
 

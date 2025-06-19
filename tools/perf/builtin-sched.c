@@ -95,6 +95,7 @@ struct sched_atom {
 
 /* task state bitmask, copied from include/linux/sched.h */
 #define TASK_RUNNING		0
+//阻塞状态
 #define TASK_INTERRUPTIBLE	1
 #define TASK_UNINTERRUPTIBLE	2
 #define __TASK_STOPPED		4
