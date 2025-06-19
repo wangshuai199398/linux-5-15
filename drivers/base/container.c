@@ -34,7 +34,7 @@ struct bus_type container_subsys = {
 void __init container_dev_init(void)
 {
 	int ret;
-
+	pr_info("%s %d: -> subsys_system_register container_subsys\n", __func__, __LINE__);
 	ret = subsys_system_register(&container_subsys, NULL);
 	if (ret)
 		pr_err("%s() failed: %d\n", __func__, ret);
