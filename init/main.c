@@ -1347,7 +1347,7 @@ static void __init do_initcall_level(int level, char *command_line)
 		do_one_initcall(initcall_from_entry(fn));
 }
 //执行由宏如 core_initcall()、device_initcall() 等注册的初始化函数
-/* early_initcall     .initcall0.init
+/* early_initcall     .initcallearly.init
    pure_initcall      .initcall0.init
    core_initcall      .initcall1.init
    postcore_initcall  .initcall2.init
@@ -1366,7 +1366,7 @@ static void __init do_initcalls(void)
 	command_line = kzalloc(len, GFP_KERNEL);
 	if (!command_line)
 		panic("%s: Failed to allocate %zu bytes\n", __func__, len);
-	//0~3 在 do_pre_smp_initcalls() 中已经执行过，这里实际生效的是调用 4~7
+	//0 之前 在 do_pre_smp_initcalls() 中已经执行过，这里实际生效的是调用 0~7
 	for (level = 0; level < ARRAY_SIZE(initcall_levels) - 1; level++) {
 		/* 某些 initcall 可能会修改命令行，所以每轮都恢复成原始的 */
 		strcpy(command_line, saved_command_line);
@@ -1582,7 +1582,7 @@ static noinline void __init kernel_init_freeable(void)
 	//初始化 RCU 用于追踪和保护任务创建/退出
 	rcu_init_tasks_generic();
 	//执行所有早于 SMP 初始化的内核初始化函数
-	//调用早期 initcall 函数（等级 ≤ 3）
+	//调用早期 initcall 函数（等级 < 0）
 	do_pre_smp_initcalls();
 	//初始化“死锁/锁死检测”机制，如 NMI watchdog，用于侦测系统软/硬卡死
 	lockup_detector_init();
