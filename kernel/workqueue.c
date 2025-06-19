@@ -5756,17 +5756,14 @@ static void wq_device_release(struct device *dev)
 }
 
 /**
- * workqueue_sysfs_register - make a workqueue visible in sysfs
- * @wq: the workqueue to register
+ * 在 sysfs 中使一个工作队列可见
+ * @wq: 要注册的工作队列
  *
- * Expose @wq in sysfs under /sys/bus/workqueue/devices.
- * alloc_workqueue*() automatically calls this function if WQ_SYSFS is set
- * which is the preferred method.
+ * 将 @wq 暴露到 sysfs 中的路径 /sys/bus/workqueue/devices 下。
+ * 如果设置了 WQ_SYSFS 标志，alloc_workqueue*() 会自动调用此函数，这是推荐的使用方式。
  *
- * Workqueue user should use this function directly iff it wants to apply
- * workqueue_attrs before making the workqueue visible in sysfs; otherwise,
- * apply_workqueue_attrs() may race against userland updating the
- * attributes.
+ * 只有在希望在将工作队列暴露到 sysfs 之前就应用属性（workqueue_attrs）时，才应该直接调用此函数；
+ * 否则，在 apply_workqueue_attrs() 设置属性的过程中，可能会与用户空间对属性的更新产生竞争（race condition）。
  *
  * Return: 0 on success, -errno on failure.
  */
@@ -5797,7 +5794,7 @@ int workqueue_sysfs_register(struct workqueue_struct *wq)
 	 * everything is ready.
 	 */
 	dev_set_uevent_suppress(&wq_dev->dev, true);
-
+	pr_info("%s %d: -> device_register \n");
 	ret = device_register(&wq_dev->dev);
 	if (ret) {
 		put_device(&wq_dev->dev);

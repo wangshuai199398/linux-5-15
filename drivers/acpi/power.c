@@ -947,7 +947,7 @@ struct acpi_device *acpi_add_power_resource(acpi_handle handle)
 	resource->order = acpi_object.power_resource.resource_order;
 	resource->state = ACPI_POWER_RESOURCE_STATE_UNKNOWN;
 
-	pr_info("%s [%s]\n", acpi_device_name(device), acpi_device_bid(device));
+	pr_info("acpi_add_power_resource %s [%s]\n", acpi_device_name(device), acpi_device_bid(device));
 
 	device->flags.match_driver = true;
 	result = acpi_device_add(device, acpi_release_power_resource);

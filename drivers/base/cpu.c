@@ -646,6 +646,7 @@ static inline void cpu_register_vulnerabilities(void) { }
 
 void __init cpu_dev_init(void)
 {
+	pr_info("%s %d: -> subsys_system_register cpu_subsys\n", __func__, __LINE__);
 	if (subsys_system_register(&cpu_subsys, cpu_root_attr_groups))
 		panic("Failed to register CPU subsystem");
 

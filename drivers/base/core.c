@@ -3455,22 +3455,17 @@ name_error:
 EXPORT_SYMBOL_GPL(device_add);
 
 /**
- * device_register - register a device with the system.
- * @dev: pointer to the device structure
+ * 向系统注册一个设备
+ * @dev: 指向设备结构体的指针
  *
- * This happens in two clean steps - initialize the device
- * and add it to the system. The two steps can be called
- * separately, but this is the easiest and most common.
- * I.e. you should only call the two helpers separately if
- * have a clearly defined need to use and refcount the device
- * before it is added to the hierarchy.
+ * 这个过程分为两个清晰的步骤 —— 初始化设备 和 将其添加到系统中。
+ * 这两个步骤可以分开调用，但这是最简单、最常见的方式（即统一调用 device_register）
  *
- * For more information, see the kerneldoc for device_initialize()
- * and device_add().
- *
- * NOTE: _Never_ directly free @dev after calling this function, even
- * if it returned an error! Always use put_device() to give up the
- * reference initialized in this function instead.
+ * 换句话说，只有在你明确需要在设备被添加到系统层级之前就使用它并管理引用计数时，才应分别调用两个辅助函数（device_initialize 和 device_add）。
+ * 更多信息请参考 device_initialize() 和 device_add() 的内核文档。
+ * 
+ * 注意：调用这个函数之后，即使它返回了错误，也绝对不要直接释放 @dev！
+ * 应该始终使用 put_device() 来释放在该函数中初始化的引用计数。
  */
 int device_register(struct device *dev)
 {
