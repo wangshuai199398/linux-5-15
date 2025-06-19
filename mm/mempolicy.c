@@ -3022,7 +3022,7 @@ static int __init numa_init_sysfs(void)
 {
 	int err;
 	struct kobject *numa_kobj;
-
+	pr_info("%s %d: \n", __func__, __LINE__);
 	numa_kobj = kobject_create_and_add("numa", mm_kobj);
 	if (!numa_kobj) {
 		pr_err("failed to create numa kobject\n");

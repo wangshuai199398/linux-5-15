@@ -1581,7 +1581,8 @@ static noinline void __init kernel_init_freeable(void)
 	init_mm_internals();
 	//初始化 RCU 用于追踪和保护任务创建/退出
 	rcu_init_tasks_generic();
-	//执行所有早于 SMP 初始化的内核初始化函数，调用早期 initcall 函数（等级 ≤ 3）
+	//执行所有早于 SMP 初始化的内核初始化函数
+	//调用早期 initcall 函数（等级 ≤ 3）
 	do_pre_smp_initcalls();
 	//初始化“死锁/锁死检测”机制，如 NMI watchdog，用于侦测系统软/硬卡死
 	lockup_detector_init();

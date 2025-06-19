@@ -1709,7 +1709,7 @@ EXPORT_SYMBOL_GPL(bio_alloc_kiocb);
 static int __init init_bio(void)
 {
 	int i;
-
+	pr_info("%s %d: \n", __func__, __LINE__);
 	bio_integrity_init();
 
 	for (i = 0; i < ARRAY_SIZE(bvec_slabs); i++) {

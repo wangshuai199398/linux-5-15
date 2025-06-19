@@ -153,7 +153,7 @@ static int __init arch_register_cpu(int num)
 static int __init topology_init(void)
 {
 	int i;
-
+	pr_info("%s %d: \n", __func__, __LINE__);
 #ifdef CONFIG_NUMA
 	for_each_online_node(i)
 		register_one_node(i);

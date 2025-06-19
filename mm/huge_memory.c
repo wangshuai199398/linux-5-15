@@ -416,7 +416,7 @@ static int __init hugepage_init(void)
 	 * as list_head: assuming THP order >= 2
 	 */
 	MAYBE_BUILD_BUG_ON(HPAGE_PMD_ORDER < 2);
-
+	pr_info("%s %d: \n", __func__, __LINE__);
 	err = hugepage_init_sysfs(&hugepage_kobj);
 	if (err)
 		goto err_sysfs;

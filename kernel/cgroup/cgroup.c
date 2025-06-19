@@ -6876,6 +6876,7 @@ static const struct attribute_group cgroup_sysfs_attr_group = {
 
 static int __init cgroup_sysfs_init(void)
 {
+	pr_info("%s %d: \n", __func__, __LINE__);
 	return sysfs_create_group(kernel_kobj, &cgroup_sysfs_attr_group);
 }
 subsys_initcall(cgroup_sysfs_init);

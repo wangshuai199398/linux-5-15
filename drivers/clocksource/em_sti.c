@@ -355,6 +355,7 @@ static struct platform_driver em_sti_device_driver = {
 
 static int __init em_sti_init(void)
 {
+	pr_info("%s %d: \n", __func__, __LINE__);
 	return platform_driver_register(&em_sti_device_driver);
 }
 

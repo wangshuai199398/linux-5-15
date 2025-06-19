@@ -3919,6 +3919,7 @@ static __net_initdata struct pernet_operations proto_net_ops = {
 
 static int __init proto_init(void)
 {
+	pr_info("%s %d: \n", __func__, __LINE__);
 	return register_pernet_subsys(&proto_net_ops);
 }
 

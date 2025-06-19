@@ -262,7 +262,7 @@ static int __init misc_init(void)
 {
 	int err;
 	struct proc_dir_entry *ret;
-
+	pr_info("%s %d: \n", __func__, __LINE__);
 	ret = proc_create_seq("misc", 0, NULL, &misc_seq_ops);
 	misc_class = class_create(THIS_MODULE, "misc");
 	err = PTR_ERR(misc_class);

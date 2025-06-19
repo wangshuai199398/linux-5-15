@@ -57,6 +57,7 @@ EXPORT_SYMBOL_GPL(pcibios_scan_specific_bus);
 
 static int __init pci_subsys_init(void)
 {
+	pr_info("%s %d: \n", __func__, __LINE__);
 	/*
 	 * The init function returns an non zero value when
 	 * pci_legacy_init should be invoked.

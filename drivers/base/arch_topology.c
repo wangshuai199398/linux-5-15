@@ -186,7 +186,7 @@ static int register_cpu_capacity_sysctl(void)
 {
 	int i;
 	struct device *cpu;
-
+	pr_info("%s %d: \n", __func__, __LINE__);
 	for_each_possible_cpu(i) {
 		cpu = get_cpu_device(i);
 		if (!cpu) {

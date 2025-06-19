@@ -11557,7 +11557,7 @@ static struct pernet_operations devlink_pernet_ops __net_initdata = {
 static int __init devlink_init(void)
 {
 	int err;
-
+	pr_info("%s %d: \n", __func__, __LINE__);
 	err = genl_register_family(&devlink_nl_family);
 	if (err)
 		goto out;

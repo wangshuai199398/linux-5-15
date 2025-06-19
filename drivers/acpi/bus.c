@@ -1331,7 +1331,7 @@ EXPORT_SYMBOL_GPL(acpi_kobj);
 static int __init acpi_init(void)
 {
 	int result;
-
+	pr_info("%s %d: \n", __func__, __LINE__);
 	if (acpi_disabled) {
 		pr_info("Interpreter disabled.\n");
 		return -ENODEV;
