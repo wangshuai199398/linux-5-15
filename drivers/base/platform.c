@@ -1492,7 +1492,7 @@ int __init platform_bus_init(void)
 	int error;
 
 	early_platform_cleanup();
-
+	pr_info("%s %d: -> device_register\n", __func__, __LINE__);
 	error = device_register(&platform_bus);
 	if (error) {
 		put_device(&platform_bus);
