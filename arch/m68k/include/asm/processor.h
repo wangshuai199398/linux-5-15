@@ -131,7 +131,7 @@ struct thread_struct {
 #endif
 
 /*
- * Do necessary setup to start up a newly executed thread.
+ * 为新启动的executed thread进行必要的设置.
  */
 static inline void start_thread(struct pt_regs * regs, unsigned long pc,
 				unsigned long usp)

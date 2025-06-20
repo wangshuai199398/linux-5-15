@@ -304,7 +304,7 @@ struct files_struct *dup_fd(struct files_struct *oldf, struct fd_range *punch_ho
 	unsigned int open_files, i;
 	struct fdtable *old_fdt, *new_fdt;
 	int error;
-
+	//为新files_struct申请内存
 	newf = kmem_cache_alloc(files_cachep, GFP_KERNEL);
 	if (!newf)
 		return ERR_PTR(-ENOMEM);
@@ -314,6 +314,7 @@ struct files_struct *dup_fd(struct files_struct *oldf, struct fd_range *punch_ho
 	spin_lock_init(&newf->file_lock);
 	newf->resize_in_progress = false;
 	init_waitqueue_head(&newf->resize_wait);
+	//初始化和复制
 	newf->next_fd = 0;
 	new_fdt = &newf->fdtab;
 	new_fdt->max_fds = NR_OPEN_DEFAULT;

@@ -211,13 +211,10 @@ do {									\
 })
 
 /*
- * this_cpu_read() makes gcc load the percpu variable every time it is
- * accessed while this_cpu_read_stable() allows the value to be cached.
- * this_cpu_read_stable() is more efficient and can be used if its value
- * is guaranteed to be valid across cpus.  The current users include
- * get_current() and get_thread_info() both of which are actually
- * per-thread variables implemented as per-cpu variables and thus
- * stable for the duration of the respective task.
+ * this_cpu_read() 会让 GCC 在每次访问时重新加载 per-cpu 变量，而 this_cpu_read_stable() 允许将该值缓存起来。
+ * 如果这个值在多个 CPU 上都被保证是有效的，那么可以使用 this_cpu_read_stable()，它效率更高。
+ * 当前的使用者包括 get_current() 和 get_thread_info()，这两个函数实际上是以每线程变量的形式实现的 per-cpu 变量，
+ * 因此在对应任务执行期间，它们的值是稳定的。
  */
 #define this_cpu_read_stable_1(pcp)	percpu_stable_op(1, "mov", pcp)
 #define this_cpu_read_stable_2(pcp)	percpu_stable_op(2, "mov", pcp)

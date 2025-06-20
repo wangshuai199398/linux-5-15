@@ -79,20 +79,25 @@ struct task_group;
  * mistake.
  */
 
-/* Used in tsk->state: */
+/* 就绪、可中断的睡眠状态、不可中断的睡眠状态、 */
 #define TASK_RUNNING			0x0000
 #define TASK_INTERRUPTIBLE		0x0001
-#define TASK_UNINTERRUPTIBLE		0x0002
+#define TASK_UNINTERRUPTIBLE	0x0002
+//接收到 SIGSTOP、SIGTTIN、SIGTSTP 或者 SIGTTOU 信号之后进入该状态
 #define __TASK_STOPPED			0x0004
+//表示进程被 debugger 等进程监视，进程执行被调试程序所停止。当一个进程被另外的进程所监视，每一个信号都会让进程进入该状态
 #define __TASK_TRACED			0x0008
 /* Used in tsk->exit_state: */
 #define EXIT_DEAD			0x0010
+//一旦一个进程要结束，先进入的状态，但是这个时候它的父进程还没有使用 wait 等系统调用来获知它的终止信息，此时进程就成了僵尸进程
 #define EXIT_ZOMBIE			0x0020
 #define EXIT_TRACE			(EXIT_ZOMBIE | EXIT_DEAD)
 /* Used in tsk->state again: */
 #define TASK_PARKED			0x0040
+//进程的最终状态
 #define TASK_DEAD			0x0080
-#define TASK_WAKEKILL			0x0100
+//接收到致命信号时唤醒进程
+#define TASK_WAKEKILL		0x0100
 #define TASK_WAKING			0x0200
 #define TASK_NOLOAD			0x0400
 #define TASK_NEW			0x0800
@@ -101,6 +106,7 @@ struct task_group;
 #define TASK_STATE_MAX			0x2000
 
 /* Convenience macros for the sake of set_current_state: */
+//可以终止的新睡眠状态
 #define TASK_KILLABLE			(TASK_WAKEKILL | TASK_UNINTERRUPTIBLE)
 #define TASK_STOPPED			(TASK_WAKEKILL | __TASK_STOPPED)
 #define TASK_TRACED			(TASK_WAKEKILL | __TASK_TRACED)
@@ -716,10 +722,7 @@ struct kmap_ctrl {
 
 struct task_struct {
 #ifdef CONFIG_THREAD_INFO_IN_TASK
-	/*
-	 * For reasons of header soup (see current_thread_info()), this
-	 * must be the first element of task_struct.
-	 */
+	/* 由于头文件混乱的问题（参见 current_thread_info()），这个成员必须是 task_struct 的第一个元素 */
 	struct thread_info		thread_info;
 #endif
 	//进程、线程状态
@@ -730,15 +733,12 @@ struct task_struct {
 	unsigned int			saved_state;
 #endif
 
-	/*
-	 * This begins the randomizable portion of task_struct. Only
-	 * scheduling-critical items should be added above here.
-	 */
+	/* 这标志着 task_struct 中可随机化字段的开始。只有调度关键的字段应该被添加在此之前，这个后边的可以随机化*/
 	randomized_struct_fields_start
-
+	//内核栈 16K
 	void				*stack;
 	refcount_t			usage;
-	/* Per task flags (PF_*), defined further below: */
+	/* 每个任务的标志（PF_*），在下文中有进一步定义 */
 	unsigned int			flags;
 	unsigned int			ptrace;
 
@@ -753,16 +753,13 @@ struct task_struct {
 	unsigned long			wakee_flip_decay_ts;
 	struct task_struct		*last_wakee;
 
-	/*
-	 * recent_used_cpu is initially set as the last CPU used by a task
-	 * that wakes affine another task. Waker/wakee relationships can
-	 * push tasks around a CPU where each wakeup moves to the next one.
-	 * Tracking a recently used CPU allows a quick search for a recently
-	 * used CPU that may be idle.
-	 */
+	/* recent_used_cpu is initially set as the last CPU used by a task that wakes affine another task. 
+	 * Waker/wakee 的关系，可能会导致任务在多个 CPU 之间来回迁移，每次唤醒都迁移到下一个 CPU
+	 * 通过追踪最近使用的 CPU，可以快速查找一个可能处于空闲状态的最近使用过的 CPU */
 	int				recent_used_cpu;
 	int				wake_cpu;
 #endif
+	//是否在运行队列上
 	int				on_rq;
 	//进程调度动态优先级
 	int				prio;
@@ -772,8 +769,9 @@ struct task_struct {
 	int				normal_prio;
 	//实时优先级 0-99
 	unsigned int			rt_priority;
-
+	//调度器类
 	const struct sched_class	*sched_class;
+	//调度实体
 	struct sched_entity		se;
 	struct sched_rt_entity		rt;
 	struct sched_dl_entity		dl;
@@ -789,15 +787,9 @@ struct task_struct {
 #endif
 
 #ifdef CONFIG_UCLAMP_TASK
-	/*
-	 * Clamp values requested for a scheduling entity.
-	 * Must be updated with task_rq_lock() held.
-	 */
+	/* 为调度实体请求的限制值（Clamp values）。必须在持有 task_rq_lock() 锁的情况下进行更新 */
 	struct uclamp_se		uclamp_req[UCLAMP_CNT];
-	/*
-	 * Effective clamp values used for a scheduling entity.
-	 * Must be updated with task_rq_lock() held.
-	 */
+	/* 用于调度实体的实际（生效）限制值。必须在持有 task_rq_lock() 锁的情况下进行更新 */
 	struct uclamp_se		uclamp[UCLAMP_CNT];
 #endif
 
@@ -811,8 +803,9 @@ struct task_struct {
 #ifdef CONFIG_BLK_DEV_IO_TRACE
 	unsigned int			btrace_seq;
 #endif
-
+	//调度策略
 	unsigned int			policy;
+	//可以使用哪些CPU
 	int				nr_cpus_allowed;
 	const cpumask_t			*cpus_ptr;
 	cpumask_t			*user_cpus_ptr;
@@ -847,7 +840,7 @@ struct task_struct {
 #endif /* #ifdef CONFIG_TASKS_TRACE_RCU */
 
 	struct sched_info		sched_info;
-
+	//任务列表
 	struct list_head		tasks;
 #ifdef CONFIG_SMP
 	struct plist_node		pushable_tasks;
@@ -885,11 +878,12 @@ struct task_struct {
 	/* Force alignment to the next boundary: */
 	unsigned			:0;
 
-	/* Unserialized, strictly 'current' */
+	/* 未序列化，仅适用于 current（当前运行的任务） */
 
 	/*
-	 * This field must not be in the scheduler word above due to wakelist
-	 * queueing no longer being serialized by p->on_cpu. However:
+	 * 这个字段不能放在上面的调度器字段（scheduler word）中，
+	 * 因为唤醒队列（wakelist）的排队操作已经不再通过 p->on_cpu 进行序列化。
+	 * 然而，下面这种情况：
 	 *
 	 * p->XXX = X;			ttwu()
 	 * schedule()			  if (p->on_rq && ..) // false
@@ -897,8 +891,9 @@ struct task_struct {
 	 *   deactivate_task()		      ttwu_queue_wakelist())
 	 *     p->on_rq = 0;			p->sched_remote_wakeup = Y;
 	 *
-	 * guarantees all stores of 'current' are visible before
-	 * ->sched_remote_wakeup gets used, so it can be in this word.
+	 * 这样的执行顺序可以保证：
+	 * 所有对当前任务 (`current`) 的写入操作，在 sched_remote_wakeup 被使用前都是可见的，
+	 * 因此 sched_remote_wakeup 字段可以被安全地放在这个 word（字）中。
 	 */
 	unsigned			sched_remote_wakeup:1;
 
@@ -948,30 +943,24 @@ struct task_struct {
 	/* Canary value for the -fstack-protector GCC feature: */
 	unsigned long			stack_canary;
 #endif
-	/*
-	 * Pointers to the (original) parent process, youngest child, younger sibling,
-	 * older sibling, respectively.  (p->father can be replaced with
-	 * p->real_parent->pid)
-	 */
-
-	/* Real parent process: */
+	/* 一般情况下与parent相同，例外：如果在 bash 上使用 GDB 来 debug 一个进程，这个时候 GDB 是 parent，bash 是这个进程的 real_parent */
 	struct task_struct __rcu	*real_parent;
 
-	/* Recipient of SIGCHLD, wait4() reports: */
+	//parent 指向其父进程。当它终止时，必须向它的父进程发送信号，接收 SIGCHLD 信号的对象，wait4() 报告的目标
 	struct task_struct __rcu	*parent;
 
-	/*
-	 * 子进程/兄弟进程 form the list of natural children:
-	 */
+	/* 链表的头部。链表中的所有元素都是它的子进程 */
 	struct list_head		children;
+	//把当前进程插入到兄弟链表中
 	struct list_head		sibling;
+	//进程的主线程
 	struct task_struct		*group_leader;
 
 	/*
-	 * 'ptraced' is the list of tasks this task is using ptrace() on.
+	 * ptraced 是该任务正在通过 ptrace() 监视的任务列表
 	 *
-	 * This includes both natural children and PTRACE_ATTACH targets.
-	 * 'ptrace_entry' is this task's link on the p->parent->ptraced list.
+	 * 这个列表包括它的自然子进程和通过 PTRACE_ATTACH 附加的目标。
+	 * ptrace_entry 是该任务在 p->parent->ptraced 列表中的链表节点。
 	 */
 	struct list_head		ptraced;
 	struct list_head		ptrace_entry;
@@ -992,8 +981,9 @@ struct task_struct {
 
 	/* PF_IO_WORKER */
 	void				*pf_io_worker;
-
+	//用户态消耗的CPU时间
 	u64				utime;
+	//内核态消耗的CPU时间
 	u64				stime;
 #ifdef CONFIG_ARCH_HAS_SCALED_CPUTIME
 	u64				utimescaled;
@@ -1008,11 +998,12 @@ struct task_struct {
 #ifdef CONFIG_NO_HZ_FULL
 	atomic_t			tick_dep_mask;
 #endif
-	/* Context switch counts: */
+	/* 自愿(voluntary)上下文切换计数 */
 	unsigned long			nvcsw;
+	//非自愿(involuntary)上下文切换计数
 	unsigned long			nivcsw;
 
-	/* Monotonic time in nsecs: */
+	/* 进程启动时间，不包含睡眠时间 */
 	u64				start_time;
 
 	/* Boot based time in nsecs: */
@@ -1033,11 +1024,11 @@ struct task_struct {
 
 	/* Tracer's credentials at attach: */
 	const struct cred __rcu		*ptracer_cred;
-
-	/* Objective and real subjective task credentials (COW): */
+	//subjective：我能操作谁 Objective：我被谁操作
+	/* 权限：谁能操作我这个进程*/
 	const struct cred __rcu		*real_cred;
 
-	/* Effective (overridable) subjective task credentials (COW): */
+	/* 我这个进程能够操作谁 */
 	const struct cred __rcu		*cred;
 
 #ifdef CONFIG_KEYS
@@ -1079,12 +1070,16 @@ struct task_struct {
 
 	/* Signal handlers: */
 	struct signal_struct		*signal;
+	//正在通过信号处理函数进行处理的信号
 	struct sighand_struct __rcu		*sighand;
+	//被阻塞、暂不处理的信号
 	sigset_t			blocked;
 	sigset_t			real_blocked;
 	/* Restored if set_restore_sigmask() was used: */
 	sigset_t			saved_sigmask;
+	//尚等待处理的信号，本任务的
 	struct sigpending		pending;
+	//信号处理函数默认使用用户态的函数栈，也可以通过sas这三个变量开辟新的栈专门用于信号处理
 	unsigned long			sas_ss_sp;
 	size_t				sas_ss_size;
 	unsigned int			sas_ss_flags;
@@ -1248,38 +1243,27 @@ struct task_struct {
 	struct callback_head		numa_work;
 
 	/*
-	 * This pointer is only modified for current in syscall and
-	 * pagefault context (and for tasks being destroyed), so it can be read
-	 * from any of the following contexts:
-	 *  - RCU read-side critical section
-	 *  - current->numa_group from everywhere
-	 *  - task's runqueue locked, task not running
+	 * 这个指针只会在系统调用（syscall）和缺页异常（pagefault）上下文中对当前任务（current）进行修改（以及任务被销毁时）。
+	 * 因此，它可以在以下上下文中安全读取:
+	 *  - RCU 读侧临界区内
+	 *  - 从任意位置读取 current->numa_group
+	 *  - 当任务所在的运行队列已加锁，且该任务未处于运行状态时
 	 */
 	struct numa_group __rcu		*numa_group;
 
-	/*
-	 * numa_faults is an array split into four regions:
-	 * faults_memory, faults_cpu, faults_memory_buffer, faults_cpu_buffer
-	 * in this precise order.
+	/* numa_faults 是一个数组，被划分为四个区域：
+	 * faults_memory、faults_cpu、faults_memory_buffer、faults_cpu_buffer，按这个确切顺序排列。
 	 *
-	 * faults_memory: Exponential decaying average of faults on a per-node
-	 * basis. Scheduling placement decisions are made based on these
-	 * counts. The values remain static for the duration of a PTE scan.
-	 * faults_cpu: Track the nodes the process was running on when a NUMA
-	 * hinting fault was incurred.
-	 * faults_memory_buffer and faults_cpu_buffer: Record faults per node
-	 * during the current scan window. When the scan completes, the counts
-	 * in faults_memory and faults_cpu decay and these values are copied.
+	 * faults_memory：按节点（NUMA 节点）记录缺页次数的指数衰减平均值。调度器在进行任务放置决策时会根据这些计数。注意，在一次 PTE 扫描期间，这些值是保持不变的
+	 * faults_cpu：记录发生 NUMA 提示型缺页错误（hinting fault）时，进程运行所在的节点。
+	 * faults_memory_buffer 和 faults_cpu_buffer：在当前扫描窗口期间按节点记录缺页错误。扫描结束时，
+	 * faults_memory 和 faults_cpu 中的计数会进行衰减更新，并从这两个 buffer 中复制新的计数值。
 	 */
 	unsigned long			*numa_faults;
 	unsigned long			total_numa_faults;
 
-	/*
-	 * numa_faults_locality tracks if faults recorded during the last
-	 * scan window were remote/local or failed to migrate. The task scan
-	 * period is adapted based on the locality of the faults with different
-	 * weights depending on whether they were shared or private faults
-	 */
+	/* numa_faults_locality 用于追踪在上一个扫描窗口期间记录的缺页是否是本地访问（local）、远程访问（remote），或者迁移失败的。
+	 * 任务的扫描周期会根据这些缺页的本地性进行调整，并根据缺页是共享的还是私有的，赋予不同的权重 */
 	unsigned long			numa_faults_locality[3];
 
 	unsigned long			numa_pages_migrated;
@@ -1288,10 +1272,7 @@ struct task_struct {
 #ifdef CONFIG_RSEQ
 	struct rseq __user *rseq;
 	u32 rseq_sig;
-	/*
-	 * RmW on rseq_event_mask must be performed atomically
-	 * with respect to preemption.
-	 */
+	/* 对 rseq_event_mask 的读-改-写（RmW）操作必须在禁止抢占的情况下以原子方式执行 */
 	unsigned long rseq_event_mask;
 #endif
 
@@ -1315,10 +1296,7 @@ struct task_struct {
 	int				make_it_fail;
 	unsigned int			fail_nth;
 #endif
-	/*
-	 * When (nr_dirtied >= nr_dirtied_pause), it's time to call
-	 * balance_dirty_pages() for a dirty throttling pause:
-	 */
+	/* 当 nr_dirtied >= nr_dirtied_pause 时，说明是时候调用 balance_dirty_pages() 进行一次“脏页限速暂停”了 */
 	int				nr_dirtied;
 	int				nr_dirtied_pause;
 	/* Start of a write-and-pause period: */
@@ -1328,10 +1306,7 @@ struct task_struct {
 	int				latency_record_count;
 	struct latency_record		latency_record[LT_SAVECOUNT];
 #endif
-	/*
-	 * Time slack values; these are used to round up poll() and
-	 * select() etc timeout values. These are in nanoseconds.
-	 */
+	/* 时间松弛值（time slack values）；用于对 poll()、select() 等函数的超时时间进行向上取整。单位是纳秒（nanoseconds）*/
 	u64				timer_slack_ns;
 	u64				default_timer_slack_ns;
 
@@ -1361,10 +1336,7 @@ struct task_struct {
 	/* Timestamp for last schedule: */
 	unsigned long long		ftrace_timestamp;
 
-	/*
-	 * Number of functions that haven't been traced
-	 * because of depth overrun:
-	 */
+	/* 由于调用深度超限而未被追踪的函数数量 */
 	atomic_t			trace_overrun;
 
 	/* Pause tracing: */
@@ -1481,30 +1453,18 @@ struct task_struct {
 #endif
 
 #ifdef CONFIG_ARCH_HAS_PARANOID_L1D_FLUSH
-	/*
-	 * If L1D flush is supported on mm context switch
-	 * then we use this callback head to queue kill work
-	 * to kill tasks that are not running on SMT disabled
-	 * cores
-	 */
+	/* 如果在 mm 上下文切换时支持 L1D（一级数据缓存）刷新，那么我们使用这个回调队列（callback_head）
+	 * 来排队销毁任务的工作，以终止那些没有运行在已禁用 SMT（超线程）核心上的任务 */
 	struct callback_head		l1d_flush_kill;
 #endif
 
-	/*
-	 * New fields for task_struct should be added above here, so that
-	 * they are included in the randomized portion of task_struct.
-	 */
+	/* task_struct 的新字段应该添加在此处之上，以便它们被包含在 task_struct 的随机化部分中 */
 	randomized_struct_fields_end
 
 	/* CPU-specific state of this task: */
 	struct thread_struct		thread;
 
-	/*
-	 * WARNING: on x86, 'thread_struct' contains a variable-sized
-	 * structure.  It *MUST* be at the end of 'task_struct'.
-	 *
-	 * Do not put anything below here!
-	 */
+	/* 警告：在 x86 架构上，thread_struct 包含一个可变大小的结构体。它必须放在 task_struct 的末尾 */
 };
 
 static inline struct pid *task_pid(struct task_struct *task)
@@ -1672,12 +1632,12 @@ extern struct pid *cad_pid;
 /*
  * Per process flags
  */
-#define PF_VCPU			0x00000001	/* I'm a virtual CPU */
+#define PF_VCPU			0x00000001	/* 进程运行在虚拟 CPU 上 */
 #define PF_IDLE			0x00000002	/* I am an IDLE thread */
-#define PF_EXITING		0x00000004	/* Getting shut down */
+#define PF_EXITING		0x00000004	/* 正在退出，find_alive_thread 中会跳过这个状态的进程 */
 #define PF_IO_WORKER		0x00000010	/* Task is an IO worker */
 #define PF_WQ_WORKER		0x00000020	/* I'm a workqueue worker */
-#define PF_FORKNOEXEC		0x00000040	/* Forked but didn't exec */
+#define PF_FORKNOEXEC		0x00000040	/* fork 完了，还没有 exec，copy_process中设置为这个，exec->load_elf_binary的时候去掉 */
 #define PF_MCE_PROCESS		0x00000080      /* Process policy on mce errors */
 #define PF_SUPERPRIV		0x00000100	/* Used super-user privileges */
 #define PF_DUMPCORE		0x00000200	/* Dumped core */
@@ -1879,7 +1839,7 @@ extern struct task_struct *curr_task(int cpu);
 extern void ia64_set_curr_task(int cpu, struct task_struct *p);
 
 void yield(void);
-
+//将 thread_info 和 stack 放在一起
 union thread_union {
 #ifndef CONFIG_ARCH_TASK_STRUCT_ON_STACK
 	struct task_struct task;

@@ -3,7 +3,10 @@
         {
             "name": "Linux-x86_64",
             "includePath": [
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/include",
+                "${workspaceFolder}/arch/x86/include",
+                "${workspaceFolder}/arch/x86/include/uapi",
+                "${workspaceFolder}/include/uapi"
             ],
             "defines": [
                 "__KERNEL__",
@@ -139,12 +142,12 @@
                 "CONFIG_SPARSEMEM_EXTREME",
                 "CONFIG_ACPI_SLEEP",
                 "CONFIG_DEBUG_FS",
-                "",
-                "",
-                "",
-                "",
-                "",
-                "",
+                "CONFIG_KERNFS",
+                "CONFIG_TMPFS",
+                "CONFIG_IA32_EMULATION",
+                "CONFIG_DETECT_HUNG_TASK",
+                "CONFIG_VMAP_STACK",
+                "CONFIG_FRAME_POINTER",
                 "",
                 "",
                 "",

@@ -123,7 +123,7 @@ struct cred {
 	kgid_t		sgid;		/* saved GID of the task */
 	kuid_t		euid;		/* effective UID of the task */
 	kgid_t		egid;		/* effective GID of the task */
-	kuid_t		fsuid;		/* UID for VFS ops */
+	kuid_t		fsuid;		/* 对文件操作会审核的权限 */
 	kgid_t		fsgid;		/* GID for VFS ops */
 	unsigned	securebits;	/* SUID-less security management */
 	kernel_cap_t	cap_inheritable; /* caps our children can inherit */

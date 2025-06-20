@@ -696,8 +696,7 @@ noinline void __ref rest_init(void)
 	int pid;
 
 	rcu_scheduler_starting();
-	/*
-	 * 我们需要先启动 init 进程，以便它获得 PID 1，然而，init 任务最终会尝试创建内核线程（kthreads），
+	/* 创建 init 进程，1号进程
 	 * 如果我们在创建 kthreadd 之前调度执行 init，将会导致内核崩溃（OOPS）
 	 */
 	pid = kernel_thread(kernel_init, NULL, CLONE_FS);
@@ -1414,6 +1413,7 @@ static int run_init_process(const char *init_filename)
 	pr_debug("  with environment:\n");
 	for (p = envp_init; *p; p++)
 		pr_debug("    %s\n", *p);
+	//运行 ramdisk 的 init
 	return kernel_execve(init_filename, argv_init, envp_init);
 }
 

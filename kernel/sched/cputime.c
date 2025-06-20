@@ -136,6 +136,7 @@ void account_user_time(struct task_struct *p, u64 cputime)
  * Account guest CPU time to a process.
  * @p: the process that the CPU time gets accounted to
  * @cputime: the CPU time spent in virtual machine since the last update
+ * 按照客户机的时间进行统计
  */
 void account_guest_time(struct task_struct *p, u64 cputime)
 {
@@ -181,6 +182,7 @@ void account_system_index_time(struct task_struct *p,
  * @p: the process that the CPU time gets accounted to
  * @hardirq_offset: the offset to subtract from hardirq_count()
  * @cputime: the CPU time spent in kernel space since the last update
+ * 统计进程的系统运行时间
  */
 void account_system_time(struct task_struct *p, int hardirq_offset, u64 cputime)
 {

@@ -176,14 +176,15 @@ struct pid *alloc_pid(struct pid_namespace *ns, pid_t *set_tid,
 	 */
 	if (set_tid_size > ns->level + 1)
 		return ERR_PTR(-EINVAL);
-
+	//申请pid内核对象
 	pid = kmem_cache_alloc(ns->pid_cachep, GFP_KERNEL);
 	if (!pid)
 		return ERR_PTR(retval);
 
 	tmp = ns;
 	pid->level = ns->level;
-
+	//进程可能归属多个命名空间，在每个命名空间都需要分配进程号
+	//实际调用idr_alloc来申请整数类型的进程号
 	for (i = ns->level; i >= 0; i--) {
 		int tid = 0;
 
@@ -209,6 +210,8 @@ struct pid *alloc_pid(struct pid_namespace *ns, pid_t *set_tid,
 		spin_lock_irq(&pidmap_lock);
 
 		if (tid) {
+			//分配一个空闲的pid编号
+			//注意：在每一个命名空间都需要分配进程号
 			nr = idr_alloc(&tmp->idr, NULL, tid,
 				       tid + 1, GFP_ATOMIC);
 			/*

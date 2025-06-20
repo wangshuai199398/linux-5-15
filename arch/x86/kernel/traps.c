@@ -1223,15 +1223,16 @@ DEFINE_IDTENTRY_SW(iret_error)
 
 void __init trap_init(void)
 {
-	/* Init cpu_entry_area before IST entries are set up */
+	/* 设置 CPU 专属的内核映射区域（CPU entry area），后面的 IST（中断栈表）要用这些区域，包含：异常栈、任务状态段TSS、全局描述符表GDT */
 	setup_cpu_entry_areas();
 
-	/* Init GHCB memory pages when running as an SEV-ES guest */
+	/* 这是针对 AMD SEV-ES（加密虚拟化-增强安全）环境的初始化 */
 	sev_es_init_vc_handling();
 
-	/* Initialize TSS before setting up traps so ISTs work */
+	/* 初始化任务状态段（TSS）中 IST 表（Interrupt Stack Table），一些关键异常（如 double fault、NMI）不能用当前栈，必须用 IST 中定义的专属异常栈 */
 	cpu_init_exception_handling();
-	/* Setup traps as cpu_init() might #GP */
+	/* 设置 IDT（中断描述符表）中 trap 向量（如 divide error, page fault, etc），把各个 CPU trap 对应的异常处理函数写入 IDT */
 	idt_setup_traps();
+	//CPU 初始化工作，比如打开 FPU 支持，设置 segment 寄存器，启用某些 CPU 特性（如 SMEP/SMAP）
 	cpu_init();
 }

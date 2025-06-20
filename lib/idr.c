@@ -43,6 +43,7 @@ int idr_alloc_u32(struct idr *idr, void *ptr, u32 *nextid,
 
 	id = (id < base) ? 0 : id - base;
 	radix_tree_iter_init(&iter, id);
+	//遍历这棵基数树的相关节点，并根据每个节点的tag、slot等字段找出还未被占用的整数ID
 	slot = idr_get_free(&idr->idr_rt, &iter, gfp, max - base);
 	if (IS_ERR(slot))
 		return PTR_ERR(slot);

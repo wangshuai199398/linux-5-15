@@ -23,7 +23,7 @@ const sys_call_ptr_t sys_call_table[] = {
 #undef __SYSCALL
 
 #define __SYSCALL(nr, sym) case nr: return __x64_##sym(regs);
-
+//基于系统调用号 nr 的系统调用分发器（dispatcher）
 long x64_sys_call(const struct pt_regs *regs, unsigned int nr)
 {
 	switch (nr) {

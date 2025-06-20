@@ -13,20 +13,20 @@ struct cgroup_namespace;
 struct fs_struct;
 
 /*
- * A structure to contain pointers to all per-process
- * namespaces - fs (mount), uts, network, sysvipc, etc.
+ * 一个用于保存指向各个进程级命名空间（namespace）指针的结构体，包括：
+ * 	文件系统（fs）命名空间（即挂载点 mount）
+ * 	UTS（主机名和域名）
+ * 	网络命名空间
+ *	System V IPC 命名空间（进程间通信）
+ * 
+ * PID 命名空间是个例外 —— 它是通过 task_active_pid_ns 访问的。
+ * nsproxy 结构中的 PID 命名空间是子进程将使用的命名空间。
  *
- * The pid namespace is an exception -- it's accessed using
- * task_active_pid_ns.  The pid namespace here is the
- * namespace that children will use.
+ * count 表示有多少个任务（task）引用了这个 nsproxy。
+ * 每个命名空间的引用计数，实际上是有多少个 nsproxy 指向了它，而不是有多少个任务使用它。
  *
- * 'count' is the number of tasks holding a reference.
- * The count for each namespace, then, will be the number
- * of nsproxies pointing to it, not the number of tasks.
- *
- * The nsproxy is shared by tasks which share all namespaces.
- * As soon as a single namespace is cloned or unshared, the
- * nsproxy is copied.
+ * 当多个任务共享所有命名空间时，它们共享同一个 nsproxy
+ * 一旦某个命名空间被 clone 或 unshare（即被单独创建或分离），内核会复制一份新的 nsproxy。
  */
 struct nsproxy {
 	atomic_t count;

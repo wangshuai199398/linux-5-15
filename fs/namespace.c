@@ -4340,18 +4340,18 @@ SYSCALL_DEFINE5(mount_setattr, int, dfd, const char __user *, path,
 	finish_mount_kattr(&kattr);
 	return err;
 }
-
+//创建并挂载内存中的 rootfs（rootfs 是内核的临时根文件系统），然后构建初始化挂载命名空间，并把当前进程（init task）绑定到这个根目录上
 static void __init init_mount_tree(void)
 {
 	struct vfsmount *mnt;
 	struct mount *m;
 	struct mnt_namespace *ns;
 	struct path root;
-
+	//挂载 rootfs 文件系统，内核启动早期创建一个可以挂载的临时根目录
 	mnt = vfs_kern_mount(&rootfs_fs_type, 0, "rootfs", NULL);
 	if (IS_ERR(mnt))
 		panic("Can't create rootfs");
-
+	//创建一个新的挂载命名空间（用于隔离挂载点），用于当前系统初始化的第一个进程（PID 1）
 	ns = alloc_mnt_ns(&init_user_ns, false);
 	if (IS_ERR(ns))
 		panic("Can't allocate initial namespace");
@@ -4360,13 +4360,16 @@ static void __init init_mount_tree(void)
 	ns->root = m;
 	ns->mounts = 1;
 	list_add(&m->mnt_list, &ns->list);
+	//把新建的挂载命名空间绑定到当前进程（即 init_task）
 	init_task.nsproxy->mnt_ns = ns;
+	//增加命名空间引用计数，防止被提前释放
 	get_mnt_ns(ns);
 
 	root.mnt = mnt;
 	root.dentry = mnt->mnt_root;
+	//防止该挂载被移动或卸载
 	mnt->mnt_flags |= MNT_LOCKED;
-
+	//设置当前进程的根目录和工作目录，工作目录（pwd），根目录（root）
 	set_fs_pwd(current->fs, &root);
 	set_fs_root(current->fs, &root);
 }

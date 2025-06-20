@@ -1501,7 +1501,7 @@ void __rcu **idr_get_free(struct radix_tree_root *root,
 		shift = RADIX_TREE_MAP_SHIFT;
 
 	while (shift) {
-		shift -= RADIX_TREE_MAP_SHIFT;
+		shift -= RADIX_TREE_MAP_SHIFT;//6
 		if (child == NULL) {
 			/* Have to add a child node.  */
 			child = radix_tree_node_alloc(gfp, node, root, shift,
@@ -1518,6 +1518,7 @@ void __rcu **idr_get_free(struct radix_tree_root *root,
 		node = entry_to_node(child);
 		offset = radix_tree_descend(node, &child, start);
 		if (!tag_get(node, IDR_FREE, offset)) {
+			//遍历tag状态bitmap，寻找下一个可用的下标
 			offset = radix_tree_find_next_bit(node, IDR_FREE,
 							offset + 1);
 			start = next_index(start, node, offset);

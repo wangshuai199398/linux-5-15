@@ -1120,9 +1120,10 @@ static inline void xa_release(struct xarray *xa, unsigned long index)
  * a sibling entry or a pointer to the next level of the tree.
  * @nr_values is the count of every element in ->slots which is
  * either a value entry or a sibling of a value entry.
+ * 基数树
  */
 struct xa_node {
-	unsigned char	shift;		/* Bits remaining in each slot */
+	unsigned char	shift;		/* 当前节点的偏移位数 */
 	unsigned char	offset;		/* Slot offset in parent */
 	unsigned char	count;		/* Total entry count */
 	unsigned char	nr_values;	/* Value entry count */
@@ -1132,9 +1133,9 @@ struct xa_node {
 		struct list_head private_list;	/* For tree user */
 		struct rcu_head	rcu_head;	/* Used when freeing node */
 	};
-	void __rcu	*slots[XA_CHUNK_SIZE];
+	void __rcu	*slots[XA_CHUNK_SIZE];//存储其指向的子节点指针
 	union {
-		unsigned long	tags[XA_MAX_MARKS][XA_MARK_LONGS];
+		unsigned long	tags[XA_MAX_MARKS][XA_MARK_LONGS];//记录 slot 数组中每一个下标的存储状态
 		unsigned long	marks[XA_MAX_MARKS][XA_MARK_LONGS];
 	};
 };

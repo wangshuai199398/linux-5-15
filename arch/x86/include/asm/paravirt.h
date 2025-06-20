@@ -215,7 +215,7 @@ do {						\
 do {						\
 	val = paravirt_read_msr(msr);		\
 } while (0)
-
+//写特殊模块寄存器
 static inline void wrmsrl(unsigned msr, u64 val)
 {
 	wrmsr(msr, (u32)val, (u32)(val>>32));

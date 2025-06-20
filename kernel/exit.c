@@ -551,7 +551,7 @@ static void exit_mm(void)
 	if (test_thread_flag(TIF_MEMDIE))
 		exit_oom_victim();
 }
-
+//找活着的线程
 static struct task_struct *find_alive_thread(struct task_struct *p)
 {
 	struct task_struct *t;

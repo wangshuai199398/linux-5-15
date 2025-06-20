@@ -111,9 +111,11 @@ void exit_fs(struct task_struct *tsk)
 
 struct fs_struct *copy_fs_struct(struct fs_struct *old)
 {
+	//申请内存
 	struct fs_struct *fs = kmem_cache_alloc(fs_cachep, GFP_KERNEL);
 	/* We don't need to lock fs - think why ;-) */
 	if (fs) {
+		//复制
 		fs->users = 1;
 		fs->in_exec = 0;
 		spin_lock_init(&fs->lock);

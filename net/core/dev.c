@@ -11859,15 +11859,9 @@ static struct pernet_operations __net_initdata default_device_ops = {
 };
 
 /*
- *	Initialize the DEV module. At boot time this walks the device list and
- *	unhooks any devices that fail to initialise (normally hardware not
- *	present) and leaves us with a valid list of present and active devices.
- *
- */
-
-/*
- *       This is called single threaded during boot, so no need
- *       to take the rtnl semaphore.
+ *	初始化 DEV 模块.
+ *	在系统启动时，它会遍历设备列表，移除所有初始化失败的设备（通常是由于硬件不存在），最终留下一个有效的、已存在且处于活动状态的设备列表。
+ *  这段代码在启动期间是单线程调用的，因此不需要获取 rtnl 信号量（rtnl semaphore）
  */
 static int __init net_dev_init(void)
 {

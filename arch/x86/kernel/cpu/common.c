@@ -2023,12 +2023,9 @@ DEFINE_PER_CPU_FIRST(struct fixed_percpu_data,
 		     fixed_percpu_data) __aligned(PAGE_SIZE) __visible;
 EXPORT_PER_CPU_SYMBOL_GPL(fixed_percpu_data);
 
-/*
- * The following percpu variables are hot.  Align current_task to
- * cacheline size such that they fall in the same cacheline.
- */
-DEFINE_PER_CPU(struct task_struct *, current_task) ____cacheline_aligned =
-	&init_task;
+/* 以下的PER CPU变量是热点变量。请将 current_task 按照缓存行大小对齐，使它们落在同一缓存行中
+ * 定义current_task变量 current_task_wangs */
+DEFINE_PER_CPU(struct task_struct *, current_task) ____cacheline_aligned = &init_task;
 EXPORT_PER_CPU_SYMBOL(current_task);
 
 DEFINE_PER_CPU(void *, hardirq_stack_ptr);
@@ -2268,6 +2265,7 @@ void cpu_init(void)
 	if (IS_ENABLED(CONFIG_X86_64)) {
 		loadsegment(fs, 0);
 		memset(cur->thread.tls_array, 0, GDT_ENTRY_TLS_ENTRIES * 8);
+		//系统调用
 		syscall_init();
 
 		wrmsrl(MSR_FS_BASE, 0);

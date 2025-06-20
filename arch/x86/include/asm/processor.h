@@ -752,7 +752,8 @@ static inline void spin_lock_prefetch(const void *x)
 			   TOP_OF_KERNEL_STACK_PADDING)
 
 #define task_top_of_stack(task) ((unsigned long)(task_pt_regs(task) + 1))
-
+/* 先从 task_struct 找到内核栈的开始位置。然后这个位置加上 THREAD_SIZE 就到了最后的位置，
+ * 然后转换为 struct pt_regs，再减一，就相当于减少了一个 pt_regs 的位置，就到了这个结构的首地址 */
 #define task_pt_regs(task) \
 ({									\
 	unsigned long __ptr = (unsigned long)task_stack_page(task);	\

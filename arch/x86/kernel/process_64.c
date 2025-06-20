@@ -500,7 +500,14 @@ void x86_gsbase_write_task(struct task_struct *task, unsigned long gsbase)
 
 	task->thread.gsbase = gsbase;
 }
-
+/*初始化一个线程的寄存器状态以开始执行新的用户空间程序。它设置了线程的寄存器状态（pt_regs）以准备进入用户空间执行
+	•	regs：当前线程的寄存器结构体；
+	•	new_ip：新的程序计数器值（入口地址）；
+	•	new_sp：新的栈指针地址；
+	•	_cs：代码段寄存器值；
+	•	_ss：堆栈段寄存器值；
+	•	_ds：数据段寄存器值。
+*/
 static void
 start_thread_common(struct pt_regs *regs, unsigned long new_ip,
 		    unsigned long new_sp,
@@ -544,14 +551,16 @@ void compat_start_thread(struct pt_regs *regs, u32 new_ip, u32 new_sp, bool x32)
 #endif
 
 /*
- *	switch_to(x,y) should switch tasks from x to y.
+ *	switch_to(x,y) 应该将任务从 x 切换到 y.
  *
- * This could still be optimized:
- * - fold all the options into a flag word and test it with a single test.
- * - could test fs/gs bitsliced
+ * 这部分仍然可以优化：
+ * - 可以将所有选项合并成一个标志位，并通过一次测试来判断。
+ * - 可以使用位切片方式测试 fs/gs 寄存器
  *
- * Kprobes not supported here. Set the probe on schedule instead.
- * Function graph tracer not supported too.
+ * 此处不支持 Kprobes。请将探针设置在 schedule 上
+ * 此处也不支持函数图追踪器（Function Graph Tracer）
+ * 
+ * 当某个 CPU 上的进程进行切换的时候，current_task 被修改为将要切换到的目标进程。例如，进程切换函数 __switch_to 就会改变 current_task
  */
 __visible __notrace_funcgraph struct task_struct *
 __switch_to(struct task_struct *prev_p, struct task_struct *next_p)

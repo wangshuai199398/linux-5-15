@@ -669,7 +669,7 @@ static int rootfs_init_fs_context(struct fs_context *fc)
 
 	return ramfs_init_fs_context(fc);
 }
-
+//指向 rootfs 的文件系统类型（内存中简单的临时文件系统）
 struct file_system_type rootfs_fs_type = {
 	.name		= "rootfs",
 	.init_fs_context = rootfs_init_fs_context,

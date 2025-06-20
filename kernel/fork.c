@@ -174,6 +174,7 @@ static struct kmem_cache *task_struct_cachep;
 
 static inline struct task_struct *alloc_task_struct_node(int node)
 {
+	//申请内存
 	return kmem_cache_alloc_node(task_struct_cachep, GFP_KERNEL, node);
 }
 
@@ -897,6 +898,7 @@ static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
 
 	if (node == NUMA_NO_NODE)
 		node = tsk_fork_get_node(orig);
+	//申请task_struct内核对象
 	tsk = alloc_task_struct_node(node);
 	if (!tsk)
 		return NULL;
@@ -909,7 +911,7 @@ static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
 		goto free_stack;
 
 	stack_vm_area = task_stack_vm_area(tsk);
-
+	//复制task_struct
 	err = arch_dup_task_struct(tsk, orig);
 
 	/*
@@ -1458,7 +1460,7 @@ static struct mm_struct *dup_mm(struct task_struct *tsk,
 {
 	struct mm_struct *mm;
 	int err;
-
+	//申请新的mm_struct
 	mm = allocate_mm();
 	if (!mm)
 		goto fail_nomem;
@@ -1935,12 +1937,9 @@ static void copy_oom_score_adj(u64 clone_flags, struct task_struct *tsk)
 }
 
 /*
- * This creates a new process as a copy of the old one,
- * but does not actually start it yet.
+ * 这会创建一个新进程，作为原进程的副本，但不会立刻启动它。
  *
- * It copies the registers, and all the appropriate
- * parts of the process environment (as per the clone
- * flags). The actual kick-off is left to the caller.
+ * 它会复制寄存器，以及根据 clone 标志，复制进程环境中的所有相关部分。实际启动（执行）新进程的操作由调用者负责完成。
  */
 static __latent_entropy struct task_struct *copy_process(
 					struct pid *pid,
@@ -2043,6 +2042,7 @@ static __latent_entropy struct task_struct *copy_process(
 		goto fork_out;
 
 	retval = -ENOMEM;
+	//复制进程task_struct结构体
 	p = dup_task_struct(current, node);
 	if (!p)
 		goto fork_out;
@@ -2200,9 +2200,11 @@ static __latent_entropy struct task_struct *copy_process(
 	retval = copy_semundo(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_security;
+	//复制files_struct
 	retval = copy_files(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_semundo;
+	//复制fs_struct
 	retval = copy_fs(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_files;
@@ -2212,9 +2214,11 @@ static __latent_entropy struct task_struct *copy_process(
 	retval = copy_signal(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_sighand;
+	//复制mm_struct
 	retval = copy_mm(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_signal;
+	//复制进程的命名空间 nsproxy
 	retval = copy_namespaces(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_mm;
@@ -2226,7 +2230,7 @@ static __latent_entropy struct task_struct *copy_process(
 		goto bad_fork_cleanup_io;
 
 	stackleak_task_init(p);
-
+	//申请pid并设置进程号
 	if (pid != &init_struct_pid) {
 		pid = alloc_pid(p->nsproxy->pid_ns_for_children, args->set_tid,
 				args->set_tid_size);
@@ -2608,7 +2612,7 @@ pid_t kernel_clone(struct kernel_clone_args *args)
 		if (likely(!ptrace_event_enabled(current, trace)))
 			trace = 0;
 	}
-
+	//复制父进程生成新的 task_struct
 	p = copy_process(NULL, trace, NUMA_NO_NODE, args);
 	add_latent_entropy();
 
@@ -2632,7 +2636,7 @@ pid_t kernel_clone(struct kernel_clone_args *args)
 		init_completion(&vfork);
 		get_task_struct(p);
 	}
-
+	//将新进程添加到就绪队列中等待调度器调度
 	wake_up_new_task(p);
 
 	/* forking complete and child started to run, tell ptracer */
@@ -2665,10 +2669,12 @@ pid_t kernel_thread(int (*fn)(void *), void *arg, unsigned long flags)
 }
 
 #ifdef __ARCH_WANT_SYS_FORK
+//fork_wangs
 SYSCALL_DEFINE0(fork)
 {
 #ifdef CONFIG_MMU
 	struct kernel_clone_args args = {
+		//子进程结束后发送SIGCHLD信号通知父进程
 		.exit_signal = SIGCHLD,
 	};
 
@@ -2691,7 +2697,7 @@ SYSCALL_DEFINE0(vfork)
 	return kernel_clone(&args);
 }
 #endif
-
+//wangs_clone
 #ifdef __ARCH_WANT_SYS_CLONE
 #ifdef CONFIG_CLONE_BACKWARDS
 SYSCALL_DEFINE5(clone, unsigned long, clone_flags, unsigned long, newsp,

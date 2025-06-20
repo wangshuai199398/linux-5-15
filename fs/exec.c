@@ -1739,7 +1739,7 @@ static int search_binary_handler(struct linux_binprm *bprm)
 		if (!try_module_get(fmt->module))
 			continue;
 		read_unlock(&binfmt_lock);
-
+		// load_elf_binary
 		retval = fmt->load_binary(bprm);
 
 		read_lock(&binfmt_lock);
@@ -2095,7 +2095,7 @@ void set_dumpable(struct mm_struct *mm, int value)
 
 	set_mask_bits(&mm->flags, MMF_DUMPABLE_MASK, value);
 }
-
+//execve_wangs
 SYSCALL_DEFINE3(execve,
 		const char __user *, filename,
 		const char __user *const __user *, argv,

@@ -3258,7 +3258,7 @@ void __init vfs_caches_init_early(void)
 	dcache_init_early();
 	inode_init_early();
 }
-
+//初始化基于内存的文件系统 rootfs
 void __init vfs_caches_init(void)
 {
 	names_cachep = kmem_cache_create_usercopy("names_cache", PATH_MAX, 0,

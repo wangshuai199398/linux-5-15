@@ -90,7 +90,7 @@ struct signal_struct {
 	/* current thread group signal load-balancing target: */
 	struct task_struct	*curr_target;
 
-	/* shared signal handling: */
+	/* shared signal handling: 线程组共享的 */
 	struct sigpending	shared_pending;
 
 	/* For collecting multiprocess signals during fork */
