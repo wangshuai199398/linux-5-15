@@ -459,7 +459,7 @@ static int __init reserve_crashkernel_low(void)
 		if (!low_size)
 			return 0;
 	}
-
+	//申请内存
 	low_base = memblock_phys_alloc_range(low_size, CRASH_ALIGN, 0, CRASH_ADDR_LOW_MAX);
 	if (!low_base) {
 		pr_err("Cannot reserve %ldMB crashkernel low memory, please try smaller size.\n",
@@ -865,6 +865,7 @@ void __init setup_arch(char **cmdline_p)
 	early_reserve_memory();
 
 	iomem_resource.end = (1ULL << boot_cpu_data.x86_phys_bits) - 1;
+	//保存物理内存检测结果
 	e820__memory_setup();
 	parse_setup_data();
 
@@ -1020,6 +1021,7 @@ void __init setup_arch(char **cmdline_p)
 	cleanup_highmap();
 
 	memblock_set_current_limit(ISA_END_ADDRESS);
+	//根据e820信息构建memblock内存分配器，开启调试和打印
 	e820__memblock_setup();
 
 	/* 需要在 memblock 初始化之后运行，因为它依赖于物理内存大小的信息 */
@@ -1102,6 +1104,7 @@ void __init setup_arch(char **cmdline_p)
 		hugetlb_cma_reserve(PUD_SHIFT - PAGE_SHIFT);
 
 	/* 在 SRAT 表（System Resource Affinity Table）解析完成之后，再为 crash kernel（崩溃内核）预留内存，以避免它占用 可热插拔的内存区域 */
+	// crashkernel=256M
 	reserve_crashkernel();
 
 	memblock_find_dma_reserve();

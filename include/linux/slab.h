@@ -573,6 +573,7 @@ static __always_inline void *kmalloc_large(size_t size, gfp_t flags)
  * %__GFP_RETRY_MAYFAIL
  *	Try really hard to succeed the allocation but fail
  *	eventually.
+ * kmalloc系列的函数都是直接在伙伴系统所管理的物理内存中分配的，不需要触发缺页中断
  */
 static __always_inline void *kmalloc(size_t size, gfp_t flags)
 {

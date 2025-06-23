@@ -846,7 +846,7 @@ struct task_struct {
 	struct plist_node		pushable_tasks;
 	struct rb_node			pushable_dl_tasks;
 #endif
-	//进程地址空间
+	//进程地址空间，内核线程该变量为NULL
 	struct mm_struct		*mm;
 	struct mm_struct		*active_mm;
 

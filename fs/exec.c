@@ -84,6 +84,7 @@ static DEFINE_RWLOCK(binfmt_lock);
 
 void __register_binfmt(struct linux_binfmt * fmt, int insert)
 {
+	//将加载器挂到formats全局链表中
 	write_lock(&binfmt_lock);
 	insert ? list_add(&fmt->lh, &formats) :
 		 list_add_tail(&fmt->lh, &formats);
@@ -249,7 +250,7 @@ static int __bprm_mm_init(struct linux_binprm *bprm)
 	int err;
 	struct vm_area_struct *vma = NULL;
 	struct mm_struct *mm = bprm->mm;
-
+	// 申请一段地址范围
 	bprm->vma = vma = vm_area_alloc(mm);
 	if (!vma)
 		return -ENOMEM;
@@ -267,11 +268,12 @@ static int __bprm_mm_init(struct linux_binprm *bprm)
 	 * configured yet.
 	 */
 	BUILD_BUG_ON(VM_STACK_FLAGS & VM_STACK_INCOMPLETE_SETUP);
+	//地址空间的顶部附近位置，start到end之间留了一个Page大小，默认给栈申请了4KB的大小
 	vma->vm_end = STACK_TOP_MAX;
 	vma->vm_start = vma->vm_end - PAGE_SIZE;
 	vma->vm_flags = VM_SOFTDIRTY | VM_STACK_FLAGS | VM_STACK_INCOMPLETE_SETUP;
 	vma->vm_page_prot = vm_get_page_prot(vma->vm_flags);
-
+	// 将这段地址范围放入虚拟地址空间对象中管理
 	err = insert_vm_struct(mm, vma);
 	if (err)
 		goto err;
@@ -363,7 +365,7 @@ static int bprm_mm_init(struct linux_binprm *bprm)
 {
 	int err;
 	struct mm_struct *mm = NULL;
-
+	//申请一个全新的地址空间 mm_struct 对象
 	bprm->mm = mm = mm_alloc();
 	err = -ENOMEM;
 	if (!mm)
@@ -373,7 +375,7 @@ static int bprm_mm_init(struct linux_binprm *bprm)
 	task_lock(current->group_leader);
 	bprm->rlim_stack = current->signal->rlim[RLIMIT_STACK];
 	task_unlock(current->group_leader);
-
+	//给新进程的栈申请一页的虚拟内存空间，并将栈指针记录下来
 	err = __bprm_mm_init(bprm);
 	if (err)
 		goto err;
@@ -851,6 +853,7 @@ int setup_arg_pages(struct linux_binprm *bprm,
 	else
 		stack_base = vma->vm_start - stack_expand;
 #endif
+	//新的栈
 	current->mm->start_stack = bprm->p;
 	ret = expand_stack(vma, stack_base);
 	if (ret)
@@ -983,6 +986,7 @@ static int exec_mmap(struct mm_struct *mm)
 	/* Notify parent that we're no longer interested in the old VM */
 	tsk = current;
 	old_mm = current->mm;
+	//释放旧的地址空间
 	exec_mm_release(tsk, old_mm);
 	if (old_mm)
 		sync_mm_rss(old_mm);
@@ -1012,6 +1016,7 @@ static int exec_mmap(struct mm_struct *mm)
 	local_irq_disable();
 	active_mm = tsk->active_mm;
 	tsk->active_mm = mm;
+	//使用bprm中保存的新的地址空间
 	tsk->mm = mm;
 	/*
 	 * This prevents preemption while active_mm is being loaded and
@@ -1268,7 +1273,7 @@ int begin_new_exec(struct linux_binprm * bprm)
 	 */
 	io_uring_task_cancel();
 
-	/* Ensure the files table is not shared. */
+	/* 确保文件表不共享 */
 	retval = unshare_files();
 	if (retval)
 		goto out;
@@ -1291,6 +1296,7 @@ int begin_new_exec(struct linux_binprm * bprm)
 	 * Release all of the old mmap stuff
 	 */
 	acct_arg_size(bprm, 0);
+	//释放所有旧的mmap
 	retval = exec_mmap(bprm->mm);
 	if (retval)
 		goto out;
@@ -1305,9 +1311,7 @@ int begin_new_exec(struct linux_binprm * bprm)
 	flush_itimer_signals();
 #endif
 
-	/*
-	 * Make the signal table private.
-	 */
+	/* 确保信号表不共享 */
 	retval = unshare_sighand(me);
 	if (retval)
 		goto out_unlock;
@@ -1533,7 +1537,7 @@ static struct linux_binprm *alloc_bprm(int fd, struct filename *filename)
 		bprm->filename = bprm->fdpath;
 	}
 	bprm->interp = bprm->filename;
-
+	//申请一个全新的地址空间mm_struct对象，准备留给新进程使用
 	retval = bprm_mm_init(bprm);
 	if (retval)
 		goto out_free;
@@ -1670,6 +1674,7 @@ static int prepare_binprm(struct linux_binprm *bprm)
 	loff_t pos = 0;
 
 	memset(bprm->buf, 0, BINPRM_BUF_SIZE);
+	//从文件头读取128字节
 	return kernel_read(bprm->file, bprm->buf, BINPRM_BUF_SIZE, &pos);
 }
 
@@ -1723,7 +1728,7 @@ static int search_binary_handler(struct linux_binprm *bprm)
 	bool need_retry = IS_ENABLED(CONFIG_MODULES);
 	struct linux_binfmt *fmt;
 	int retval;
-
+	//读取可执行文件头，判断文件格式
 	retval = prepare_binprm(bprm);
 	if (retval < 0)
 		return retval;
@@ -1735,15 +1740,17 @@ static int search_binary_handler(struct linux_binprm *bprm)
 	retval = -ENOENT;
  retry:
 	read_lock(&binfmt_lock);
+	//遍历系统已注册的加载器
 	list_for_each_entry(fmt, &formats, lh) {
 		if (!try_module_get(fmt->module))
 			continue;
 		read_unlock(&binfmt_lock);
-		// load_elf_binary
+		// 尝试对当前可执行文件启动加载 load_elf_binary
 		retval = fmt->load_binary(bprm);
 
 		read_lock(&binfmt_lock);
 		put_binfmt(fmt);
+		//加载成功返回，失败继续尝试
 		if (bprm->point_of_no_return || (retval != -ENOEXEC)) {
 			read_unlock(&binfmt_lock);
 			return retval;
@@ -1884,6 +1891,7 @@ static int do_execveat_common(int fd, struct filename *filename,
 			      struct user_arg_ptr envp,
 			      int flags)
 {
+	//linux_binprm 用于存储加载二进制文件时使用的参数
 	struct linux_binprm *bprm;
 	int retval;
 
@@ -1905,7 +1913,6 @@ static int do_execveat_common(int fd, struct filename *filename,
 	/* We're below the limit (still or again), so we don't want to make
 	 * further execve() calls fail. */
 	current->flags &= ~PF_NPROC_EXCEEDED;
-
 	bprm = alloc_bprm(fd, filename);
 	if (IS_ERR(bprm)) {
 		retval = PTR_ERR(bprm);
@@ -1954,7 +1961,7 @@ static int do_execveat_common(int fd, struct filename *filename,
 			goto out_free;
 		bprm->argc = 1;
 	}
-
+	//执行加载
 	retval = bprm_execve(bprm, fd, filename, flags);
 out_free:
 	free_bprm(bprm);

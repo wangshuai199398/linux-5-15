@@ -2697,7 +2697,7 @@ SYSCALL_DEFINE0(vfork)
 	return kernel_clone(&args);
 }
 #endif
-//wangs_clone
+//clone_wangs
 #ifdef __ARCH_WANT_SYS_CLONE
 #ifdef CONFIG_CLONE_BACKWARDS
 SYSCALL_DEFINE5(clone, unsigned long, clone_flags, unsigned long, newsp,

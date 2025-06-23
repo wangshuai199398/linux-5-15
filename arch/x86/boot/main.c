@@ -154,7 +154,7 @@ void main(void)
 	/* Tell the BIOS what CPU mode we intend to run in. */
 	set_bios_mode();
 
-	/* Detect memory layout */
+	/* 探测物理内存 */
 	detect_memory();
 
 	/* Set keyboard repeat rate (why?) and query the lock flags */

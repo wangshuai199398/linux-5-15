@@ -15,6 +15,7 @@
 
 #define SMAP	0x534d4150	/* ASCII "SMAP" */
 
+//发出0x15中断并处理所有结果，把内存地址范围保存到boot_params.e820_table对象中
 static void detect_memory_e820(void)
 {
 	int count = 0;
@@ -65,7 +66,7 @@ static void detect_memory_e820(void)
 		*desc++ = buf;
 		count++;
 	} while (ireg.ebx && count < ARRAY_SIZE(boot_params.e820_table));
-
+	//boot_params是启动的中间过程的数据
 	boot_params.e820_entries = count;
 }
 

@@ -1316,12 +1316,13 @@ void __init e820__memory_setup(void)
 
 	/* This is a firmware interface ABI - make sure we don't break it: */
 	BUILD_BUG_ON(sizeof(struct boot_e820_entry) != 20);
-
+	//将boot_params.e820_table保存到全局e820_table中
 	who = x86_init.resources.memory_setup();
 
 	memcpy(e820_table_kexec, e820_table, sizeof(*e820_table_kexec));
 	memcpy(e820_table_firmware, e820_table, sizeof(*e820_table_firmware));
-
+	//打印内存检测结果，最后一列为usable表示实际可用的物理内存地址范围, reserved表示不能被分配使用,可能是内存启动时用来保存内核的一些关键数据和代码
+	//也可能是没有实际的物理内存映射到这个范围
 	pr_info("BIOS-provided physical RAM map:\n");
 	e820__print_table(who);
 }
@@ -1348,18 +1349,18 @@ void __init e820__memblock_setup(void)
 		end = entry->addr + entry->size;
 		if (end != (resource_size_t)end)
 			continue;
-
+		//如果是预留内存添加到reserved成员中，也就是预留内存列表
 		if (entry->type == E820_TYPE_SOFT_RESERVED)
 			memblock_reserve(entry->addr, entry->size);
 
 		if (entry->type != E820_TYPE_RAM && entry->type != E820_TYPE_RESERVED_KERN)
 			continue;
-
+		//可用内存添加到memory成员中，也就是可用内存列表
 		memblock_add(entry->addr, entry->size);
 	}
 
 	/* Throw away partial pages: */
 	memblock_trim_memory(PAGE_SIZE);
-
+	//打印memblock创建结果，在/boot/grub/grub.cfg或者/etc/default/grub文件启动参数加 memblock=debug
 	memblock_dump_all();
 }

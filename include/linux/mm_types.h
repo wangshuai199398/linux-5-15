@@ -316,13 +316,13 @@ struct vm_userfaultfd_ctx {};
  * per VM-area/task. A VM area is any part of the process virtual memory
  * space that has a special rule for the page-fault handlers (ie a shared
  * library, the executable area etc).
+ * 在虚拟地址空间中，每一段地址范围都是用一个vma对象来表示的
  */
 struct vm_area_struct {
 	/* The first cache line has the info for VMA tree walking. */
 
-	unsigned long vm_start;		/* Our start address within vm_mm. */
-	unsigned long vm_end;		/* The first byte after our end address
-					   within vm_mm. */
+	unsigned long vm_start;		/* 开始地址 within vm_mm. */
+	unsigned long vm_end;		/* The first byte after our end address within vm_mm. */
 
 	/* linked list of VM areas per task, sorted by address */
 	struct vm_area_struct *vm_next, *vm_prev;

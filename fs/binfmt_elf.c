@@ -96,7 +96,7 @@ static int elf_core_dump(struct coredump_params *cprm);
 #define ELF_PAGESTART(_v) ((_v) & ~(unsigned long)(ELF_MIN_ALIGN-1))
 #define ELF_PAGEOFFSET(_v) ((_v) & (ELF_MIN_ALIGN-1))
 #define ELF_PAGEALIGN(_v) (((_v) + ELF_MIN_ALIGN - 1) & ~(ELF_MIN_ALIGN - 1))
-
+//elf加载器
 static struct linux_binfmt elf_format = {
 	.module		= THIS_MODULE,
 	.load_binary	= load_elf_binary,
@@ -109,6 +109,7 @@ static struct linux_binfmt elf_format = {
 
 static int set_brk(unsigned long start, unsigned long end, int prot)
 {
+	//为数据段申请虚拟地址
 	start = ELF_PAGEALIGN(start);
 	end = ELF_PAGEALIGN(end);
 	if (end > start) {
@@ -122,6 +123,7 @@ static int set_brk(unsigned long start, unsigned long end, int prot)
 		if (error)
 			return error;
 	}
+	//初始化堆的指针
 	current->mm->start_brk = current->mm->brk = end;
 	return 0;
 }
@@ -473,10 +475,11 @@ static struct elf_phdr *load_elf_phdrs(const struct elfhdr *elf_ex,
 
 	/* Sanity check the number of program headers... */
 	/* ...and their total size. */
+	//elf_ex->e_phnum 中保存的是 Program Header 的数量，在根据 Program Header的大小一起计算出所有Program Header的大小
 	size = sizeof(struct elf_phdr) * elf_ex->e_phnum;
 	if (size == 0 || size > 65536 || size > ELF_MIN_ALIGN)
 		goto out;
-
+	//申请内存并读取
 	elf_phdata = kmalloc(size, GFP_KERNEL);
 	if (!elf_phdata)
 		goto out;
@@ -837,6 +840,7 @@ static int load_elf_binary(struct linux_binprm *bprm)
 	unsigned long start_code, end_code, start_data, end_data;
 	unsigned long reloc_func_desc __maybe_unused = 0;
 	int executable_stack = EXSTACK_DEFAULT;
+	//ELF文件头解析，获取ELF文件头
 	struct elfhdr *elf_ex = (struct elfhdr *)bprm->buf;
 	struct elfhdr *interp_elf_ex = NULL;
 	struct arch_elf_state arch_state = INIT_ARCH_ELF_STATE;
@@ -847,7 +851,7 @@ static int load_elf_binary(struct linux_binprm *bprm)
 	/* First of all, some simple consistency checks */
 	if (memcmp(elf_ex->e_ident, ELFMAG, SELFMAG) != 0)
 		goto out;
-
+	//对头部进行一系列的合法性判断，不合法则直接退出
 	if (elf_ex->e_type != ET_EXEC && elf_ex->e_type != ET_DYN)
 		goto out;
 	if (!elf_check_arch(elf_ex))
@@ -856,12 +860,13 @@ static int load_elf_binary(struct linux_binprm *bprm)
 		goto out;
 	if (!bprm->file->f_op->mmap)
 		goto out;
-
+	// 读取 Program Header
 	elf_phdata = load_elf_phdrs(elf_ex, bprm->file);
 	if (!elf_phdata)
 		goto out;
 
 	elf_ppnt = elf_phdata;
+	//第一次遍历Program Header Table，只针对PT_INTERP类型的segment做预处理，这个segment中保存着动态加载器在文件系统中的路径信息
 	for (i = 0; i < elf_ex->e_phnum; i++, elf_ppnt++) {
 		char *elf_interpreter;
 
@@ -906,7 +911,7 @@ static int load_elf_binary(struct linux_binprm *bprm)
 		 * regardless of the interpreter's permissions.
 		 */
 		would_dump(bprm, interpreter);
-
+		//申请 interp_elf_ex 对象
 		interp_elf_ex = kmalloc(sizeof(*interp_elf_ex), GFP_KERNEL);
 		if (!interp_elf_ex) {
 			retval = -ENOMEM;
@@ -925,7 +930,7 @@ out_free_interp:
 		kfree(elf_interpreter);
 		goto out_free_ph;
 	}
-
+	//第二次遍历Program Header Table，做一些特殊处理
 	elf_ppnt = elf_phdata;
 	for (i = 0; i < elf_ex->e_phnum; i++, elf_ppnt++)
 		switch (elf_ppnt->p_type) {
@@ -998,6 +1003,7 @@ out_free_interp:
 		goto out_free_dentry;
 
 	/* Flush all traces of the currently running executable */
+	//清空父进程继承来的资源
 	retval = begin_new_exec(bprm);
 	if (retval)
 		goto out_free_dentry;
@@ -1011,11 +1017,12 @@ out_free_interp:
 	const int snapshot_randomize_va_space = READ_ONCE(randomize_va_space);
 	if (!(current->personality & ADDR_NO_RANDOMIZE) && snapshot_randomize_va_space)
 		current->flags |= PF_RANDOMIZE;
-
+	//
 	setup_new_exec(bprm);
 
 	/* Do this so that we can load the interpreter, if need be.  We will
 	   change some of these later */
+	//使用新栈
 	retval = setup_arg_pages(bprm, randomize_stack_top(STACK_TOP),
 				 executable_stack);
 	if (retval < 0)
@@ -1031,13 +1038,15 @@ out_free_interp:
 
 	/* Now we do a little grungy work by mmapping the ELF image into
 	   the correct location in memory. */
+	//执行Segment加载
+	//遍历可执行文件的Program Header
 	for(i = 0, elf_ppnt = elf_phdata;
 	    i < elf_ex->e_phnum; i++, elf_ppnt++) {
 		int elf_prot, elf_flags;
 		unsigned long k, vaddr;
 		unsigned long total_size = 0;
 		unsigned long alignment;
-
+		//只加载LOAD类型的Segment，否则跳过
 		if (elf_ppnt->p_type != PT_LOAD)
 			continue;
 
@@ -1047,6 +1056,8 @@ out_free_interp:
 			/* There was a PT_LOAD segment with p_memsz > p_filesz
 			   before this one. Map anonymous pages, if needed,
 			   and clear the area.  */
+			//load_bias是Segment要加载到内存的基地址
+			//数据内存申请 & 堆初始化
 			retval = set_brk(elf_bss + load_bias,
 					 elf_brk + load_bias,
 					 bss_prot);
@@ -1138,7 +1149,7 @@ out_free_interp:
 				goto out_free_dentry;
 			}
 		}
-
+		//为Segment建立内存mmap，将程序文件中的内容映射到虚拟内存空间，这样将来程序中的代码、数据就都可以被访问了
 		error = elf_map(bprm->file, load_bias + vaddr, elf_ppnt,
 				elf_prot, elf_flags, total_size);
 		if (BAD_ADDR(error)) {
@@ -1169,6 +1180,7 @@ out_free_interp:
 		}
 
 		k = elf_ppnt->p_vaddr;
+		//计算mm_struct所需的各个成员地址
 		if ((elf_ppnt->p_flags & PF_X) && k < start_code)
 			start_code = k;
 		if (start_data < k)
@@ -1223,8 +1235,9 @@ out_free_interp:
 		retval = -EFAULT; /* Nobody gets to see this, but.. */
 		goto out_free_dentry;
 	}
-
+	//如果程序中指定了动态链接器，就把动态链接器程序读出来
 	if (interpreter) {
+		//加载并返回动态链接器代码段地址
 		elf_entry = load_elf_interp(interp_elf_ex,
 					    interpreter,
 					    load_bias, interp_elf_phdata,
@@ -1235,6 +1248,7 @@ out_free_interp:
 			 * adjustment
 			 */
 			interp_load_addr = elf_entry;
+			//计算动态链接器入口地址
 			elf_entry += interp_elf_ex->e_entry;
 		}
 		if (BAD_ADDR(elf_entry)) {
@@ -1323,6 +1337,7 @@ out_free_interp:
 #endif
 
 	finalize_exec(bprm);
+	//跳转到入口开始执行 入口函数: _start -> __libc_start_main -> main
 	START_THREAD(elf_ex, regs, elf_entry, bprm->p);
 	retval = 0;
 out:
@@ -2303,7 +2318,7 @@ end_coredump:
 }
 
 #endif		/* CONFIG_ELF_CORE */
-
+//注册elf加载器 elf_wangs
 static int __init init_elf_binfmt(void)
 {
 	register_binfmt(&elf_format);

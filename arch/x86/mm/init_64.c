@@ -810,7 +810,7 @@ void __init initmem_init(void)
 	memblock_set_node(0, PHYS_ADDR_MAX, &memblock.memory, 0);
 }
 #endif
-
+//页管理机制初始化
 void __init paging_init(void)
 {
 	sparse_init();
@@ -1331,6 +1331,7 @@ void __init mem_init(void)
 	/* clear_bss() already clear the empty_zero_page */
 
 	/* this will put all memory onto the freelists */
+	//向伙伴系统移交控制权
 	memblock_free_all();
 	after_bootmem = 1;
 	x86_init.hyper.init_after_bootmem();

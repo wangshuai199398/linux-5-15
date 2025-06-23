@@ -293,9 +293,8 @@ static unsigned int sane_fdtable_size(struct fdtable *fdt, struct fd_range *punc
 }
 
 /*
- * Allocate a new descriptor table and copy contents from the passed in
- * instance.  Returns a pointer to cloned table on success, ERR_PTR()
- * on failure.  For 'punch_hole' see sane_fdtable_size().
+ * 分配一个新的描述符表，并将传入实例中的内容复制过来。成功时返回指向克隆后的表的指针，失败时返回 ERR_PTR()。
+ * 关于 punch_hole 的含义，请参见 sane_fdtable_size()。
  */
 struct files_struct *dup_fd(struct files_struct *oldf, struct fd_range *punch_hole)
 {
