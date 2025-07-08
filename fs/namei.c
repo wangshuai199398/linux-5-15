@@ -4004,7 +4004,6 @@ static int may_mknod(umode_t mode)
  * @name: 指向 struct filename 的指针，代表要创建的节点名称
  * @mode: 文件的权限以及类型（决定是字符设备、块设备还是FIFO等）。
  * @dev:  设备号（主设备号和次设备号，组合成 dev_t 类型）。
- */
 */
 static int do_mknodat(int dfd, struct filename *name, umode_t mode,
 		unsigned int dev)
@@ -4058,7 +4057,7 @@ out1:
 	putname(name);
 	return error;
 }
-
+//mknodat_wangs
 SYSCALL_DEFINE4(mknodat, int, dfd, const char __user *, filename, umode_t, mode,
 		unsigned int, dev)
 {
