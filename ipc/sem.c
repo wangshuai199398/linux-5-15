@@ -2184,7 +2184,7 @@ long __do_semtimedop(int semid, struct sembuf *sops,
 		WRITE_ONCE(queue.status, -EINTR);
 		queue.sleeper = current;
 
-		/* memory ordering is ensured by the lock in sem_lock() */、
+		/* memory ordering is ensured by the lock in sem_lock() */
 		//在让出 CPU 的时候，设置进程的状态为 TASK_INTERRUPTIBLE
 		__set_current_state(TASK_INTERRUPTIBLE);
 		sem_unlock(sma, locknum);
