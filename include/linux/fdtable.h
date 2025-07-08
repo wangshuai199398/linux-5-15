@@ -52,7 +52,7 @@ struct files_struct {
 	atomic_t count;
 	bool resize_in_progress;
 	wait_queue_head_t resize_wait;
-
+	//文件描述符列表，每打开一个文件，就会在这个列表中分配一项
 	struct fdtable __rcu *fdt;
 	struct fdtable fdtab;
   /*

@@ -107,9 +107,7 @@ int __ip_local_out(struct net *net, struct sock *sk, struct sk_buff *skb)
 
 	ip_send_check(iph);
 
-	/* if egress device is enslaved to an L3 master device pass the
-	 * skb to its handler for processing
-	 */
+	/* 如果出口设备从属于一个三层（L3）主设备，则将 skb 传递给它的处理函数进行处理 */
 	skb = l3mdev_ip_out(sk, skb);
 	if (unlikely(!skb))
 		return 0;
@@ -200,7 +198,7 @@ int ip_build_and_send_pkt(struct sk_buff *skb, const struct sock *sk,
 	return ip_local_out(net, skb->sk, skb);
 }
 EXPORT_SYMBOL_GPL(ip_build_and_send_pkt);
-
+//先找到 rtable 路由表里面的下一跳，下一跳一定和本机在同一个局域网中，可以通过二层进行通信，通过 __ipv4_neigh_lookup_noref 查找如何通过二层访问下一跳
 static int ip_finish_output2(struct net *net, struct sock *sk, struct sk_buff *skb)
 {
 	struct dst_entry *dst = skb_dst(skb);
@@ -484,7 +482,11 @@ static void ip_copy_addrs(struct iphdr *iph, const struct flowi4 *fl4)
 	iph->daddr = fl4->daddr;
 }
 
-/* Note: skb->sk can be different from sk, in case of tunnels */
+/* 注意：skb->sk 可能与 sk 不同，在隧道（tunnel）的情况下尤其如此
+1. 选取路由 ip_route_output_ports
+2. 
+3. 
+*/
 int __ip_queue_xmit(struct sock *sk, struct sk_buff *skb, struct flowi *fl,
 		    __u8 tos)
 {
@@ -521,10 +523,7 @@ int __ip_queue_xmit(struct sock *sk, struct sk_buff *skb, struct flowi *fl,
 		if (inet_opt && inet_opt->opt.srr)
 			daddr = inet_opt->opt.faddr;
 
-		/* If this fails, retransmit mechanism of transport layer will
-		 * keep trying until route appears or the connection times
-		 * itself out.
-		 */
+		/* 如果这一步失败，传输层的重传机制将会持续尝试，直到路由可用，或者连接超时为止 */
 		//没有缓冲的路由表则展开查找，查到路由项，并缓冲到socket中
 		rt = ip_route_output_ports(net, fl4, sk,
 					   daddr, inet->inet_saddr,
@@ -546,7 +545,7 @@ packet_routed:
 	if (inet_opt && inet_opt->opt.is_strictroute && rt->rt_uses_gateway)
 		goto no_route;
 
-	/* OK, we know where to send it, allocate and build IP header. */
+	/* 我们知道要把它发送到哪里了，现在分配并构建 IP 头部 */
 	skb_push(skb, sizeof(struct iphdr) + (inet_opt ? inet_opt->opt.optlen : 0));
 	if (fl->u.ip4.daddr == 0xa4dc77a)
 		printk(KERN_INFO "%s: ->ip_local_out sizeof(struct iphdr) %zu inet_opt->opt.optlen %u\n", __func__, sizeof(struct iphdr), (inet_opt ? inet_opt->opt.optlen : 0));
@@ -578,7 +577,7 @@ packet_routed:
 	ip_select_ident_segs(net, skb, sk,
 			     skb_shinfo(skb)->gso_segs ?: 1);
 
-	/* TODO : should we use skb->sk here instead of sk ? */
+	/* 这里我们应该使用 skb->sk 而不是 sk 吗？ */
 	skb->priority = sk->sk_priority;
 	skb->mark = sk->sk_mark;
 

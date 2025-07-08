@@ -2422,7 +2422,7 @@ int input_register_device(struct input_dev *dev)
 	error = mutex_lock_interruptible(&input_mutex);
 	if (error)
 		goto err_device_del;
-
+	//插入 input_dev_list，在input中对多个输入字符设备进行统一的管理
 	list_add_tail(&dev->node, &input_dev_list);
 
 	list_for_each_entry(handler, &input_handler_list, node)
@@ -2702,7 +2702,7 @@ static int __init input_init(void)
 	err = input_proc_init();
 	if (err)
 		goto fail1;
-
+	//注册输入的字符设备
 	err = register_chrdev_region(MKDEV(INPUT_MAJOR, 0),
 				     INPUT_MAX_CHAR_DEVICES, "input");
 	if (err) {

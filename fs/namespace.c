@@ -978,7 +978,7 @@ struct vfsmount *vfs_create_mount(struct fs_context *fc)
 
 	if (!fc->root)
 		return ERR_PTR(-EINVAL);
-
+	//创建mount结构，每个挂载的文件系统都对应于这样一个结构
 	mnt = alloc_vfsmnt(fc->source ?: "none");
 	if (!mnt)
 		return ERR_PTR(-ENOMEM);
@@ -3546,6 +3546,7 @@ struct dentry *mount_subtree(struct vfsmount *m, const char *name)
 }
 EXPORT_SYMBOL(mount_subtree);
 
+//mount_wangs
 SYSCALL_DEFINE5(mount, char __user *, dev_name, char __user *, dir_name,
 		char __user *, type, unsigned long, flags, void __user *, data)
 {

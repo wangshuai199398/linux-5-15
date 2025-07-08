@@ -2059,7 +2059,7 @@ static unsigned long __init free_low_memory_core_early(void)
 	u64 i;
 
 	memblock_clear_hotplug(0, -1);
-
+	//reserve内存交接
 	memmap_init_reserved_pages();
 
 	/*
@@ -2067,6 +2067,7 @@ static unsigned long __init free_low_memory_core_early(void)
 	 *  because in some case like Node0 doesn't have RAM installed
 	 *  low ram will be on Node1
 	 */
+	//可用内存交接
 	for_each_free_mem_range(i, NUMA_NO_NODE, MEMBLOCK_NONE, &start, &end,
 				NULL)
 		count += __free_memory_core(start, end);
@@ -2099,6 +2100,7 @@ void __init reset_all_zones_managed_pages(void)
 
 /**
  * memblock_free_all - release free pages to the buddy allocator
+ * 向伙伴系统移交控制权
  */
 void __init memblock_free_all(void)
 {
@@ -2106,7 +2108,7 @@ void __init memblock_free_all(void)
 
 	free_unused_memmap();
 	reset_all_zones_managed_pages();
-
+	//具体释放动作
 	pages = free_low_memory_core_early();
 	totalram_pages_add(pages);
 }

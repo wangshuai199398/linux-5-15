@@ -78,6 +78,7 @@ struct inet_connection_sock_af_ops {
  * @icsk_probes_tstamp:    Probe timestamp (cleared by non-zero window ack)
  * @icsk_user_timeout:	   TCP_USER_TIMEOUT value
  */
+//处于各种状态的队列，各种超时时间、拥塞控制等
 struct inet_connection_sock {
 	/* inet_sock has to be the first member! */
 	struct inet_sock	  icsk_inet;

@@ -1041,6 +1041,7 @@ EXPORT_SYMBOL(submit_bio_noacct);
  * completion, is delivered asynchronously through the ->bi_end_io() callback
  * in @bio.  The bio must NOT be touched by thecaller until ->bi_end_io() has
  * been called.
+ * struct bio 是将数据传给块设备的通用传输对象
  */
 blk_qc_t submit_bio(struct bio *bio)
 {

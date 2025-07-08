@@ -536,6 +536,7 @@ static inline bool queue_delayed_work(struct workqueue_struct *wq,
  * @delay: number of jiffies to wait before queueing
  *
  * mod_delayed_work_on() on local CPU.
+ * 负责将一个回写任务 bdi_writeback 挂在bdi_wq队列上
  */
 static inline bool mod_delayed_work(struct workqueue_struct *wq,
 				    struct delayed_work *dwork,

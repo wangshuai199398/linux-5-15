@@ -2435,7 +2435,11 @@ unsigned long reclaim_pages(struct list_head *page_list)
 
 	return nr_reclaimed;
 }
-
+/*
+先缩减活跃页面列表，再压缩不活跃的页面列表
+对于不活跃列表的缩减，shrink_inactive_list 就需要对页面进行回收；对于匿名页来讲，需要分配 swap，将内存页写入文件系统；
+对于内存映射关联了文件的，我们需要将在内存中对于文件的修改写回到文件中
+*/
 static unsigned long shrink_list(enum lru_list lru, unsigned long nr_to_scan,
 				 struct lruvec *lruvec, struct scan_control *sc)
 {
@@ -2724,7 +2728,10 @@ static bool can_age_anon_pages(struct pglist_data *pgdat,
 	/* Also valuable if anon pages can be demoted: */
 	return can_demote(pgdat->node_id, sc);
 }
-
+/*
+这里面有个 lru 列表。所有的页面都被挂在 LRU 列表中。LRU 是 Least Recent Use，也就是最近最少使用。
+也就是说，这个列表里面会按照活跃程度进行排序，这样就容易把不怎么用的内存页拿出来做处理
+*/
 static void shrink_lruvec(struct lruvec *lruvec, struct scan_control *sc)
 {
 	unsigned long nr[NR_LRU_LISTS];
@@ -2952,7 +2959,7 @@ static void shrink_node_memcgs(pg_data_t *pgdat, struct scan_control *sc)
 
 		reclaimed = sc->nr_reclaimed;
 		scanned = sc->nr_scanned;
-
+		//lru列表
 		shrink_lruvec(lruvec, sc);
 
 		shrink_slab(sc->gfp_mask, pgdat->node_id, memcg,
@@ -3075,7 +3082,7 @@ again:
 			!(sc->may_deactivate & DEACTIVATE_ANON) &&
 			anon >> sc->priority;
 	}
-
+	//换出
 	shrink_node_memcgs(pgdat, sc);
 
 	if (reclaim_state) {
@@ -3815,8 +3822,7 @@ static bool kswapd_shrink_node(pg_data_t *pgdat,
 	}
 
 	/*
-	 * Historically care was taken to put equal pressure on all zones but
-	 * now pressure is applied based on node LRU order.
+	 * 过去，回收机制会尽量对所有内存区域（zone）施加相同的回收压力，但现在则是根据节点的 LRU 顺序来分配回收压力
 	 */
 	shrink_node(pgdat, sc);
 
@@ -4268,6 +4274,7 @@ kswapd_try_sleep:
 		 */
 		trace_mm_vmscan_kswapd_wake(pgdat->node_id, highest_zoneidx,
 						alloc_order);
+		//以内存节点为单位换出 balance_pgdat->kswapd_shrink_node->shrink_node
 		reclaim_order = balance_pgdat(pgdat, alloc_order,
 						highest_zoneidx);
 		if (reclaim_order < alloc_order)
@@ -4371,8 +4378,10 @@ unsigned long shrink_all_memory(unsigned long nr_to_reclaim)
 #endif /* CONFIG_HIBERNATION */
 
 /*
- * This kswapd start function will be called by init and node-hot-add.
- * On node-hot-add, kswapd will moved to proper cpus if cpus are hot-added.
+ * 这个 kswapd 启动函数将会被内核初始化（init）和节点热添加（node-hot-add）调用。
+ * 在节点热添加时，如果有 CPU 被热插拔添加，kswapd 会被迁移到合适的 CPU 上运行。
+ * kswapd 负责物理页面的换入换出
+ * kswapd_wangs
  */
 void kswapd_run(int nid)
 {

@@ -96,24 +96,25 @@ enum {
 	IRQC_IS_HARDIRQ	= 0,
 	IRQC_IS_NESTED,
 };
-
+//irq 是一个整数，是中断信号。dev_id 是一个 void * 的通用指针，主要用于区分同一个中断处理函数对于不同设备的处理
 typedef irqreturn_t (*irq_handler_t)(int, void *);
 
 /**
- * struct irqaction - per interrupt action descriptor
- * @handler:	interrupt handler function
- * @name:	name of the device
- * @dev_id:	cookie to identify the device
- * @percpu_dev_id:	cookie to identify the device
- * @next:	pointer to the next irqaction for shared interrupts
- * @irq:	interrupt number
- * @flags:	flags (see IRQF_* above)
- * @thread_fn:	interrupt handler function for threaded interrupts
- * @thread:	thread pointer for threaded interrupts
- * @secondary:	pointer to secondary irqaction (force threading)
- * @thread_flags:	flags related to @thread
- * @thread_mask:	bitmask for keeping track of @thread activity
- * @dir:	pointer to the proc/irq/NN/name entry
+ * struct irqaction - 每个中断的操作描述符
+ * @handler:	中断处理函数
+ * @name:	    设备名称
+ * @dev_id:	    用于标识设备的私有数据指针（设备 id）
+ * @percpu_dev_id:	用于标识设备的每 CPU 私有数据指针（cookie）
+ * @next:	    指向下一个 irqaction 的指针（用于共享中断）
+ * @irq:	    中断号
+ * @flags:	    标志位（参见上方的 IRQF_* 定义）
+ * @thread_fn:	线程的执行函数
+ * @thread:	    线程的 task_struct
+ * @secondary:	指向次级 irqaction 的指针（用于强制线程化）
+ * @thread_flags:	与 @thread 相关的标志
+ * @thread_mask:	用于追踪线程活动的位掩码
+ * @dir:	    指向 /proc/irq/NN/name 条目的指针
+ * 对于这个中断的所有处理动作，都串在这个链表上
  */
 struct irqaction {
 	irq_handler_t		handler;
@@ -149,17 +150,14 @@ request_threaded_irq(unsigned int irq, irq_handler_t handler,
 		     unsigned long flags, const char *name, void *dev);
 
 /**
- * request_irq - Add a handler for an interrupt line
- * @irq:	The interrupt line to allocate
- * @handler:	Function to be called when the IRQ occurs.
- *		Primary handler for threaded interrupts
- *		If NULL, the default primary handler is installed
- * @flags:	Handling flags
- * @name:	Name of the device generating this interrupt
- * @dev:	A cookie passed to the handler function
+ * 为中断添加一个处理程序
+ * @irq:	要申请的中断编号
+ * @handler:当该中断发生时被调用的函数。用于线程化中断的主处理函数。如果为 NULL，则会安装默认的主处理函数
+ * @flags:	中断处理标志
+ * @name:	产生该中断的设备名称
+ * @dev:	传递给中断处理函数的私有数据指针（cookie）
  *
- * This call allocates an interrupt and establishes a handler; see
- * the documentation for request_threaded_irq() for details.
+ * 此调用会申请一个中断并建立一个处理函数；详细信息请参考 request_threaded_irq 的文档。
  */
 static inline int __must_check
 request_irq(unsigned int irq, irq_handler_t handler, unsigned long flags,

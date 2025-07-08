@@ -279,32 +279,27 @@ out_free_cache:
 }
 
 /**
- * kmem_cache_create_usercopy - Create a cache with a region suitable
- * for copying to userspace
- * @name: A string which is used in /proc/slabinfo to identify this cache.
- * @size: The size of objects to be created in this cache.
- * @align: The required alignment for the objects.
- * @flags: SLAB flags
- * @useroffset: Usercopy region offset
- * @usersize: Usercopy region size
- * @ctor: A constructor for the objects.
+ * 创建一个适合用户空间复制的 slab 缓存, 不用到内存里面去分配，先在缓存里面看看有没有直接可用的
+ * @name: 用于在 /proc/slabinfo 中标识该缓存的字符串名称
+ * @size: 此缓存中每个对象的大小
+ * @align: 对象所需的对齐方式
+ * @flags: SLAB 分配标志
+ * @useroffset: 用户可复制区域的偏移量
+ * @usersize: 用户可复制区域的大小
+ * @ctor: 对象的构造函数（在分配新页时调用）
  *
- * Cannot be called within a interrupt, but can be interrupted.
- * The @ctor is run when new pages are allocated by the cache.
+ * 不能在中断上下文中调用，但该函数本身可以被中断
+ * 当缓存分配了新页时，将会执行 @ctor 构造函数
  *
- * The flags are
+ * 支持的 flags（标志位）包括
  *
- * %SLAB_POISON - Poison the slab with a known test pattern (a5a5a5a5)
- * to catch references to uninitialised memory.
+ * %SLAB_POISON - 用特定的测试模式（a5a5a5a5）填充内存，以便在使用未初始化内存时快速检测
  *
- * %SLAB_RED_ZONE - Insert `Red` zones around the allocated memory to check
- * for buffer overruns.
+ * %SLAB_RED_ZONE - 在分配的内存周围插入“红区”（保护区），用于检查缓冲区溢出问题。
  *
- * %SLAB_HWCACHE_ALIGN - Align the objects in this cache to a hardware
- * cacheline.  This can be beneficial if you're counting cycles as closely
- * as davem.
+ * %SLAB_HWCACHE_ALIGN - 将对象按硬件缓存行对齐。如果你像 davem 一样对性能周期精确计数，这会带来性能收益。
  *
- * Return: a pointer to the cache on success, NULL on failure.
+ * Return: 成功时返回指向新建缓存的指针；失败时返回 NULL
  */
 struct kmem_cache *
 kmem_cache_create_usercopy(const char *name,

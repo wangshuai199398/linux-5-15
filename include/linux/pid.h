@@ -5,13 +5,13 @@
 #include <linux/rculist.h>
 #include <linux/wait.h>
 #include <linux/refcount.h>
-
+//pid_wangs
 enum pid_type
 {
-	PIDTYPE_PID,
-	PIDTYPE_TGID,
-	PIDTYPE_PGID,
-	PIDTYPE_SID,
+	PIDTYPE_PID,  // 表示进程或线程的 PID（轻量级进程 ID）
+	PIDTYPE_TGID, // Thread表示线程组 ID（即进程的 PID，主线程的 PID）
+	PIDTYPE_PGID, // Process表示进程组 ID
+	PIDTYPE_SID,  // 表示会话 ID
 	PIDTYPE_MAX,
 };
 

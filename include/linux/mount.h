@@ -69,7 +69,9 @@ struct fs_context;
 #define MNT_CURSOR		0x10000000
 
 struct vfsmount {
+	//当前文件系统根目录的 dentry
 	struct dentry *mnt_root;	/* root of the mounted tree */
+	//指向超级块的指针
 	struct super_block *mnt_sb;	/* pointer to superblock */
 	int mnt_flags;
 	struct user_namespace *mnt_userns;

@@ -1221,6 +1221,7 @@ DEFINE_IDTENTRY_SW(iret_error)
 }
 #endif
 
+//在 trap_init 的最后，我们将 idt_table 放在一个固定的虚拟地址上。trap_init 结束后，中断向量表中已经填好了前 32 位，外加一位 32 位系统调用，其他的都是用于设备中断
 void __init trap_init(void)
 {
 	/* 设置 CPU 专属的内核映射区域（CPU entry area），后面的 IST（中断栈表）要用这些区域，包含：异常栈、任务状态段TSS、全局描述符表GDT */

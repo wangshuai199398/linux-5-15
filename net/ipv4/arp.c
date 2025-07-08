@@ -148,7 +148,7 @@ static const struct neigh_ops arp_direct_ops = {
 	.output =		neigh_direct_output,
 	.connected_output =	neigh_direct_output,
 };
-
+//arp_wangs
 struct neigh_table arp_tbl = {
 	.family		= AF_INET,
 	.key_len	= 4,
@@ -276,7 +276,7 @@ static int arp_constructor(struct neighbour *neigh)
 			neigh->nud_state = NUD_NOARP;
 			memcpy(neigh->ha, dev->broadcast, dev->addr_len);
 		}
-
+		//定义了 ARP 的操作 arp_hh_ops
 		if (dev->header_ops->cache)
 			neigh->ops = &arp_hh_ops;
 		else
@@ -355,7 +355,7 @@ static void print_arp_skb(struct sk_buff *skb)
     printk("Target IP : %pI4\n", &tip);
 }
 
-/* Create and send an arp packet. */
+/* 创建并发送一个 arp 包，得到结果放在 struct dst_entry 里面 */
 static void arp_send_dst(int type, int ptype, __be32 dest_ip,
 			 struct net_device *dev, __be32 src_ip,
 			 const unsigned char *dest_hw,
@@ -455,6 +455,7 @@ static void arp_solicit(struct neighbour *neigh, struct sk_buff *skb)
 	if (target == 0xa4dc77a) {
 		printk(KERN_INFO "%s: ->arp_send_dst\n", __func__);
 	}
+	//创建并发送一个 arp 包
 	arp_send_dst(ARPOP_REQUEST, ETH_P_ARP, target, dev, saddr,
 		     dst_hw, dev->dev_addr, NULL, dst);
 }

@@ -48,8 +48,8 @@
 #include <linux/uaccess.h>
 
 #include "util.h"
-
-struct shmid_kernel /* private to the kernel */
+//共享内存的数据结构 shmid_kernel 是通过它的成员 struct file *shm_file，来管理内存文件系统 shmem 上的内存文件的。无论这个共享内存是否被映射，shm_file 都是存在的
+struct shmid_kernel /* private to the kernel 共享内存 */
 {
 	struct kern_ipc_perm	shm_perm;
 	struct file		*shm_file;
@@ -91,7 +91,7 @@ struct shm_file_data {
 
 static const struct file_operations shm_file_operations;
 static const struct vm_operations_struct shm_vm_ops;
-
+//ipc_wangs
 #define shm_ids(ns)	((ns)->ids[IPC_SHM_IDS])
 
 #define shm_unlock(shp)			\
@@ -517,7 +517,7 @@ unlink_continue:
 		put_ipc_ns(ns); /* paired with get_ipc_ns_not_zero */
 	}
 }
-
+//当访问不到的时候，先调用 vm_area_struct 的 fault 函数 shm_fault。然后它会转而调用 shm_file_data 的 fault 函数 shmem_fault
 static vm_fault_t shm_fault(struct vm_fault *vmf)
 {
 	struct file *file = vmf->vma->vm_file;
@@ -589,12 +589,13 @@ static int shm_mmap(struct file *file, struct vm_area_struct *vma)
 	ret = __shm_open(vma);
 	if (ret)
 		return ret;
-
+	//调用了 shm_file_data 中的 file 的 mmap 函数，这次调用的是 shmem_file_operations 的 mmap，也即 shmem_mmap
 	ret = call_mmap(sfd->file, vma);
 	if (ret) {
 		shm_close(vma);
 		return ret;
 	}
+	//等从 call_mmap 中返回之后, shm_file_data 的 vm_ops 指向了 shmem_vm_ops, 而 vm_area_struct 的 vm_ops 改为指向 shm_vm_ops
 	sfd->vm_ops = vma->vm_ops;
 #ifdef CONFIG_MMU
 	WARN_ON(!sfd->vm_ops->fault);
@@ -673,7 +674,7 @@ bool is_file_shm_hugepages(struct file *file)
 static const struct vm_operations_struct shm_vm_ops = {
 	.open	= shm_open,	/* callback for a new vm-area open */
 	.close	= shm_close,	/* callback for when the vm-area is released */
-	.fault	= shm_fault,
+	.fault	= shm_fault,//访问虚拟内存的时候，访问不到应该怎么办
 	.may_split = shm_may_split,
 	.pagesize = shm_pagesize,
 #if defined(CONFIG_NUMA)
@@ -710,7 +711,7 @@ static int newseg(struct ipc_namespace *ns, struct ipc_params *params)
 	if (ns->shm_tot + numpages < ns->shm_tot ||
 			ns->shm_tot + numpages > ns->shm_ctlall)
 		return -ENOSPC;
-
+	//在直接映射区分配一个共享内存 shmid_kernel 结构
 	shp = kmalloc(sizeof(*shp), GFP_KERNEL_ACCOUNT);
 	if (unlikely(!shp))
 		return -ENOMEM;
@@ -727,6 +728,7 @@ static int newseg(struct ipc_namespace *ns, struct ipc_params *params)
 	}
 
 	sprintf(name, "SYSV%08x", key);
+	//共享内存需要和文件进行关联，从而能被多个进程共享
 	if (shmflg & SHM_HUGETLB) {
 		struct hstate *hs;
 		size_t hugesize;
@@ -768,6 +770,7 @@ static int newseg(struct ipc_namespace *ns, struct ipc_params *params)
 	shp->shm_creator = current;
 
 	/* ipc_addid() locks shp upon success. */
+	//放到基数树
 	error = ipc_addid(&shm_ids(ns), &shp->shm_perm, ns->shm_ctlmni);
 	if (error < 0)
 		goto no_id;
@@ -775,6 +778,7 @@ static int newseg(struct ipc_namespace *ns, struct ipc_params *params)
 	shp->ns = ns;
 
 	task_lock(current);
+	//将 shmid_kernel 挂到当前进程的 sysvshm 队列中
 	list_add(&shp->shm_clist, &current->sysvshm.shm_clist);
 	task_unlock(current);
 
@@ -836,7 +840,7 @@ long ksys_shmget(key_t key, size_t size, int shmflg)
 
 	return ipcget(ns, &shm_ids(ns), &shm_ops, &shm_params);
 }
-
+//shmget_wangs
 SYSCALL_DEFINE3(shmget, key_t, key, size_t, size, int, shmflg)
 {
 	return ksys_shmget(key, size, shmflg);
@@ -1572,6 +1576,7 @@ long do_shmat(int shmid, char __user *shmaddr, int shmflg,
 	 */
 	ns = current->nsproxy->ipc_ns;
 	rcu_read_lock();
+	//通过共享内存的 id，在基数树中找到对应的 shmid_kernel 结构，通过它找到 shmem 上的内存文件
 	shp = shm_obtain_object_check(ns, shmid);
 	if (IS_ERR(shp)) {
 		err = PTR_ERR(shp);
@@ -1611,12 +1616,15 @@ long do_shmat(int shmid, char __user *shmaddr, int shmflg,
 	rcu_read_unlock();
 
 	err = -ENOMEM;
+	//分配一个 shm_file_data，来表示这个内存文件
 	sfd = kzalloc(sizeof(*sfd), GFP_KERNEL);
 	if (!sfd) {
 		fput(base);
 		goto out_nattch;
 	}
-
+	//创建了一个 file，指向的也是 shmem 中的内存文件
+	//为什么要再创建一个呢？这两个的功能不同，shmem 中 shm_file 用于管理内存文件，是一个中立的，独立于任何一个进程的角色。而新创建的 file 是专门用于做内存映射的
+	//新创建的 file 的 file_operations 也发生了变化，变成了 shm_file_operations
 	file = alloc_file_clone(base, f_flags,
 			  is_file_hugepages(base) ?
 				&shm_file_operations_huge :
@@ -1630,8 +1638,10 @@ long do_shmat(int shmid, char __user *shmaddr, int shmflg,
 
 	sfd->id = shp->shm_perm.id;
 	sfd->ns = get_ipc_ns(ns);
+	//将 shmem 中指向内存文件的 shm_file 赋值给 shm_file_data 中的 file 成员
 	sfd->file = base;
 	sfd->vm_ops = NULL;
+	//新创建的 file 的 private_data, 指向 shm_file_data, 这样内存映射那部分的数据结构，就能够通过它来访问内存文件了
 	file->private_data = sfd;
 
 	err = security_mmap_file(file, prot, flags);
@@ -1682,7 +1692,7 @@ out_unlock:
 out:
 	return err;
 }
-
+//shmat_wangs
 SYSCALL_DEFINE3(shmat, int, shmid, char __user *, shmaddr, int, shmflg)
 {
 	unsigned long ret;

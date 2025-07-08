@@ -310,6 +310,7 @@ trace:
  * Returns to the caller:
  *				false  - hardware queue frozen backoff
  *				true   - feel free to send more pkts
+ * 调用 dev_hard_start_xmit 进行发送，如果发送不成功，会返回 NETDEV_TX_BUSY。这说明网络卡很忙，于是就调用 dev_requeue_skb, 重新放入队列
  */
 bool sch_direct_xmit(struct sk_buff *skb, struct Qdisc *q,
 		     struct net_device *dev, struct netdev_queue *txq,
@@ -384,7 +385,8 @@ bool sch_direct_xmit(struct sk_buff *skb, struct Qdisc *q,
  * Returns to the caller:
  *				0  - queue is empty or throttled.
  *				>0 - queue is not empty.
- *
+ * 发送
+ * 将网络包从 Qdisc 的队列中拿下来，然后调用 sch_direct_xmit 进行发送
  */
 static inline bool qdisc_restart(struct Qdisc *q, int *packets)
 {
@@ -407,7 +409,9 @@ static inline bool qdisc_restart(struct Qdisc *q, int *packets)
 
 	return sch_direct_xmit(skb, q, dev, txq, root_lock, validate);
 }
-
+/*
+qdisc 的另一个功能是用于控制网络包的发送速度，因而如果超过速度，就需要重新调度，则会调用 __netif_schedule
+*/
 void __qdisc_run(struct Qdisc *q)
 {
 	int quota = READ_ONCE(dev_tx_weight);

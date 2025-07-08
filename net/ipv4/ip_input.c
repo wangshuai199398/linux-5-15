@@ -242,13 +242,12 @@ static int ip_local_deliver_finish(struct net *net, struct sock *sk, struct sk_b
 }
 
 /*
- * 	Deliver IP Packets to the higher protocol layers.
+ * 	将 IP 数据包传递给更高层的协议层
+ * hook 点在 NF_INET_LOCAL_IN，对应 iptables 里面的 INPUT 链
  */
 int ip_local_deliver(struct sk_buff *skb)
 {
-	/*
-	 *	Reassemble IP fragments.
-	 */
+	/* 重新组装 IP 分片 */
 	struct net *net = dev_net(skb->dev);
 	//如果收到的包是一个分片，就尝试进行重组（defragmentation），直到可以完整交付
 	if (ip_is_fragment(ip_hdr(skb))) {
@@ -450,15 +449,11 @@ drop_error:
 	}
 	goto drop;
 }
-
+//得到网络包对应的路由表，然后调用 dst_input，在 dst_input 中，调用的是 rtable 的成员的 dst 的 input 函数。在 rt_dst_alloc 中，可以看到，input 函数指向的是 ip_local_deliver
 static int ip_rcv_finish(struct net *net, struct sock *sk, struct sk_buff *skb)
 {
 	struct net_device *dev = skb->dev;
 	int ret;
-
-	/* if ingress device is enslaved to an L3 master device pass the
-	 * skb to its handler for processing
-	 */
 	//检查是否启用了L3主设备（例如 VRF），如果是，则更新skb的关联信息（如网络命名空间、设备等），为后续的路由查找提供正确的上下文
 	skb = l3mdev_ip_rcv(skb);
 	if (!skb)
@@ -481,9 +476,7 @@ static struct sk_buff *ip_rcv_core(struct sk_buff *skb, struct net *net)
 	int drop_reason;
 	u32 len;
 
-	/* When the interface is in promisc. mode, drop all the crap
-	 * that it receives, do not try to analyse it.
-	 */
+	/* 当接口处于混杂模式（promisc. mode）时，丢弃它接收到的所有杂乱数据，不要尝试分析它们 */
 	if (skb->pkt_type == PACKET_OTHERHOST) {
 		drop_reason = SKB_DROP_REASON_OTHERHOST;
 		goto drop;
@@ -580,7 +573,7 @@ out:
 }
 
 /*
- * IP receive entry point
+ * 接收网络包，第一个 hook 点是 NF_INET_PRE_ROUTING，也就是 iptables 的 PREROUTING 链。如果里面有规则，则执行规则，然后调用 ip_rcv_finish
  */
 int ip_rcv(struct sk_buff *skb, struct net_device *dev, struct packet_type *pt,
 	   struct net_device *orig_dev)

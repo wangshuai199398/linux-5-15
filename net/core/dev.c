@@ -541,6 +541,7 @@ static inline struct list_head *ptype_head(const struct packet_type *pt)
  *	This call does not sleep therefore it can not
  *	guarantee all CPU's that are in middle of receiving packets
  *	will see the new packet type (until the next received packet).
+ * 添加协议到链表中
  */
 
 void dev_add_pack(struct packet_type *pt)
@@ -2236,7 +2237,7 @@ static inline int deliver_skb(struct sk_buff *skb,
 		printk(KERN_INFO "%s: 0x%x\n", __func__, ntohs(pt_prev->type));
 	return pt_prev->func(skb, skb->dev, pt_prev, orig_dev);//ip_rcv
 }
-
+//在一个协议列表中逐个匹配
 static inline void deliver_ptype_list_skb(struct sk_buff *skb,
 					  struct packet_type **pt,
 					  struct net_device *orig_dev,
@@ -3075,7 +3076,9 @@ static void __netif_reschedule(struct Qdisc *q)
 	raise_softirq_irqoff(NET_TX_SOFTIRQ);
 	local_irq_restore(flags);
 }
-
+/* 发起一个软中断 NET_TX_SOFTIRQ
+设备驱动程序处理中断，分两个过程，一个是屏蔽中断的关键处理逻辑，一个是延迟处理逻辑。工作队列是延迟处理逻辑的处理方案，软中断也是一种方案
+*/
 void __netif_schedule(struct Qdisc *q)
 {
 	if (!test_and_set_bit(__QDISC_STATE_SCHED, &q->state))
@@ -3849,7 +3852,9 @@ static int dev_qdisc_enqueue(struct sk_buff *skb, struct Qdisc *q,
 		trace_qdisc_enqueue(q, txq, skb);
 	return rc;
 }
-
+/*
+将请求放入队列，然后调用 __qdisc_run 处理队列中的数据
+*/
 static inline int __dev_xmit_skb(struct sk_buff *skb, struct Qdisc *q,
 				 struct net_device *dev,
 				 struct netdev_queue *txq)
@@ -4213,6 +4218,18 @@ struct netdev_queue *netdev_core_pick_tx(struct net_device *dev,
  *      When calling this method, interrupts MUST be enabled.  This is because
  *      the BH enable code must have IRQs enabled so that it will not deadlock.
  *          --BLG
+ * 对于发送来说网络设备，有一个发送队列 struct netdev_queue *txq
+ * qdisc 全称是 queueing discipline，中文叫排队规则。
+ * 内核如果需要通过某个网络接口发送数据包，都需要按照为这个接口配置的 qdisc（排队规则）把数据包加入队列
+ * 最简单的 qdisc 是 pfifo，它不对进入的数据包做任何的处理，数据包采用先入先出的方式通过队列。
+ * pfifo_fast 稍微复杂一些，它的队列包括三个波段（band）。在每个波段里面，使用先进先出规则。三个波段的优先级也不相同。
+ *   band 0 的优先级最高，band 2 的最低。如果 band 0 里面有数据包，系统就不会处理 band 1 里面的数据包，
+ *   band 1 和 band 2 之间也是一样。数据包是按照服务类型（Type of Service，TOS）被分配到三个波段里面的。
+ *   TOS 是 IP 头里面的一个字段，代表了当前的包是高优先级的，还是低优先级的。
+ *   pfifo_fast 分为三个先入先出的队列，我们能称为三个 Band。根据网络包里面的 TOS，看这个包到底应该进入哪个队列。
+ *   TOS 总共四位，每一位表示的意思不同，总共十六种类型。
+ * tc qdisc show dev enp1s0f0
+ * tc -s qdisc show dev enp1s0f0
  */
 static int __dev_queue_xmit(struct sk_buff *skb, struct net_device *sb_dev)
 {
@@ -4449,7 +4466,7 @@ static inline void ____napi_schedule(struct softnet_data *sd,
 
 	list_add_tail(&napi->poll_list, &sd->poll_list);//将该 napi 对象加入当前 CPU 的 sd->poll_list 队列中
 	//触发 接收软中断（NET_RX_SOFTIRQ），它稍后会运行对应的 poll 回调函数。
-	//无论硬中断是因为有数据接收，还是发送完成通知，从硬中断触发的软中断都是 NET_RX_SOFTIRQ
+	//无论硬中断是因为有数据接收，还是发送完成通知，从硬中断触发的软中断都是 NET_RX_SOFTIRQ -> net_rx_action
 	__raise_softirq_irqoff(NET_RX_SOFTIRQ);
 }
 
@@ -5356,7 +5373,8 @@ static inline int nf_ingress(struct sk_buff *skb, struct packet_type **pt_prev,
 为什么遍历时总是将上一个ptype调用 deliver_skb，最后一个ptype不会在for循环里处理，而是循环结束后，再单独处理pt_prev？
 clone只是延迟了，能够少一次kfree_skb的调用，为了提升自定义packet_type的优先级，使之位于某些特殊处理之前执行
 http://bbs.chinaunix.net/thread-1933943-1-1.html
-1. 处理skb的metadata，如时间戳，网络头，传输层头，dev，skb_iif字段
+
+1. 处理skb的metadata，如时间戳，网络头，传输层头，dev，skb_iif字段, 处理二层的一些逻辑
 2. xdp处理，用于做快速包处理、丢弃、修改、转发等
 3. vlan处理，如果skb 上有 VLAN tag，交给 VLAN 子系统解析
 4. 抓包支持，对前 n-1 个 clone skb 调用 ptype->func，最后一个直接使用原始 skb
@@ -5563,7 +5581,7 @@ check_vlan_id:
 	if (likely(!deliver_exact)) {
 		if (is_src_k2pro(skb))
 			printk(KERN_INFO "%s: ->deliver_ptype_list_skb !deliver_exact \n", __func__);
-		//这里会调用上边抓包的deliver_skb，而pt_prev返回skb的协议类型如ipv4 ipv6 arp等
+		//这里会调用上边抓包的deliver_skb, pt_prev 返回skb的协议类型如ipv4 ipv6 arp等
 		deliver_ptype_list_skb(skb, &pt_prev, orig_dev, type,
 				       &ptype_base[ntohs(type) &
 						   PTYPE_HASH_MASK]);
@@ -5625,19 +5643,16 @@ static int __netif_receive_skb_one_core(struct sk_buff *skb, bool pfmemalloc)
 }
 
 /**
- *	netif_receive_skb_core - special purpose version of netif_receive_skb
- *	@skb: buffer to process
+ *	netif_receive_skb_core - netif_receive_skb 的特殊用途版本
+ *	@skb: 要处理的数据缓冲区（socket buffer）
  *
- *	More direct receive version of netif_receive_skb().  It should
- *	only be used by callers that have a need to skip RPS and Generic XDP.
- *	Caller must also take care of handling if ``(page_is_)pfmemalloc``.
+ *	这是一个比 netif_receive_skb 更直接的接收版本。仅应由那些需要跳过 RPS（接收包调度）和通用 XDP（eXpress Data Path）的调用者使用。
+ *  调用者还必须自行处理是否为 (page_is_)pfmemalloc 的情况
+ *	此函数只能在 softirq（软中断）上下文中调用，且中断应已启用。
  *
- *	This function may only be called from softirq context and interrupts
- *	should be enabled.
- *
- *	Return values (usually ignored):
- *	NET_RX_SUCCESS: no congestion
- *	NET_RX_DROP: packet was dropped
+ *	返回值（通常会被忽略）：
+ *	NET_RX_SUCCESS：无拥塞
+ *	NET_RX_DROP：数据包被丢弃
  */
 int netif_receive_skb_core(struct sk_buff *skb)
 {
@@ -6457,7 +6472,7 @@ static gro_result_t napi_skb_finish(struct napi_struct *napi,
 
 	return ret;
 }
-
+//gro_wangs
 gro_result_t napi_gro_receive(struct napi_struct *napi, struct sk_buff *skb)
 {
 	gro_result_t ret;
@@ -7394,9 +7409,10 @@ static int napi_threaded_poll(void *data)
 	}
 	return 0;
 }
-
+//软中断 NET_RX_SOFTIRQ 的中断处理函数
 static __latent_entropy void net_rx_action(struct softirq_action *h)
 {
+	//当前cpu的 softnet_data
 	struct softnet_data *sd = this_cpu_ptr(&softnet_data);
 	unsigned long time_limit = jiffies +
 		usecs_to_jiffies(READ_ONCE(netdev_budget_usecs));
@@ -7416,8 +7432,9 @@ static __latent_entropy void net_rx_action(struct softirq_action *h)
 				return;
 			break;
 		}
-
+		//取出网络包到达的设备
 		n = list_first_entry(&list, struct napi_struct, poll_list);
+		//轮询设备
 		budget -= napi_poll(n, &repoll);
 
 		/* If softirq window is exhausted then punt.

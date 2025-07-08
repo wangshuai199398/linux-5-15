@@ -845,6 +845,7 @@ skip:
  * It's a main entry function for swap readahead. By the configuration,
  * it will read ahead blocks by cluster-based(ie, physical disk based)
  * or vma-based(ie, virtual address based on faulty address) readahead.
+ * 最终会调用 swap_readpage
  */
 struct page *swapin_readahead(swp_entry_t entry, gfp_t gfp_mask,
 				struct vm_fault *vmf)

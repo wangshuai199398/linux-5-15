@@ -190,6 +190,10 @@ static struct vm_area_struct *remove_vma(struct vm_area_struct *vma)
 
 static int do_brk_flags(unsigned long addr, unsigned long request, unsigned long flags,
 		struct list_head *uf);
+/*
+brk_wangs
+要申请小块内存，就用 brk, 参数 brk 是新的堆顶位置，而当前的 mm->brk 是原来堆顶的位置
+*/
 SYSCALL_DEFINE1(brk, unsigned long, brk)
 {
 	unsigned long newbrk, oldbrk, origbrk;
@@ -233,6 +237,7 @@ SYSCALL_DEFINE1(brk, unsigned long, brk)
 
 	newbrk = PAGE_ALIGN(brk);
 	oldbrk = PAGE_ALIGN(mm->brk);
+	//这次增加的堆的量很小，还在一个页里面，不需要另行分配页
 	if (oldbrk == newbrk) {
 		mm->brk = brk;
 		goto success;
@@ -241,6 +246,7 @@ SYSCALL_DEFINE1(brk, unsigned long, brk)
 	/*
 	 * Always allow shrinking brk.
 	 * __do_munmap() may downgrade mmap_lock to read.
+	 * 要跨页了,新堆顶小于旧堆顶，这说明不是新分配内存了，而是释放内存
 	 */
 	if (brk <= mm->brk) {
 		int ret;
@@ -251,6 +257,7 @@ SYSCALL_DEFINE1(brk, unsigned long, brk)
 		 * mm->brk will be restored from origbrk.
 		 */
 		mm->brk = brk;
+		//将这一页的内存映射去掉
 		ret = __do_munmap(mm, newbrk, oldbrk-newbrk, &uf, true);
 		if (ret < 0) {
 			mm->brk = origbrk;
@@ -262,11 +269,14 @@ SYSCALL_DEFINE1(brk, unsigned long, brk)
 	}
 
 	/* Check against existing mmap mappings. */
+	//如果堆将要扩大，就要调用 find_vma
 	next = find_vma(mm, oldbrk);
+	//看当前的堆顶和下一个 vm_area_struct 之间还能不能分配一个完整的页,如果不能，没办法只好直接退出返回，内存空间都被占满了
 	if (next && newbrk + PAGE_SIZE > vm_start_gap(next))
 		goto out;
 
 	/* Ok, looks good - let it rip. */
+	//如果还有空间，就调用 do_brk 进一步分配堆空间，从旧堆顶开始，分配计算出的新旧堆顶之间的页数
 	if (do_brk_flags(oldbrk, newbrk-oldbrk, 0, &uf) < 0)
 		goto out;
 	mm->brk = brk;
@@ -655,7 +665,7 @@ void __vma_link_rb(struct mm_struct *mm, struct vm_area_struct *vma,
 	vma_gap_update(vma);
 	vma_rb_insert(vma, &mm->mm_rb);
 }
-
+//把vm_area_struct内存挂到file->f_mapping->i_mmap上
 static void __vma_link_file(struct vm_area_struct *vma)
 {
 	struct file *file;
@@ -668,6 +678,7 @@ static void __vma_link_file(struct vm_area_struct *vma)
 			mapping_allow_writable(mapping);
 
 		flush_dcache_mmap_lock(mapping);
+		//插入红黑树
 		vma_interval_tree_insert(vma, &mapping->i_mmap);
 		flush_dcache_mmap_unlock(mapping);
 	}
@@ -694,6 +705,7 @@ static void vma_link(struct mm_struct *mm, struct vm_area_struct *vma,
 	}
 
 	__vma_link(mm, vma, prev, rb_link, rb_parent);
+	//从文件到内存的映射关系
 	__vma_link_file(vma);
 
 	if (mapping)
@@ -1399,6 +1411,8 @@ static inline bool file_mmap_ok(struct file *file, struct inode *inode,
 
 /*
  * The caller must write-lock current->mm->mmap_lock.
+ * 1. 调用 get_unmapped_area 找到一个没有映射的区域
+ * 2. 调用 mmap_region 映射这个区域
  */
 unsigned long do_mmap(struct file *file, unsigned long addr,
 			unsigned long len, unsigned long prot,
@@ -1446,6 +1460,7 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
 
 	/* Obtain the address to map to. we verify (or select) it and ensure
 	 * that it represents a valid section of the address space.
+	 * 分配一个 vm_area_struct 指向虚拟地址空间中没有分配的区域，它的 vm_file 指向这个内存文件
 	 */
 	addr = get_unmapped_area(file, addr, len, pgoff, flags);
 	if (IS_ERR_VALUE(addr))
@@ -1570,7 +1585,7 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
 		if (file && is_file_hugepages(file))
 			vm_flags |= VM_NORESERVE;
 	}
-
+	//映射这个虚拟内存区域
 	addr = mmap_region(file, addr, len, vm_flags, pgoff, uf);
 	if (!IS_ERR_VALUE(addr) &&
 	    ((vm_flags & VM_LOCKED) ||
@@ -1579,6 +1594,7 @@ unsigned long do_mmap(struct file *file, unsigned long addr,
 	return addr;
 }
 
+//映射到文件，会传进来一个文件描述符fd 
 unsigned long ksys_mmap_pgoff(unsigned long addr, unsigned long len,
 			      unsigned long prot, unsigned long flags,
 			      unsigned long fd, unsigned long pgoff)
@@ -1588,6 +1604,7 @@ unsigned long ksys_mmap_pgoff(unsigned long addr, unsigned long len,
 
 	if (!(flags & MAP_ANONYMOUS)) {
 		audit_mmap_fd(fd, flags);
+		//获得 struct file。struct file 表示打开的一个文件
 		file = fget(fd);
 		if (!file)
 			return -EBADF;
@@ -1716,6 +1733,7 @@ static inline int accountable_mapping(struct file *file, vm_flags_t vm_flags)
 	return (vm_flags & (VM_NORESERVE | VM_SHARED | VM_WRITE)) == VM_WRITE;
 }
 
+//申请vm_area_struct对象，最终将可执行文件中的代码段、数据段等映射到内存中
 static unsigned long __mmap_region(struct file *file, unsigned long addr,
 		unsigned long len, vm_flags_t vm_flags, unsigned long pgoff,
 		struct list_head *uf)
@@ -1755,7 +1773,7 @@ static unsigned long __mmap_region(struct file *file, unsigned long addr,
 	}
 
 	/*
-	 * Can we just expand an old mapping?
+	 * 我们刚找到了虚拟内存区域的前一个 vm_area_struct, 是否能够基于它进行扩展，和前一个 vm_area_struct 合并到一起
 	 */
 	vma = vma_merge(mm, prev, addr, addr + len, vm_flags,
 			NULL, file, pgoff, NULL, NULL_VM_UFFD_CTX);
@@ -1766,6 +1784,7 @@ static unsigned long __mmap_region(struct file *file, unsigned long addr,
 	 * Determine the object being mapped and call the appropriate
 	 * specific mapper. the address has already been validated, but
 	 * not unmapped, but the maps are removed from the list.
+	 * 不能合并，在 Slub 里面创建一个新的 vm_area_struct 对象，设置起始和结束位置，将它加入队列
 	 */
 	vma = vm_area_alloc(mm);
 	if (!vma) {
@@ -1780,7 +1799,9 @@ static unsigned long __mmap_region(struct file *file, unsigned long addr,
 	vma->vm_pgoff = pgoff;
 
 	if (file) {
+		//映射的是文件，设置 vm_file 为目标文件
 		vma->vm_file = get_file(file);
+		//调用file的mmap方法，进行文件映射
 		error = mmap_file(file, vma);
 		if (error)
 			goto unmap_and_free_file_vma;
@@ -1845,7 +1866,7 @@ static unsigned long __mmap_region(struct file *file, unsigned long addr,
 	/* TODO: Fix SPARC ADI! */
 	WARN_ON_ONCE(!arch_validate_flags(vm_flags));
 #endif
-
+	//将新创建的 vm_area_struct 挂在了 mm_struct 里面的红黑树上
 	vma_link(mm, vma, prev, rb_link, rb_parent);
 file_expanded:
 	file = vma->vm_file;
@@ -2145,6 +2166,7 @@ arch_get_unmapped_area(struct file *filp, unsigned long addr,
 
 	if (addr) {
 		addr = PAGE_ALIGN(addr);
+		//在表示虚拟内存区域的 vm_area_struct 红黑树上找到相应的位置。之所以叫 prev，是说这个时候虚拟内存区域还没有建立，找到前一个 vm_area_struct
 		vma = find_vma_prev(mm, addr, &prev);
 		if (mmap_end - len >= addr && addr >= mmap_min_addr &&
 		    (!vma || addr + len <= vm_start_gap(vma)) &&
@@ -2234,9 +2256,11 @@ get_unmapped_area(struct file *file, unsigned long addr, unsigned long len,
 	/* Careful about overflows.. */
 	if (len > TASK_SIZE)
 		return -ENOMEM;
-
+	//匿名映射 arch_get_unmapped_area
 	get_area = current->mm->get_unmapped_area;
 	if (file) {
+		//映射到一个文件,每个打开的文件都有一个 struct file 结构，里面有一个 file_operations，用来表示和这个文件相关的操作
+		//ext4 文件系统，调用的是 thp_get_unmapped_area
 		if (file->f_op->get_unmapped_area)
 			get_area = file->f_op->get_unmapped_area;
 	} else if (flags & MAP_SHARED) {
@@ -2264,20 +2288,21 @@ get_unmapped_area(struct file *file, unsigned long addr, unsigned long len,
 
 EXPORT_SYMBOL(get_unmapped_area);
 
-/* Look up the first VMA which satisfies  addr < vm_end,  NULL if none. */
+/* Look up the first VMA which satisfies  addr < vm_end,  NULL if none. 
+ * 对红黑树的查找, 找到的是原堆顶所在的 vm_area_struct 的下一个 vm_area_struct */
 struct vm_area_struct *find_vma(struct mm_struct *mm, unsigned long addr)
 {
 	struct rb_node *rb_node;
 	struct vm_area_struct *vma;
 
 	mmap_assert_locked(mm);
-	/* Check the cache first. */
+	/* 缓存查找逻辑 */
 	vma = vmacache_find(mm, addr);
 	if (likely(vma))
 		return vma;
 
 	rb_node = mm->mm_rb.rb_node;
-
+	//没有缓冲就遍历查找
 	while (rb_node) {
 		struct vm_area_struct *tmp;
 
@@ -2323,6 +2348,8 @@ find_vma_prev(struct mm_struct *mm, unsigned long addr,
  * Verify that the stack growth is acceptable and
  * update accounting. This is shared with both the
  * grow-up and grow-down cases.
+ * 通过 ulimit -a 可以查看下边的限制
+ * 修改：uillmit -s 10240 长期修改 /etc/security/limits.conf
  */
 static int acct_stack_growth(struct vm_area_struct *vma,
 			     unsigned long size, unsigned long grow)
@@ -2330,11 +2357,11 @@ static int acct_stack_growth(struct vm_area_struct *vma,
 	struct mm_struct *mm = vma->vm_mm;
 	unsigned long new_start;
 
-	/* address space limit tests */
+	/* 增长完这几页后是否超出整体虚拟地址空间的大小 */
 	if (!may_expand_vm(mm, vma->vm_flags, grow))
 		return -ENOMEM;
 
-	/* Stack limit test */
+	/* 检查是否超出栈的大小限制 */
 	if (size > rlimit(RLIMIT_STACK))
 		return -ENOMEM;
 
@@ -2494,12 +2521,14 @@ int expand_downwards(struct vm_area_struct *vma,
 	/* Somebody else might have raced and expanded it already */
 	if (address < vma->vm_start) {
 		unsigned long size, grow;
-
+		//计算栈扩大后的最后大小
 		size = vma->vm_end - address;
+		//计算需要扩充几个页面
 		grow = (vma->vm_start - address) >> PAGE_SHIFT;
 
 		error = -ENOMEM;
 		if (grow <= vma->vm_pgoff) {
+			//判断是否允许扩充
 			error = acct_stack_growth(vma, size, grow);
 			if (!error) {
 				/*
@@ -2518,6 +2547,7 @@ int expand_downwards(struct vm_area_struct *vma,
 					mm->locked_vm += grow;
 				vm_stat_account(mm, vma->vm_flags, grow);
 				anon_vma_interval_tree_pre_update_vma(vma);
+				//如果允许则开始扩充
 				vma->vm_start = address;
 				vma->vm_pgoff -= grow;
 				anon_vma_interval_tree_post_update_vma(vma);
@@ -2925,7 +2955,7 @@ unsigned long mmap_region(struct file *file, unsigned long addr,
 			return error;
 		writable_file_mapping = true;
 	}
-
+	//
 	ret = __mmap_region(file, addr, len, vm_flags, pgoff, uf);
 
 	/* Clear our write mapping regardless of error. */
@@ -3073,9 +3103,9 @@ out:
 }
 
 /*
- *  this is really a simplified "do_mmap".  it only handles
- *  anonymous maps.  eventually we may be able to do some
- *  brk-specific accounting here.
+ *  这实际上是一个简化版的 “do_mmap”。
+ *  它只处理匿名映射（anonymous maps）。
+ *  将来我们也许可以在这里做一些与 brk 特定相关的资源统计
  */
 static int do_brk_flags(unsigned long addr, unsigned long len, unsigned long flags, struct list_head *uf)
 {
@@ -3100,6 +3130,7 @@ static int do_brk_flags(unsigned long addr, unsigned long len, unsigned long fla
 		return error;
 
 	/* Clear old maps, set up prev, rb_link, rb_parent, and uf */
+	//调用 find_vma_links 找到将来的 vm_area_struct 节点在红黑树的位置,找到它的父节点、前序节点
 	if (munmap_vma_range(mm, addr, len, &prev, &rb_link, &rb_parent, uf))
 		return -ENOMEM;
 
@@ -3114,6 +3145,7 @@ static int do_brk_flags(unsigned long addr, unsigned long len, unsigned long fla
 		return -ENOMEM;
 
 	/* Can we just expand an old private anonymous mapping? */
+	//看这个新节点是否能够和现有树中的节点合并。如果地址是连着的，能够合并，则不用创建新的 vm_area_struct 了，直接跳到 out，更新统计值即可
 	vma = vma_merge(mm, prev, addr, addr + len, flags,
 			NULL, NULL, pgoff, NULL, NULL_VM_UFFD_CTX);
 	if (vma)
@@ -3121,6 +3153,7 @@ static int do_brk_flags(unsigned long addr, unsigned long len, unsigned long fla
 
 	/*
 	 * create a vma struct for an anonymous mapping
+	 * 如果不能合并，则创建新的 vm_area_struct,加到 anon_vma_chain 链表中,也加到红黑树中
 	 */
 	vma = vm_area_alloc(mm);
 	if (!vma) {

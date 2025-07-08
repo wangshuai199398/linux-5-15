@@ -195,7 +195,7 @@ static const struct cpu_dev default_cpu = {
 };
 
 static const struct cpu_dev *this_cpu = &default_cpu;
-
+//定义了内核代码段、内核数据段、用户代码段和用户数据段
 DEFINE_PER_CPU_PAGE_ALIGNED(struct gdt_page, gdt_page) = { .gdt = {
 #ifdef CONFIG_X86_64
 	/*

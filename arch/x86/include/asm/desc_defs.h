@@ -19,7 +19,8 @@ struct desc_struct {
 	u16	base1: 8, type: 4, s: 1, dpl: 2, p: 1;
 	u16	limit1: 4, avl: 1, l: 1, d: 1, g: 1, base2: 8;
 } __attribute__((packed));
-
+//段描述符表（segment descriptors），放在全局描述符表 GDT（Global Descriptor Table）里面
+//一个段表项由段基地址 base、段界限 limit，还有一些标识符组成
 #define GDT_ENTRY_INIT(flags, base, limit)			\
 	{							\
 		.limit0		= (u16) (limit),		\

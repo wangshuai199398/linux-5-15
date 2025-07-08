@@ -822,7 +822,13 @@ static int parse_elf_properties(struct file *f, const struct elf_phdr *phdr,
 
 	return ret == -ENOENT ? 0 : ret;
 }
-
+/*
+1. 调用 setup_new_exec，设置内存映射区 mmap_base
+2. 调用 setup_arg_pages，设置栈的 vm_area_struct，这里面设置了 mm->arg_start 是指向栈底的，current->mm->start_stack 就是栈底
+3. elf_map 会将 ELF 文件中的代码部分映射到内存中来
+4. set_brk 设置了堆的 vm_area_struct，这里面设置了 current->mm->start_brk = current->mm->brk，也即堆里面还是空的
+5. load_elf_interp 将依赖的 so 映射到内存中的内存映射区域
+*/
 static int load_elf_binary(struct linux_binprm *bprm)
 {
 	struct file *interpreter = NULL; /* to shut gcc up */
@@ -1228,6 +1234,7 @@ out_free_interp:
 	 * mapping in the interpreter, to make sure it doesn't wind
 	 * up getting placed where the bss needs to go.
 	 */
+	//为堆空间申请vm_area_struct对象
 	retval = set_brk(elf_bss, elf_brk, bss_prot);
 	if (retval)
 		goto out_free_dentry;

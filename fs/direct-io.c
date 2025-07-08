@@ -442,7 +442,7 @@ static inline void dio_bio_submit(struct dio *dio, struct dio_submit *sdio)
 		sdio->submit_io(bio, dio->inode, sdio->logical_offset_in_bio);
 		dio->bio_cookie = BLK_QC_T_NONE;
 	} else
-		dio->bio_cookie = submit_bio(bio);
+		dio->bio_cookie = submit_bio(bio);//向块设备层提交数据
 
 	sdio->bio = NULL;
 	sdio->boundary = 0;
@@ -923,6 +923,8 @@ static inline void dio_zero_block(struct dio *dio, struct dio_submit *sdio,
  * For best results, the blockdev should be set up with 512-byte i_blkbits and
  * it should set b_size to PAGE_SIZE or more inside get_block().  This gives
  * fine alignment but still allows this function to work in PAGE_SIZE units.
+ * 有两层循环，第一层循环是依次处理这次要写入的所有块。对于每一块，取出对应的内存中的页 page，在这一块中，有写入的起始地址 from 和终止地址 to，
+ * 所以，第二层循环就是依次处理 from 到 to 的数据，调用 submit_page_section，提交到块设备层进行写入
  */
 static int do_direct_IO(struct dio *dio, struct dio_submit *sdio,
 			struct buffer_head *map_bh)
@@ -1124,6 +1126,7 @@ static inline int drop_refcount(struct dio *dio)
  * is always inlined. Otherwise gcc is unable to split the structure into
  * individual fields and will generate much worse code. This is important
  * for the whole file.
+ * 准备一个 struct dio 结构和 struct dio_submit 结构，用来描述将要发生的写入请求
  */
 static inline ssize_t
 do_blockdev_direct_IO(struct kiocb *iocb, struct inode *inode,

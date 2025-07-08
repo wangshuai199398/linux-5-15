@@ -142,7 +142,9 @@ struct neighbour {
 	rwlock_t		lock;
 	refcount_t		refcnt;
 	unsigned int		arp_queue_len_bytes;
+	//所有想通过ARP获取MAC地址的任务都放在这个队列里面
 	struct sk_buff_head	arp_queue;
+	//定时器，过一段时间就调用 neigh_timer_handler, 来处理这些ARP任务
 	struct timer_list	timer;
 	unsigned long		used;
 	atomic_t		probes;

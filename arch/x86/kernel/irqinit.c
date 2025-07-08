@@ -70,7 +70,7 @@ void __init init_ISA_irqs(void)
 		irq_set_status_flags(i, IRQ_LEVEL);
 	}
 }
-
+//初始化其他的设备中断
 void __init init_IRQ(void)
 {
 	int i;

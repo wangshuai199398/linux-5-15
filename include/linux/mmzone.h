@@ -263,6 +263,10 @@ static __always_inline bool vmstat_item_in_bytes(int idx)
 #define LRU_ACTIVE 1
 #define LRU_FILE 2
 
+/* 内存页总共分两类，一类是匿名页，和虚拟地址空间进行关联；一类是内存映射，不但和虚拟地址空间关联，还和文件管理关联
+   每一类都有两个列表，一个是 active，一个是 inactive。顾名思义，active 就是比较活跃的，inactive 就是不怎么活跃的。
+   这两个里面的页会变化，过一段时间，活跃的可能变为不活跃，不活跃的可能变为活跃。如果要换出内存，那就是从不活跃的列表中找出最不活跃的，换出到硬盘上
+*/
 enum lru_list {
 	LRU_INACTIVE_ANON = LRU_BASE,
 	LRU_ACTIVE_ANON = LRU_BASE + LRU_ACTIVE,
@@ -394,87 +398,58 @@ struct per_cpu_nodestat {
 
 enum zone_type {
 	/*
-	 * ZONE_DMA and ZONE_DMA32 are used when there are peripherals not able
-	 * to DMA to all of the addressable memory (ZONE_NORMAL).
-	 * On architectures where this area covers the whole 32 bit address
-	 * space ZONE_DMA32 is used. ZONE_DMA is left for the ones with smaller
-	 * DMA addressing constraints. This distinction is important as a 32bit
-	 * DMA mask is assumed when ZONE_DMA32 is defined. Some 64-bit
-	 * platforms may need both zones as they support peripherals with
-	 * different DMA addressing limitations.
+	 * ZONE_DMA 和 ZONE_DMA32 用于在某些外设无法对整个可寻址内存（即 ZONE_NORMAL）进行 DMA（直接内存访问）时的情况。
+	 * 在某些架构中，如果 DMA 区域覆盖了整个 32 位地址空间，就会使用 ZONE_DMA32。而 ZONE_DMA 则保留给那些 DMA 地址限制更小的设备使用。
+	 * 这种区分很重要，因为一旦定义了 ZONE_DMA32，就默认假设外设使用的是 32 位的 DMA 掩码（DMA mask）。
+	 * 一些 64 位平台可能同时需要 ZONE_DMA 和 ZONE_DMA32，因为它们支持具有不同 DMA 地址限制的外设。
 	 */
 #ifdef CONFIG_ZONE_DMA
+	//ZONE_DMA 地址段最低的一块内存区域, 支持DMA
 	ZONE_DMA,
 #endif
 #ifdef CONFIG_ZONE_DMA32
+	//支持32位地址总线的DMA设备, 只有在64位系统里才有效
 	ZONE_DMA32,
 #endif
-	/*
-	 * Normal addressable memory is in ZONE_NORMAL. DMA operations can be
-	 * performed on pages in ZONE_NORMAL if the DMA devices support
-	 * transfers to all addressable memory.
-	 */
+	/*普通的可寻址内存位于 ZONE_NORMAL 区域。如果 DMA 设备支持对所有可寻址内存进行传输操作，那么 DMA 操作是可以在 ZONE_NORMAL 区域的页面上执行的*/
+	//直接映射区，从物理内存到虚拟内存的内核区域，通过加上一个常量直接映射
 	ZONE_NORMAL,
 #ifdef CONFIG_HIGHMEM
 	/*
-	 * A memory area that is only addressable by the kernel through
-	 * mapping portions into its own address space. This is for example
-	 * used by i386 to allow the kernel to address the memory beyond
-	 * 900MB. The kernel will set up special mappings (page
-	 * table entries on i386) for each page that the kernel needs to
-	 * access.
+	 * 高端内存区，就是上一节讲的，对于 32 位系统来说超过 896M 的地方，对于 64 位没必要有的一段区域
 	 */
 	ZONE_HIGHMEM,
 #endif
 	/*
-	 * ZONE_MOVABLE is similar to ZONE_NORMAL, except that it contains
-	 * movable pages with few exceptional cases described below. Main use
-	 * cases for ZONE_MOVABLE are to make memory offlining/unplug more
-	 * likely to succeed, and to locally limit unmovable allocations - e.g.,
-	 * to increase the number of THP/huge pages. Notable special cases are:
+	 * ZONE_MOVABLE 与 ZONE_NORMAL 类似，但它只包含可移动的页面，除了以下列出的少数特殊情况
+	 * 这个区域的主要用途包括：
+	 * 提高内存下线（memory offlining）或内存热拔插的成功率；
+	 * 将不可移动的内存分配局部限制在其他 zone 中，例如为了增加可用的大页（THP/huge pages）数量
 	 *
-	 * 1. Pinned pages: (long-term) pinning of movable pages might
-	 *    essentially turn such pages unmovable. Therefore, we do not allow
-	 *    pinning long-term pages in ZONE_MOVABLE. When pages are pinned and
-	 *    faulted, they come from the right zone right away. However, it is
-	 *    still possible that address space already has pages in
-	 *    ZONE_MOVABLE at the time when pages are pinned (i.e. user has
-	 *    touches that memory before pinning). In such case we migrate them
-	 *    to a different zone. When migration fails - pinning fails.
-	 * 2. memblock allocations: kernelcore/movablecore setups might create
-	 *    situations where ZONE_MOVABLE contains unmovable allocations
-	 *    after boot. Memory offlining and allocations fail early.
-	 * 3. Memory holes: kernelcore/movablecore setups might create very rare
-	 *    situations where ZONE_MOVABLE contains memory holes after boot,
-	 *    for example, if we have sections that are only partially
-	 *    populated. Memory offlining and allocations fail early.
-	 * 4. PG_hwpoison pages: while poisoned pages can be skipped during
-	 *    memory offlining, such pages cannot be allocated.
-	 * 5. Unmovable PG_offline pages: in paravirtualized environments,
-	 *    hotplugged memory blocks might only partially be managed by the
-	 *    buddy (e.g., via XEN-balloon, Hyper-V balloon, virtio-mem). The
-	 *    parts not manged by the buddy are unmovable PG_offline pages. In
-	 *    some cases (virtio-mem), such pages can be skipped during
-	 *    memory offlining, however, cannot be moved/allocated. These
-	 *    techniques might use alloc_contig_range() to hide previously
-	 *    exposed pages from the buddy again (e.g., to implement some sort
-	 *    of memory unplug in virtio-mem).
-	 * 6. ZERO_PAGE(0), kernelcore/movablecore setups might create
-	 *    situations where ZERO_PAGE(0) which is allocated differently
-	 *    on different platforms may end up in a movable zone. ZERO_PAGE(0)
-	 *    cannot be migrated.
-	 * 7. Memory-hotplug: when using memmap_on_memory and onlining the
-	 *    memory to the MOVABLE zone, the vmemmap pages are also placed in
-	 *    such zone. Such pages cannot be really moved around as they are
-	 *    self-stored in the range, but they are treated as movable when
-	 *    the range they describe is about to be offlined.
+	 * 一些重要的特殊情况包括：
+	 * 1. 固定页（Pinned pages）：
+	 *    对可移动页进行长期 pin 操作，会使其变得不可移动。因此，不允许在 ZONE_MOVABLE 中长期 pin 页面。页面在被 fault 并固定时，会直接从合适的 
+	 *    zone 分配；如果在 pin 操作前，地址空间中已有页面来自 ZONE_MOVABLE，就会尝试将这些页面迁移到其他 zone。若迁移失败，则 pin 操作失败。
+	 * 2. memblock 分配造成的不可移动页面：
+	 *    内核参数 kernelcore 和 movablecore 可能会在引导后导致 ZONE_MOVABLE 中出现不可移动页面，进而导致内存下线或页面分配提前失败。
+	 * 3. 内存空洞（memory holes）：
+	 *    某些稀有情况下，比如 zone 所跨越的 section 只部分填充，也可能导致 ZONE_MOVABLE 中出现“空洞”。这也会影响后续的下线或分配操作。
+	 * 4. 被硬件毒化的页（PG_hwpoison）：
+	 *    虽然在内存下线时可以跳过这些页面，但它们无法被重新分配。
+	 * 5. 不可移动的 PG_offline 页：
+	 *    在半虚拟化环境下（如 XEN-balloon、Hyper-V balloon、virtio-mem），热插拔内存可能部分由伙伴系统管理，未被管理的部分是不可移动的 PG_offline 页面。
+	 *    某些机制如 virtio-mem 可以通过 alloc_contig_range() 把这些页重新“隐藏”掉，以实现类似“内存拔出”的效果，但它们仍然不可移动或不可分配。
+	 * 6. ZERO_PAGE(0)：
+	 *    某些平台中，ZERO_PAGE(0) 的分配方式不同，可能最终落入 ZONE_MOVABLE，但这类页是不能迁移的。
+	 * 7. 内存热插拔与 vmemmap 页：
+	 *    使用 memmap_on_memory 时，如果把内存上线到 ZONE_MOVABLE，描述这部分内存的 vmemmap 页面也会落入此区。虽然这些页面是“自我存储”的
+	 *   （自我描述其所在范围），它们理论上不可移动，但在实际下线中会被视作可移动页。
 	 *
-	 * In general, no unmovable allocations that degrade memory offlining
-	 * should end up in ZONE_MOVABLE. Allocators (like alloc_contig_range())
-	 * have to expect that migrating pages in ZONE_MOVABLE can fail (even
-	 * if has_unmovable_pages() states that there are no unmovable pages,
-	 * there can be false negatives).
+	 * 总结：
+	 * 在 ZONE_MOVABLE 中，一般不应包含任何真正不可移动的分配，否则会削弱内存热插拔和大页分配的能力。但是由于上述种种特殊情况，即便系统认为页面是可移动的
+	 * （如通过 has_unmovable_pages() 判断），仍可能存在假阳性，即实际迁移会失败。因此，像 alloc_contig_range() 这样的内存分配器必须预期迁移操作可能失败
 	 */
+	//可移动区域，通过将物理内存划分为可移动分配区域和不可移动分配区域来避免内存碎片
 	ZONE_MOVABLE,
 #ifdef CONFIG_ZONE_DEVICE
 	ZONE_DEVICE,
@@ -511,6 +486,7 @@ struct zone {
 	int node;
 #endif
 	struct pglist_data	*zone_pgdat;
+	//区分冷热页,每个 CPU 一个,如果一个页被加载到 CPU 高速缓存里面，这就是一个热页（Hot Page），CPU 读起来速度会快很多，如果没有就是冷页（Cold Page）
 	struct per_cpu_pages	__percpu *per_cpu_pageset;
 	struct per_cpu_zonestat	__percpu *per_cpu_zonestats;
 	/*
@@ -529,6 +505,7 @@ struct zone {
 #endif /* CONFIG_SPARSEMEM */
 
 	/* zone_start_pfn == zone_start_paddr >> PAGE_SHIFT */
+	//属于这个 zone 的第一个页
 	unsigned long		zone_start_pfn;
 
 	/*
@@ -573,8 +550,11 @@ struct zone {
 	 * mem_hotplug_begin/end(). Any reader who can't tolerant drift of
 	 * present_pages should get_online_mems() to get a stable value.
 	 */
+	//这个 zone 被伙伴系统管理的所有的 page 数目
 	atomic_long_t		managed_pages;
+	//不管中间有没有物理内存空洞，反正就是最后的页号减去起始的页号
 	unsigned long		spanned_pages;
+	//这个 zone 在物理内存中真实存在的所有 page 数目
 	unsigned long		present_pages;
 #if defined(CONFIG_MEMORY_HOTPLUG)
 	unsigned long		present_early_pages;
@@ -582,7 +562,7 @@ struct zone {
 #ifdef CONFIG_CMA
 	unsigned long		cma_pages;
 #endif
-
+	// zone 的名称
 	const char		*name;
 
 #ifdef CONFIG_MEMORY_ISOLATION
@@ -604,7 +584,7 @@ struct zone {
 	/* Write-intensive fields used from the page allocator */
 	ZONE_PADDING(_pad1_)
 
-	/* free areas of different sizes */
+	/* 管理了zone下面所有页面的伙伴系统 每个元素代表空闲可分配连续4K、8K、16K、4M(2^i个连续页的空闲块)的内存链表*/
 	struct free_area	free_area[MAX_ORDER];
 
 	/* zone flags, see below */
@@ -790,28 +770,23 @@ struct deferred_split {
 #endif
 
 /*
- * On NUMA machines, each NUMA node would have a pg_data_t to describe
- * it's memory layout. On UMA machines there is a single pglist_data which
- * describes the whole memory.
- *
- * Memory statistics and page replacement data structures are maintained on a
- * per-zone basis.
+ * 在 NUMA（非统一内存访问）架构的机器上，每个 NUMA 节点都会有一个 pg_data_t 结构，用于描述该节点的内存布局。
+ * 而在 UMA（统一内存访问）架构的机器上，则只会有一个 pglist_data 结构，用来描述整个系统的内存
+ * 
+ * 内存统计信息以及页面置换（page replacement）所需的数据结构是以“zone”为单位来维护的
+ * node 描述
  */
 typedef struct pglist_data {
-	/*
-	 * node_zones contains just the zones for THIS node. Not all of the
-	 * zones may be populated, but it is the full list. It is referenced by
-	 * this node's node_zonelists as well as other node's node_zonelists.
-	 */
+	/* node_zones 只包含当前节点（THIS node）上的所有 zone。
+	 * 并不是所有的 zone 都一定被填充（populated），但这个列表是完整的。
+	 * 它不仅被当前节点的 node_zonelists 引用，也可能被其他节点的 node_zonelists 引用 */
+	//每一个节点分成一个个区域 zone，放在数组 node_zones 里面。这个数组的大小为 __MAX_NR_ZONES
 	struct zone node_zones[MAX_NR_ZONES];
 
-	/*
-	 * node_zonelists contains references to all zones in all nodes.
-	 * Generally the first zones will be references to this node's
-	 * node_zones.
-	 */
+	/* node_zonelists 包含对所有节点中所有 zone 的引用。通常，列表中的前几个 zone 引用的是当前节点（本节点）的 node_zones */
+	//备用节点和它的内存区域的情况
 	struct zonelist node_zonelists[MAX_ZONELISTS];
-
+	//当前节点的区域的数量
 	int nr_zones; /* number of populated zones in this node */
 #ifdef CONFIG_FLATMEM	/* means !SPARSEMEM */
 	struct page *node_mem_map;
@@ -834,10 +809,13 @@ typedef struct pglist_data {
 	 */
 	spinlock_t node_size_lock;
 #endif
+	//这个节点的起始页号
 	unsigned long node_start_pfn;
+	//真正可用的物理页面的数目
 	unsigned long node_present_pages; /* total number of physical pages */
-	unsigned long node_spanned_pages; /* total size of physical page
-					     range, including holes */
+	//这个节点中包含不连续的物理内存地址的页面数
+	unsigned long node_spanned_pages; /* total size of physical page range, including holes */
+	// ID 号
 	int node_id;
 	wait_queue_head_t kswapd_wait;
 	wait_queue_head_t pfmemalloc_wait;

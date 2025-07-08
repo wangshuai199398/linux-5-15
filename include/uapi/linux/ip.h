@@ -94,10 +94,12 @@ struct iphdr {
 #else
 #error	"Please fix <asm/byteorder.h>"
 #endif
+	//服务类型, 分片
 	__u8	tos;
 	__be16	tot_len;
 	__be16	id;
 	__be16	frag_off;
+	//存活时间
 	__u8	ttl;
 	__u8	protocol;
 	__sum16	check;

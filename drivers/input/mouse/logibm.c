@@ -57,7 +57,9 @@ module_param_hw_named(irq, logibm_irq, uint, irq, 0);
 MODULE_PARM_DESC(irq, "IRQ number (5=default)");
 
 static struct input_dev *logibm_dev;
-
+/*
+先是获取了 x 和 y 的移动坐标，以及左中右的按键，上报上去，然后返回 IRQ_HANDLED，这表示处理完毕
+*/
 static irqreturn_t logibm_interrupt(int irq, void *dev_id)
 {
 	char dx, dy;
@@ -144,7 +146,7 @@ static int __init logibm_init(void)
 
 	logibm_dev->open  = logibm_open;
 	logibm_dev->close = logibm_close;
-
+	//将 logibm 字符设备注册到 input.c 里面去
 	err = input_register_device(logibm_dev);
 	if (err)
 		goto err_free_dev;
@@ -164,6 +166,6 @@ static void __exit logibm_exit(void)
 	input_unregister_device(logibm_dev);
 	release_region(LOGIBM_BASE, LOGIBM_EXTENT);
 }
-
+//输入字符设备，鼠标
 module_init(logibm_init);
 module_exit(logibm_exit);

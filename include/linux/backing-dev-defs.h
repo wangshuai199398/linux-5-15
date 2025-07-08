@@ -142,6 +142,7 @@ struct bdi_writeback {
 
 	spinlock_t work_lock;		/* protects work_list & dwork scheduling */
 	struct list_head work_list;
+	//bdi_writeback 就是以 delayed_work 的身份挂到bdi_wq队列上的，并且把 delay 设置为 0，意思就是一刻不等，马上执行
 	struct delayed_work dwork;	/* work item used for writeback */
 	struct delayed_work bw_dwork;	/* work item used for bandwidth estimate */
 

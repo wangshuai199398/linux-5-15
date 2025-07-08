@@ -6,7 +6,9 @@ struct dentry;
 struct vfsmount;
 
 struct path {
+	//文件系统的挂载有关
 	struct vfsmount *mnt;
+	//除了用于标识目录之外，还可以表示文件名，还会建立文件名及其 inode 之间的关联
 	struct dentry *dentry;
 } __randomize_layout;
 

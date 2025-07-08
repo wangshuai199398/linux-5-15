@@ -1624,7 +1624,7 @@ struct rtable *rt_dst_alloc(struct net_device *dev,
 			    bool nopolicy, bool noxfrm)
 {
 	struct rtable *rt;
-
+	//创建 rtable, 表示找到的路由表项
 	rt = dst_alloc(&ipv4_dst_ops, dev, 1, DST_OBSOLETE_FORCE_CHK,
 		       (nopolicy ? DST_NOPOLICY : 0) |
 		       (noxfrm ? DST_NOXFRM : 0));

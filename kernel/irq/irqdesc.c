@@ -351,7 +351,7 @@ static void irq_insert_desc(unsigned int irq, struct irq_desc *desc)
 {
 	radix_tree_insert(&irq_desc_tree, irq, desc);
 }
-
+//中断号不连续，放在基数树上，对于从某个整型 key 找到 value 速度很快
 struct irq_desc *irq_to_desc(unsigned int irq)
 {
 	return radix_tree_lookup(&irq_desc_tree, irq);

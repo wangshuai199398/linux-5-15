@@ -340,7 +340,7 @@ static ssize_t lp_write(struct file *file, const char __user *buf,
 
 	if ((retv = lp_wait_ready(minor, nonblock)) == 0)
 	do {
-		/* Write the data. */
+		/* 写入外部设备 */
 		written = parport_write(port, kbuf, copy_size);
 		if (written > 0) {
 			copy_size -= written;
@@ -382,7 +382,7 @@ static ssize_t lp_write(struct file *file, const char __user *buf,
 					 lp_table[minor].best_mode);
 
 		} else if (need_resched())
-			schedule();
+			schedule();//写入的过程中，给其他线程抢占 CPU 的机会
 
 		if (count) {
 			copy_size = count;
@@ -395,7 +395,7 @@ static ssize_t lp_write(struct file *file, const char __user *buf,
 				break;
 			}
 		}
-	} while (count > 0);
+	} while (count > 0);//如果 count 还是大于 0，继续写
 
 	if (test_and_clear_bit(LP_PREEMPT_REQUEST,
 			       &lp_table[minor].bits)) {
@@ -1117,7 +1117,7 @@ static void lp_cleanup_module(void)
 	unregister_chrdev(LP_MAJOR, "lp");
 	class_destroy(lp_class);
 }
-
+//输出字符设备，打印机
 __setup("lp=", lp_setup);
 module_init(lp_init_module);
 module_exit(lp_cleanup_module);

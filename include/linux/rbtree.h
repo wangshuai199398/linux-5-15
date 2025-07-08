@@ -168,7 +168,7 @@ rb_add_cached(struct rb_node *node, struct rb_root_cached *tree,
 	struct rb_node **link = &tree->rb_root.rb_node;
 	struct rb_node *parent = NULL;
 	bool leftmost = true;
-
+	//根据进程的vruntime值在红黑树中寻找位置
 	while (*link) {
 		parent = *link;
 		if (less(node, parent)) {
@@ -178,7 +178,7 @@ rb_add_cached(struct rb_node *node, struct rb_root_cached *tree,
 			leftmost = false;
 		}
 	}
-
+	//插入到红黑树中
 	rb_link_node(node, parent, link);
 	rb_insert_color_cached(node, tree, leftmost);
 

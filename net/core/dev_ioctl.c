@@ -306,6 +306,8 @@ static int dev_siocwandev(struct net_device *dev, struct if_settings *ifs)
 
 /*
  *	Perform the SIOCxIFxxx calls, inside rtnl_lock()
+ *  响应用户空间发来的 SIOCSIFFLAGS、SIOCSIFADDR、SIOCSIFMTU 等 ioctl 命令，进而对网卡做控制操作
+ *  ifconfig
  */
 static int dev_ifsioc(struct net *net, struct ifreq *ifr, void __user *data,
 		      unsigned int cmd)
@@ -313,7 +315,7 @@ static int dev_ifsioc(struct net *net, struct ifreq *ifr, void __user *data,
 	int err;
 	struct net_device *dev = __dev_get_by_name(net, ifr->ifr_name);
 	const struct net_device_ops *ops;
-
+	pr_info("%s: cmd %u\n", __func__, cmd);
 	if (!dev)
 		return -ENODEV;
 

@@ -2,7 +2,7 @@
 #ifndef _LINUX_NUMA_H
 #define _LINUX_NUMA_H
 #include <linux/types.h>
-
+//CONFIG_NODES_SHIFT=10
 #ifdef CONFIG_NODES_SHIFT
 #define NODES_SHIFT     CONFIG_NODES_SHIFT
 #else

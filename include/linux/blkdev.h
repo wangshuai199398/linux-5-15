@@ -1325,7 +1325,9 @@ static inline int sb_issue_zeroout(struct super_block *sb, sector_t block,
 						  SECTOR_SHIFT),
 				    gfp_mask, 0);
 }
-
+/*
+如果这个值非零，表示这是一个分区设备；如果为 0，则说明它是整个磁盘（例如 /dev/sda）而非某个分区（如 /dev/sda1）。
+*/
 static inline bool bdev_is_partition(struct block_device *bdev)
 {
 	return bdev->bd_partno;

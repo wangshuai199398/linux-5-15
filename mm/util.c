@@ -1089,6 +1089,8 @@ int __weak memcmp_pages(struct page *page1, struct page *page2)
 int mmap_file(struct file *file, struct vm_area_struct *vma)
 {
 	static const struct vm_operations_struct dummy_vm_ops = {};
+	//调用 file_operations 的 mmap 函数， 对于 ext4 文件系统，调用的是 ext4_file_mmap, 对于共享内存调用 shm_mmap
+	//这里文件和内存开始发生关系
 	int err = call_mmap(file, vma);
 
 	if (likely(!err))

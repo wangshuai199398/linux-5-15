@@ -203,6 +203,7 @@ static void loopback_setup(struct net_device *dev)
 }
 
 /* Setup and register the loopback device. */
+//创建并且注册一个名字为lo的 net_device。注册完之后，在这个 namespace 里面就会出现一个这样的网络设备，称为 loopback 网络设备
 static __net_init int loopback_net_init(struct net *net)
 {
 	struct net_device *dev;
@@ -231,6 +232,7 @@ out:
 }
 
 /* Registered in net/core/dev.c */
+//loopback_wangs
 struct pernet_operations __net_initdata loopback_net_ops = {
 	.init = loopback_net_init,
 };

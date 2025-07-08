@@ -499,9 +499,13 @@ static int ext4_read_inline_page(struct inode *inode, struct page *page)
 		goto out;
 
 	len = min_t(size_t, ext4_get_inline_size(inode), i_size_read(inode));
+	//将物理内存映射到内核的虚拟地址空间，得到内核中的地址 kaddr
+	//本来把物理内存映射到用户虚拟地址空间，不需要在内核里面映射一把。但是，现在因为要从文件里面读取数据并写入这个物理页面，又不能使用物理地址，只能使用虚拟地址，这就需要在内核里面临时映射一把
 	kaddr = kmap_atomic(page);
+	//读取文件到这个虚拟地址
 	ret = ext4_read_inline_data(inode, kaddr, len, &iloc);
 	flush_dcache_page(page);
+	//取消这个临时映射
 	kunmap_atomic(kaddr);
 	zero_user_segment(page, len, PAGE_SIZE);
 	SetPageUptodate(page);
@@ -526,6 +530,7 @@ int ext4_readpage_inline(struct inode *inode, struct page *page)
 	 * So for all the other pages, just set them uptodate.
 	 */
 	if (!page->index)
+		//内存映射
 		ret = ext4_read_inline_page(inode, page);
 	else if (!PageUptodate(page)) {
 		zero_user_segment(page, 0, PAGE_SIZE);

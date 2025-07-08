@@ -2915,11 +2915,13 @@ static int ext4_mknod(struct user_namespace *mnt_userns, struct inode *dir,
 	credits = (EXT4_DATA_TRANS_BLOCKS(dir->i_sb) +
 		   EXT4_INDEX_EXTRA_TRANS_BLOCKS + 3);
 retry:
+	//调用 __ext4_new_inode，在 ext4 文件系统上真的创建一个文件
 	inode = ext4_new_inode_start_handle(mnt_userns, dir, mode, &dentry->d_name,
 					    0, NULL, EXT4_HT_DIR, credits);
 	handle = ext4_journal_current_handle();
 	err = PTR_ERR(inode);
 	if (!IS_ERR(inode)) {
+		//初始化 inode
 		init_special_inode(inode, inode->i_mode, rdev);
 		inode->i_op = &ext4_special_inode_operations;
 		err = ext4_add_nondir(handle, dentry, &inode);

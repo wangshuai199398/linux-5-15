@@ -23,6 +23,7 @@
  * A note on @num_free: with indirect buffers, each buffer needs one
  * element in the queue, otherwise a buffer will need one element per
  * sg element.
+ * virtqueue 是一个介于客户机前端和 qemu 后端的一个结构，用于在这两端之间传递数据，对于网络设备来讲有发送和接收两个方向的队列
  */
 struct virtqueue {
 	struct list_head list;

@@ -184,7 +184,7 @@ _copy_to_user(void __user *to, const void *from, unsigned long n)
 extern __must_check unsigned long
 _copy_to_user(void __user *, const void *, unsigned long);
 #endif
-
+//将数据从用户态拷贝到内核态的缓存中
 static __always_inline unsigned long __must_check
 copy_from_user(void *to, const void __user *from, unsigned long n)
 {

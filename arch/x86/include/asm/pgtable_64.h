@@ -16,6 +16,7 @@
 #include <linux/threads.h>
 #include <asm/fixmap.h>
 
+//XXX_ident_pgt 对应的是直接映射区，XXX_kernel_pgt 对应的是内核代码区，XXX_fixmap_pgt 对应的是固定映射区
 extern p4d_t level4_kernel_pgt[512];
 extern p4d_t level4_ident_pgt[512];
 extern pud_t level3_kernel_pgt[512];
@@ -25,7 +26,7 @@ extern pmd_t level2_fixmap_pgt[512];
 extern pmd_t level2_ident_pgt[512];
 extern pte_t level1_fixmap_pgt[512 * FIXMAP_PMD_NUM];
 extern pgd_t init_top_pgt[];
-
+//swapper_pg_dir 指向内核最顶级的目录 pgd，同时出现的还有几个页表目录
 #define swapper_pg_dir init_top_pgt
 
 extern void paging_init(void);
@@ -240,7 +241,7 @@ static inline void native_pgd_clear(pgd_t *pgd)
 
 extern int kern_addr_valid(unsigned long addr);
 extern void cleanup_highmap(void);
-
+//是否由体系结构（架构）提供自己的 get_unmapped_area 实现
 #define HAVE_ARCH_UNMAPPED_AREA
 #define HAVE_ARCH_UNMAPPED_AREA_TOPDOWN
 

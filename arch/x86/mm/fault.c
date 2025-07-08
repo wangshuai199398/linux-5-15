@@ -1099,9 +1099,8 @@ bool fault_in_kernel_space(unsigned long address)
 }
 
 /*
- * Called for all faults where 'address' is part of the kernel address
- * space.  Might get called for faults that originate from *code* that
- * ran in userspace or the kernel.
+ * 在 address 属于内核地址空间的所有缺页异常中都会被调用。可能会因为在用户空间或内核中运行的代码引发的异常而被调用
+ * 判断这个页错误是否是可接受/可忽略/需要修复的类型，如果都不是，就认为是“坏地址”并处理错误
  */
 static void
 do_kern_addr_fault(struct pt_regs *regs, unsigned long hw_error_code,
@@ -1144,37 +1143,43 @@ do_kern_addr_fault(struct pt_regs *regs, unsigned long hw_error_code,
 			return;
 	}
 #endif
-
+	//检查是否是 Intel 早期 CPU 的 f00f bug（处理器异常漏洞）导致的页错误。是的话特殊处理后直接返回
 	if (is_f00f_bug(regs, hw_error_code, address))
 		return;
 
-	/* Was the fault spurious, caused by lazy TLB invalidation? */
+	/* 判断这个fault是否是伪故障（spurious fault）——可能是延迟 TLB 失效导致的错误访问，看起来是错误，其实系统状态仍一致，可以忽略 */
 	if (spurious_kernel_fault(hw_error_code, address))
 		return;
 
-	/* kprobes don't want to hook the spurious faults: */
+	/* 如果是 kprobe（内核插桩调试）引发的页错误，发出警告（WARN_ON_ONCE），然后忽略处理。目的是防止调试器因内核状态轻微异常误操作 */
 	if (WARN_ON_ONCE(kprobe_page_fault(regs, X86_TRAP_PF)))
 		return;
 
 	/*
-	 * Note, despite being a "bad area", there are quite a few
-	 * acceptable reasons to get here, such as erratum fixups
-	 * and handling kernel code that can fault, like get_user().
+	 * Note, 虽然这是一个“错误地址”访问（bad area），但可能是一些合法情况：
+	 *   例如 CPU 的缺陷修复代码；
+	 *   内核中访问用户空间的操作，如 get_user() 可能会合法地触发页错误；
 	 *
-	 * Don't take the mm semaphore here. If we fixup a prefetch
-	 * fault we could otherwise deadlock:
+	 * 不要在这里获取 mm 的 semaphore（内存映射信号量），因为：
+	 *   如果页错误是由于 预取(prefetch) 引起的，获取信号量可能会造成死锁；
+	 * 所以调用 bad_area_nosemaphore() 来处理 —— 它是一个轻量级、不持锁的异常恢复路径
 	 */
 	bad_area_nosemaphore(regs, hw_error_code, address);
 }
 NOKPROBE_SYMBOL(do_kern_addr_fault);
 
 /*
- * Handle faults in the user portion of the address space.  Nothing in here
- * should check X86_PF_USER without a specific justification: for almost
- * all purposes, we should treat a normal kernel access to user memory
- * (e.g. get_user(), put_user(), etc.) the same as the WRUSS instruction.
- * The one exception is AC flag handling, which is, per the x86
- * architecture, special for WRUSS.
+ * 处理用户地址空间中的faults. 此处的代码不应在没有具体理由的情况下检查 X86_PF_USER：在几乎所有情况下，
+ * 我们都应将内核对用户内存的普通访问（例如 get_user()、put_user() 等）视为与 WRUSS 指令相同。
+ * 唯一的例外是 AC 标志（Alignment Check）处理，根据 x86 架构规范，WRUSS 对 AC 标志有特殊处理。
+ * 
+ * 原来的 do_page_fault
+ * 访问虚拟内存的时候，发现没有映射到物理内存，页表也没有创建过，才触发缺页异常。进入内核调用 do_page_fault, 一直调用到 __handle_mm_fault
+ * 既然原来没有创建过页表，那只好补上这一课。于是 __handle_mm_fault 调用 pud_alloc 和 pmd_alloc，来创建相应的页目录项，最后调用 handle_pte_fault 来创建页表项
+ * 
+ * 为了提高映射速度，引入了 TLB（Translation Lookaside Buffer）作为页表的 Cache，称为快表，专门用来做地址映射。它不在内存中，可存储的数据比较少，但是比内存要快。
+ * 其中存储了当前最可能被访问到的页表项，其内容是部分页表项的一个副本，有映射关系。
+ * 先查TLB表，然后直接转换为物理地址。如果在 TLB 查不到映射关系时，才会到内存中查询页表
  */
 static inline
 void do_user_addr_fault(struct pt_regs *regs,
@@ -1314,18 +1319,21 @@ retry:
 		 */
 		might_sleep();
 	}
-
+	//根据新的address查找对应的 vm_area_struct
 	vma = find_vma(mm, address);
 	if (unlikely(!vma)) {
 		bad_area(regs, error_code, address);
 		return;
 	}
+	//address落在vma内部
 	if (likely(vma->vm_start <= address))
 		goto good_area;
+	//如果vma的开始地址比address大，则判断VM_GROWSDOWN是否可以动态扩充
 	if (unlikely(!(vma->vm_flags & VM_GROWSDOWN))) {
 		bad_area(regs, error_code, address);
 		return;
 	}
+	//对vma进行扩充
 	if (unlikely(expand_stack(vma, address))) {
 		bad_area(regs, error_code, address);
 		return;
@@ -1354,6 +1362,7 @@ good_area:
 	 * userland). The return to userland is identified whenever
 	 * FAULT_FLAG_USER|FAULT_FLAG_KILLABLE are both set in flags.
 	 */
+	//完成真正的物理内存申请
 	fault = handle_mm_fault(vma, address, flags, regs);
 
 	if (fault_signal_pending(fault, regs)) {
@@ -1438,7 +1447,7 @@ handle_page_fault(struct pt_regs *regs, unsigned long error_code,
 	if (unlikely(kmmio_fault(regs, address)))
 		return;
 
-	/* Was the fault on kernel-controlled part of the address space? */
+	/* 故障是否发生在内核控制的地址空间部分？*/
 	if (unlikely(fault_in_kernel_space(address))) {
 		do_kern_addr_fault(regs, error_code, address);
 	} else {
@@ -1453,7 +1462,7 @@ handle_page_fault(struct pt_regs *regs, unsigned long error_code,
 		local_irq_disable();
 	}
 }
-
+//do_page_fault_wangs
 DEFINE_IDTENTRY_RAW_ERRORCODE(exc_page_fault)
 {
 	unsigned long address = read_cr2();

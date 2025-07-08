@@ -732,6 +732,7 @@ __kernel_physical_mapping_init(unsigned long paddr_start,
 	unsigned long vaddr, vaddr_start, vaddr_end, vaddr_next, paddr_last;
 
 	paddr_last = paddr_end;
+	//通过 __va 将物理地址转换为虚拟地址，然后再创建虚拟地址和物理地址的映射页表
 	vaddr = (unsigned long)__va(paddr_start);
 	vaddr_end = (unsigned long)__va(paddr_end);
 	vaddr_start = vaddr;

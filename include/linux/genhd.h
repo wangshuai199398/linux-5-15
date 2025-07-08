@@ -109,11 +109,14 @@ struct gendisk {
 	/* major, first_minor and minors are input parameters only,
 	 * don't use directly.  Use disk_devt() and disk_max_parts().
 	 */
+	//主设备号
 	int major;			/* major number of driver */
+	//第一个分区的从设备号
 	int first_minor;
+	//nors 表示分区的数目
 	int minors;                     /* maximum number of minors, =1 for
                                          * disks that can't be partitioned. */
-
+	//磁盘块设备的名称
 	char disk_name[DISK_NAME_LEN];	/* name of major driver */
 
 	unsigned short events;		/* supported events */
@@ -121,8 +124,9 @@ struct gendisk {
 
 	struct xarray part_tbl;
 	struct block_device *part0;
-
+	//对于这个块设备的各种操作
 	const struct block_device_operations *fops;
+	//在这个块设备上的请求队列
 	struct request_queue *queue;
 	void *private_data;
 

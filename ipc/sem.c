@@ -103,6 +103,7 @@ struct sem {
 	 */
 	struct pid *sempid;
 	spinlock_t	lock;	/* spinlock for fine-grained semtimedop */
+	//对于某个信号量的修改
 	struct list_head pending_alter; /* pending single-sop operations */
 					/* that alter the semaphore */
 	struct list_head pending_const; /* pending single-sop operations */
@@ -110,19 +111,22 @@ struct sem {
 	time64_t	 sem_otime;	/* candidate for sem_otime */
 } ____cacheline_aligned_in_smp;
 
-/* One sem_array data structure for each set of semaphores in the system. */
+/* One sem_array data structure for each set of semaphores in the system. 信号量 */
+//sem_array 里有多个信号量，放在 struct sem sems[]数组里面, 在 struct sem 里面有当前的信号量的数值 semval
 struct sem_array {
 	struct kern_ipc_perm	sem_perm;	/* permissions .. see ipc.h */
 	time64_t		sem_ctime;	/* create/last semctl() time */
+	//对于整个信号量数组的修改
 	struct list_head	pending_alter;	/* pending operations */
 						/* that alter the array */
 	struct list_head	pending_const;	/* pending complex operations */
 						/* that do not alter semvals */
 	struct list_head	list_id;	/* undo requests on this array */
 	int			sem_nsems;	/* no. of semaphores in array */
+	//如果多个操作同时作用于不同的信号量，说明操作是“复杂”的，会设置这个值
 	int			complex_count;	/* pending complex operations */
 	unsigned int		use_global_lock;/* >0: global lock required */
-
+	//信号量数组
 	struct sem		sems[];
 } __randomize_layout;
 
@@ -130,6 +134,7 @@ struct sem_array {
 struct sem_queue {
 	struct list_head	list;	 /* queue of pending operations */
 	struct task_struct	*sleeper; /* this process */
+	//回退操作，从而保证其他进程可以正常工作
 	struct sem_undo		*undo;	 /* undo structure */
 	struct pid		*pid;	 /* process id of requesting process */
 	int			status;	 /* completion status of operation */
@@ -165,7 +170,7 @@ struct sem_undo_list {
 	struct list_head	list_proc;
 };
 
-
+//ipc_wangs
 #define sem_ids(ns)	((ns)->ids[IPC_SEM_IDS])
 
 static int newary(struct ipc_namespace *, struct ipc_params *);
@@ -522,11 +527,11 @@ static struct sem_array *sem_alloc(size_t nsems)
 }
 
 /**
- * newary - Create a new semaphore set
- * @ns: namespace
- * @params: ptr to the structure that contains key, semflg and nsems
+ * 创建一个新的信号量集合
+ * @ns: 命名空间
+ * @params: 指向包含 key、semflg 和 nsems 的结构体的指针
  *
- * Called with sem_ids.rwsem held (as a writer)
+ * 调用时已持有 sem_ids.rwsem（以写方式）
  */
 static int newary(struct ipc_namespace *ns, struct ipc_params *params)
 {
@@ -541,7 +546,7 @@ static int newary(struct ipc_namespace *ns, struct ipc_params *params)
 		return -EINVAL;
 	if (ns->used_sems + nsems > ns->sc_semmns)
 		return -ENOSPC;
-
+	//在直接映射区分配一个 sem_array 结构。这个结构是用来描述信号量的，这个结构最开始就是上面说的 kern_ipc_perm 结构
 	sma = sem_alloc(nsems);
 	if (!sma)
 		return -ENOMEM;
@@ -571,6 +576,7 @@ static int newary(struct ipc_namespace *ns, struct ipc_params *params)
 	sma->sem_ctime = ktime_get_real_seconds();
 
 	/* ipc_addid() locks sma upon success. */
+	//将新创建的 sem_array 结构，挂到 sem_ids 里面的基数树上，并返回相应的 id
 	retval = ipc_addid(&sem_ids(ns), &sma->sem_perm, ns->sc_semmni);
 	if (retval < 0) {
 		ipc_rcu_putref(&sma->sem_perm, sem_rcu_free);
@@ -620,7 +626,7 @@ long ksys_semget(key_t key, int nsems, int semflg)
 
 	return ipcget(ns, &sem_ids(ns), &sem_ops, &sem_params);
 }
-
+//semget_wangs
 SYSCALL_DEFINE3(semget, key_t, key, int, nsems, int, semflg)
 {
 	return ksys_semget(key, nsems, semflg);
@@ -715,7 +721,11 @@ undo:
 
 	return result;
 }
-
+/*
+对于所有信号量操作都进行两次循环。在第一次循环中，如果发现计算出的 result 小于 0，则说明必须等待，于是跳到 would_block 中，
+设置 q->blocking = sop 表示这个 queue 是 block 在这个操作上，然后如果需要等待，则返回 1。如果第一次循环中发现无需等待，
+则第二个循环实施所有的信号量操作，将信号量的值设置为新的值，并且返回 0
+*/
 static int perform_atomic_semop(struct sem_array *sma, struct sem_queue *q)
 {
 	int result, sem_op, nsops;
@@ -946,6 +956,7 @@ static int do_smart_wakeup_zero(struct sem_array *sma, struct sembuf *sops,
  * The function internally checks if const operations can now succeed.
  *
  * The function return 1 if at least one semop was completed successfully.
+ * 依次循环整个信号量集合的等待队列 pending_alter 或者某个信号量的等待队列,试图在信号量的值变了的情况下，再次尝试 perform_atomic_semop 进行信号量操作
  */
 static int update_queue(struct sem_array *sma, int semnum, struct wake_q_head *wake_q)
 {
@@ -974,10 +985,10 @@ again:
 
 		error = perform_atomic_semop(sma, q);
 
-		/* Does q->sleeper still need to sleep? */
+		/* Does q->sleeper still need to sleep? 如果不成功，则尝试队列中的下一个 */
 		if (error > 0)
 			continue;
-
+		//如果尝试成功，则调用 unlink_queue 从队列上取下来
 		unlink_queue(sma, q);
 
 		if (error) {
@@ -987,7 +998,7 @@ again:
 			do_smart_wakeup_zero(sma, q->sops, q->nsops, wake_q);
 			restart = check_restart(sma, q);
 		}
-
+		//将 q->sleeper 加到 wake_q 上去, q->sleeper 是一个 task_struct，是等待在这个信号量操作上的进程
 		wake_up_sem_queue_prepare(q, error, wake_q);
 		if (restart)
 			goto again;
@@ -1340,7 +1351,7 @@ static int semctl_info(struct ipc_namespace *ns, int semid,
 		return -EFAULT;
 	return (max_idx < 0) ? 0 : max_idx;
 }
-
+//对于 SETVAL 操作来讲，传进来的参数 union semun 里面的 int val，仅仅会设置某个信号量
 static int semctl_setval(struct ipc_namespace *ns, int semid, int semnum,
 		int val)
 {
@@ -1354,6 +1365,7 @@ static int semctl_setval(struct ipc_namespace *ns, int semid, int semnum,
 		return -ERANGE;
 
 	rcu_read_lock();
+	//根据信号量集合的 id 在基数树里面找到 sem_array 对象
 	sma = sem_obtain_object_check(ns, semid);
 	if (IS_ERR(sma)) {
 		rcu_read_unlock();
@@ -1391,7 +1403,7 @@ static int semctl_setval(struct ipc_namespace *ns, int semid, int semnum,
 	ipc_assert_locked_object(&sma->sem_perm);
 	list_for_each_entry(un, &sma->list_id, list_id)
 		un->semadj[semnum] = 0;
-
+	//直接根据参数中的 val 设置 semval，以及修改这个信号量值的 pid
 	curr->semval = val;
 	ipc_update_pid(&curr->sempid, task_tgid(current));
 	sma->sem_ctime = ktime_get_real_seconds();
@@ -1402,7 +1414,7 @@ static int semctl_setval(struct ipc_namespace *ns, int semid, int semnum,
 	wake_up_q(&wake_q);
 	return 0;
 }
-
+//对于 SETALL 操作来讲，传进来的参数为 union semun 里面的 unsigned short *array，会设置整个信号量集合
 static int semctl_main(struct ipc_namespace *ns, int semid, int semnum,
 		int cmd, void __user *p)
 {
@@ -1414,6 +1426,7 @@ static int semctl_main(struct ipc_namespace *ns, int semid, int semnum,
 	DEFINE_WAKE_Q(wake_q);
 
 	rcu_read_lock();
+	//根据信号量集合的 id 在基数树里面找到 sem_array 对象
 	sma = sem_obtain_object_check(ns, semid);
 	if (IS_ERR(sma)) {
 		rcu_read_unlock();
@@ -1491,7 +1504,7 @@ static int semctl_main(struct ipc_namespace *ns, int semid, int semnum,
 				return -ENOMEM;
 			}
 		}
-
+		//将用户的参数中的 unsigned short *array 拷贝到内核里面的 sem_io 数组
 		if (copy_from_user(sem_io, p, nsems*sizeof(ushort))) {
 			ipc_rcu_putref(&sma->sem_perm, sem_rcu_free);
 			err = -EFAULT;
@@ -1513,6 +1526,7 @@ static int semctl_main(struct ipc_namespace *ns, int semid, int semnum,
 		}
 
 		for (i = 0; i < nsems; i++) {
+			//对于信号量集合里面的每一个信号量，设置 semval，以及修改这个信号量值的 pid
 			sma->sems[i].semval = sem_io[i];
 			ipc_update_pid(&sma->sems[i].sempid, task_tgid(current));
 		}
@@ -1703,7 +1717,7 @@ static long ksys_semctl(int semid, int semnum, int cmd, unsigned long arg, int v
 		return -EINVAL;
 	}
 }
-
+//semctl_wangs 对信号量数组进行初始化
 SYSCALL_DEFINE4(semctl, int, semid, int, semnum, int, cmd, unsigned long, arg)
 {
 	return ksys_semctl(semid, semnum, cmd, arg, IPC_64);
@@ -1989,10 +2003,12 @@ long __do_semtimedop(int semid, struct sembuf *sops,
 		struct ipc_namespace *ns)
 {
 	int error = -EINVAL;
+	//指向信号量集合指针
 	struct sem_array *sma;
 	struct sembuf *sop;
 	struct sem_undo *un;
 	int max, locknum;
+	//alter表示这是一个会修改信号量值的操作（如 P/V 操作），而不是只读等待
 	bool undos = false, alter = false, dupsop = false;
 	struct sem_queue queue;
 	unsigned long dup = 0, jiffies_left = 0;
@@ -2001,7 +2017,7 @@ long __do_semtimedop(int semid, struct sembuf *sops,
 		return -EINVAL;
 	if (nsops > ns->sc_semopm)
 		return -E2BIG;
-
+	//如果是 P 操作，很可能让进程进入等待状态，是否要为这个等待状态设置一个超时，timeout 也是一个参数，会把它变成时钟的滴答数目
 	if (timeout) {
 		if (timeout->tv_sec < 0 || timeout->tv_nsec < 0 ||
 			timeout->tv_nsec >= 1000000000L) {
@@ -2046,7 +2062,7 @@ long __do_semtimedop(int semid, struct sembuf *sops,
 		un = NULL;
 		rcu_read_lock();
 	}
-
+	//根据信号量集合的 id，获得 sem_array
 	sma = sem_obtain_object_check(ns, semid);
 	if (IS_ERR(sma)) {
 		rcu_read_unlock();
@@ -2093,16 +2109,18 @@ long __do_semtimedop(int semid, struct sembuf *sops,
 	 */
 	if (un && un->semid == -1)
 		goto out_unlock;
-
+	//queue 表示当前的信号量操作,为什么叫 queue 呢？因为这个操作可能马上就能完成，也可能因为无法获取信号量不能完成，不能完成的话就只好排列到队列上，等待信号量满足条件的时候
 	queue.sops = sops;
 	queue.nsops = nsops;
 	queue.undo = un;
 	queue.pid = task_tgid(current);
 	queue.alter = alter;
 	queue.dupsop = dupsop;
-
+	//实施信号量操作
 	error = perform_atomic_semop(sma, &queue);
+	//如果不需要等待，就说明对于信号量的操作完成了，也改变了信号量的值
 	if (error == 0) { /* non-blocking successful path */
+		//声明一个 wake_q
 		DEFINE_WAKE_Q(wake_q);
 
 		/*
@@ -2110,12 +2128,14 @@ long __do_semtimedop(int semid, struct sembuf *sops,
 		 * the required updates.
 		 */
 		if (alter)
+			//看这次对于信号量的值的改变，可以影响并可以激活等待队列中的哪些 struct sem_queue，然后把它们都放在 wake_q 里面
 			do_smart_update(sma, sops, nsops, 1, &wake_q);
 		else
 			set_semotime(sma, sops);
 
 		sem_unlock(sma, locknum);
 		rcu_read_unlock();
+		//唤醒这些进程
 		wake_up_q(&wake_q);
 
 		goto out;
@@ -2126,12 +2146,14 @@ long __do_semtimedop(int semid, struct sembuf *sops,
 	/*
 	 * We need to sleep on this operation, so we put the current
 	 * task into the pending queue and go to sleep.
+	 * 如果需要等待，则要区分刚才的对于信号量的操作，是对一个信号量的，还是对于整个信号量集合的
 	 */
 	if (nsops == 1) {
+		//是对于一个信号量的
 		struct sem *curr;
 		int idx = array_index_nospec(sops->sem_num, sma->sem_nsems);
 		curr = &sma->sems[idx];
-
+		//将 queue 挂到这个信号量的 pending_alter 中
 		if (alter) {
 			if (sma->complex_count) {
 				list_add_tail(&queue.list,
@@ -2145,9 +2167,10 @@ long __do_semtimedop(int semid, struct sembuf *sops,
 			list_add_tail(&queue.list, &curr->pending_const);
 		}
 	} else {
+		//是对于整个信号量集合的
 		if (!sma->complex_count)
-			merge_queues(sma);
-
+			merge_queues(sma);//把每个信号量上的等待队列合并成统一的队列
+		//那我们就将 queue 挂到整个信号量集合的 pending_alter 中
 		if (alter)
 			list_add_tail(&queue.list, &sma->pending_alter);
 		else
@@ -2155,17 +2178,18 @@ long __do_semtimedop(int semid, struct sembuf *sops,
 
 		sma->complex_count++;
 	}
-
+	//do-while 循环，就是要开始等待了
 	do {
 		/* memory ordering ensured by the lock in sem_lock() */
 		WRITE_ONCE(queue.status, -EINTR);
 		queue.sleeper = current;
 
-		/* memory ordering is ensured by the lock in sem_lock() */
+		/* memory ordering is ensured by the lock in sem_lock() */、
+		//在让出 CPU 的时候，设置进程的状态为 TASK_INTERRUPTIBLE
 		__set_current_state(TASK_INTERRUPTIBLE);
 		sem_unlock(sma, locknum);
 		rcu_read_unlock();
-
+		//如果等待没有时间限制，则调用 schedule 让出 CPU；如果等待有时间限制，则调用 schedule_timeout 让出 CPU，过一段时间还回来
 		if (timeout)
 			jiffies_left = schedule_timeout(jiffies_left);
 		else
@@ -2207,12 +2231,14 @@ long __do_semtimedop(int semid, struct sembuf *sops,
 		 */
 		if (error != -EINTR)
 			goto out_unlock;
-
 		/*
 		 * If an interrupt occurred we have to clean up the queue.
+		 * 等待超时
+		 * 当回来的时候，判断是否等待超时，如果没有等待超时则进入下一轮循环，再次等待，如果超时则退出循环，返回错误
 		 */
 		if (timeout && jiffies_left == 0)
 			error = -EAGAIN;
+	//循环的结束会通过 signal_pending 查看是否收到过信号，这说明这个等待信号量的进程是可以被信号中断的，也即一个等待信号量的进程是可以通过 kill 杀掉
 	} while (error == -EINTR && !signal_pending(current)); /* spurious */
 
 	unlink_queue(sma, &queue);
@@ -2223,7 +2249,7 @@ out_unlock:
 out:
 	return error;
 }
-
+//
 static long do_semtimedop(int semid, struct sembuf __user *tsops,
 		unsigned nsops, const struct timespec64 *timeout)
 {
@@ -2243,7 +2269,7 @@ static long do_semtimedop(int semid, struct sembuf __user *tsops,
 		if (sops == NULL)
 			return -ENOMEM;
 	}
-
+	//将用户的参数，例如，对于信号量的操作 struct sembuf，拷贝到内核里面来
 	if (copy_from_user(sops, tsops, nsops * sizeof(*tsops))) {
 		ret =  -EFAULT;
 		goto out_free;
@@ -2269,7 +2295,7 @@ long ksys_semtimedop(int semid, struct sembuf __user *tsops,
 	}
 	return do_semtimedop(semid, tsops, nsops, NULL);
 }
-
+//semtimedop_wangs
 SYSCALL_DEFINE4(semtimedop, int, semid, struct sembuf __user *, tsops,
 		unsigned int, nsops, const struct __kernel_timespec __user *, timeout)
 {
@@ -2297,7 +2323,7 @@ SYSCALL_DEFINE4(semtimedop_time32, int, semid, struct sembuf __user *, tsems,
 	return compat_ksys_semtimedop(semid, tsems, nsops, timeout);
 }
 #endif
-
+//semop_wangs
 SYSCALL_DEFINE3(semop, int, semid, struct sembuf __user *, tsops,
 		unsigned, nsops)
 {

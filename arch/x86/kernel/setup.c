@@ -873,6 +873,7 @@ void __init setup_arch(char **cmdline_p)
 
 	if (!boot_params.hdr.root_flags)
 		root_mountflags &= ~MS_RDONLY;
+	//初始化init_mm
 	setup_initial_init_mm(_text, _etext, _edata, (void *)_brk_end);
 
 	code_resource.start = __pa_symbol(_text);
@@ -1055,7 +1056,7 @@ void __init setup_arch(char **cmdline_p)
 	 *
 	 * 此外，在使用 SandyBridge 集成显卡 的机器上，或者启用了 crashkernel 的系统中，整个 1MB 区域也无论如何都会被保留 */
 	reserve_real_mode();
-
+	// 初始化虚拟地址到物理地址的映射关系, 调用 kernel_physical_mapping_init
 	init_mem_mapping();
 
 	idt_setup_early_pf();
@@ -1096,7 +1097,7 @@ void __init setup_arch(char **cmdline_p)
 	early_platform_quirks();
 
 	early_acpi_boot_init();
-
+	//内存初始化，包括numa机制初始化
 	initmem_init();
 	dma_contiguous_reserve(max_pfn_mapped << PAGE_SHIFT);
 
@@ -1112,7 +1113,7 @@ void __init setup_arch(char **cmdline_p)
 	if (!early_xdbc_setup_hardware())
 		early_xdbc_register_console();
 
-	x86_init.paging.pagetable_init();// xen_pagetable_init
+	x86_init.paging.pagetable_init();// native_pagetable_init xen_pagetable_init 
 
 	kasan_init();
 

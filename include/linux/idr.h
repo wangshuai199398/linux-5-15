@@ -15,7 +15,7 @@
 #include <linux/radix-tree.h>
 #include <linux/gfp.h>
 #include <linux/percpu.h>
-
+//一旦涉及从一个整数查找一个对象，基数树idr都是最好的选择
 struct idr {
 	struct radix_tree_root	idr_rt;
 	unsigned int		idr_base;

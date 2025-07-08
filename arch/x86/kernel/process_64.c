@@ -551,8 +551,8 @@ void compat_start_thread(struct pt_regs *regs, u32 new_ip, u32 new_sp, bool x32)
 #endif
 
 /*
- *	switch_to(x,y) 应该将任务从 x 切换到 y.
- *
+ *	switch_to(x,y) 应该将任务从 x 切换到 y. 
+ * __switch_to_wangs
  * 这部分仍然可以优化：
  * - 可以将所有选项合并成一个标志位，并通过一次测试来判断。
  * - 可以使用位切片方式测试 fs/gs 寄存器

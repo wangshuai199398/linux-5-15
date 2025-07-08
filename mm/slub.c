@@ -1908,7 +1908,7 @@ static struct page *allocate_slab(struct kmem_cache *s, gfp_t flags, int node)
 	alloc_gfp = (flags | __GFP_NOWARN | __GFP_NORETRY) & ~__GFP_NOFAIL;
 	if ((alloc_gfp & __GFP_DIRECT_RECLAIM) && oo_order(oo) > oo_order(s->min))
 		alloc_gfp = (alloc_gfp | __GFP_NOMEMALLOC) & ~(__GFP_RECLAIM|__GFP_NOFAIL);
-
+	//分配页面，分配的时候，要按 kmem_cache_order_objects 里面的 order 来，如果第一次分配不成功，说明内存已经很紧张了，那就换成 min 版本的 kmem_cache_order_objects
 	page = alloc_slab_page(s, alloc_gfp, node, oo);
 	if (unlikely(!page)) {
 		oo = s->min;
@@ -2130,7 +2130,9 @@ static void *get_partial_node(struct kmem_cache *s, struct kmem_cache_node *n,
 
 		if (!pfmemalloc_match(page, gfpflags))
 			continue;
-
+		//从 kmem_cache_node 的 partial 链表中拿下一大块内存来，并且将 freelist，也就是第一块空闲的缓存块，赋值给 t
+		//并且当第一轮循环的时候，将 kmem_cache_cpu 的 page 指向取下来的这一大块内存，返回的 object 就是这块内存里面的第一个缓存块 t
+		//如果 kmem_cache_cpu 也有一个 partial，就会进行第二轮，再次取下一大块内存来，这次调用 put_cpu_partial，放到 kmem_cache_cpu 的 partial 里面
 		t = acquire_slab(s, n, page, object == NULL, &objects);
 		if (!t)
 			break;
@@ -2932,6 +2934,7 @@ redo:
 		local_unlock_irqrestore(&s->cpu_slab->lock, flags);
 		goto reread_page;
 	}
+	//再次查看freelist是否有空间
 	freelist = c->freelist;
 	if (freelist)
 		goto load_freelist;
@@ -2943,6 +2946,7 @@ redo:
 		c->tid = next_tid(c->tid);
 		local_unlock_irqrestore(&s->cpu_slab->lock, flags);
 		stat(s, DEACTIVATE_BYPASS);
+		//freelist没有
 		goto new_slab;
 	}
 
@@ -2958,6 +2962,7 @@ load_freelist:
 	 * That page must be frozen for per cpu allocations to work.
 	 */
 	VM_BUG_ON(!c->page->frozen);
+	//将 freelist 指向下一个空闲项
 	c->freelist = get_freepointer(s, freelist);
 	c->tid = next_tid(c->tid);
 	local_unlock_irqrestore(&s->cpu_slab->lock, flags);
@@ -2978,7 +2983,7 @@ deactivate_slab:
 	deactivate_slab(s, page, freelist);
 
 new_slab:
-
+	//先去 kmem_cache_cpu 的 partial 里面看
 	if (slub_percpu_partial(c)) {
 		local_lock_irqsave(&s->cpu_slab->lock, flags);
 		if (unlikely(c->page)) {
@@ -2990,7 +2995,7 @@ new_slab:
 			/* we were preempted and partial list got empty */
 			goto new_objects;
 		}
-
+		//如果 partial 不是空的，那就将 kmem_cache_cpu 的 page，也就是快速通道的那一大块内存，替换为 partial 里面的大块内存。然后 redo，重新试下。这次应该就可以成功了
 		page = c->page = slub_percpu_partial(c);
 		slub_set_percpu_partial(c, page);
 		local_unlock_irqrestore(&s->cpu_slab->lock, flags);
@@ -2999,12 +3004,13 @@ new_slab:
 	}
 
 new_objects:
-
+	//根据 node id，找到相应的 kmem_cache_node，然后调用 get_partial_node，开始在这个节点进行分配
 	freelist = get_partial(s, gfpflags, node, &page);
 	if (freelist)
 		goto check_new_page;
 
 	slub_put_cpu_ptr(s->cpu_slab);
+	//如果 kmem_cache_node 里面也没有空闲的内存，这就说明原来分配的页里面都放满了
 	page = new_slab(s, gfpflags, node);
 	c = slub_get_cpu_ptr(s->cpu_slab);
 
@@ -3112,14 +3118,16 @@ static __always_inline void maybe_wipe_obj_freeptr(struct kmem_cache *s,
 }
 
 /*
- * Inlined fastpath so that allocation functions (kmalloc, kmem_cache_alloc)
- * have the fastpath folded into their functions. So no function call
- * overhead for requests that can be satisfied on the fastpath.
+ * 将快速路径（fastpath）内联，从而使分配函数（如 kmalloc 和 kmem_cache_alloc）将快速路径逻辑直接融合进自身函数中。
+ * 这样，对于能通过快速路径满足的请求，就不会有函数调用的额外开销。
  *
- * The fastpath works by first checking if the lockless freelist can be used.
- * If not then __slab_alloc is called for slow processing.
- *
- * Otherwise we can simply pick the next object from the lockless free list.
+ * 快速路径的工作方式是首先检查是否可以使用无锁的 freelist（空闲对象链表）。如果不行，就会调用 __slab_alloc 进行慢速路径处理
+ * 否则，我们就可以直接从无锁 freelist 中选择下一个可用对象
+ * 
+ * 	fastpath（快速路径）：处理常见、可快速完成的情况，尽量避免加锁和函数调用，以提高性能。
+	lockless freelist（无锁空闲链表）：是一种高效的数据结构，用于在多核系统中避免因锁竞争导致的性能下降。
+	__slab_alloc：是 slub 分配器在 fastpath 无法满足请求时进入的慢速分配逻辑。
+	Slub Allocator 将从伙伴系统申请的大内存块切成小块，分配给其他系统
  */
 static __always_inline void *slab_alloc_node(struct kmem_cache *s,
 		gfp_t gfpflags, int node, unsigned long addr, size_t orig_size)
@@ -3171,7 +3179,7 @@ redo:
 	 * occurs on the right processor and that there was no operation on the
 	 * linked list in between.
 	 */
-
+	//取出kmem_cache_cpu 的 freelist，这就是第一个空闲的项,有可以直接返回
 	object = c->freelist;
 	page = c->page;
 	/*
@@ -3183,6 +3191,7 @@ redo:
 	 */
 	if (IS_ENABLED(CONFIG_PREEMPT_RT) ||
 	    unlikely(!object || !page || !node_match(page, node))) {
+		//没有进入普通通道
 		object = __slab_alloc(s, gfpflags, node, addr, c);
 	} else {
 		void *next_object = get_freepointer_safe(s, object);

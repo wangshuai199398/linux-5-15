@@ -86,7 +86,7 @@ SYSCALL_DEFINE3(osf_sigaction, int, sig,
 
 	return ret;
 }
-
+//rt_sigaction_wangs
 SYSCALL_DEFINE5(rt_sigaction, int, sig, const struct sigaction __user *, act,
 		struct sigaction __user *, oact,
 		size_t, sigsetsize, void __user *, restorer)
@@ -103,7 +103,7 @@ SYSCALL_DEFINE5(rt_sigaction, int, sig, const struct sigaction __user *, act,
 		if (copy_from_user(&new_ka.sa, act, sizeof(*act)))
 			return -EFAULT;
 	}
-
+	//设置信号处理函数
 	ret = do_sigaction(sig, act ? &new_ka : NULL, oact ? &old_ka : NULL);
 
 	if (!ret && oact) {

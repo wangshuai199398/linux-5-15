@@ -70,7 +70,7 @@ static __always_inline bool do_syscall_x32(struct pt_regs *regs, int nr)
 	}
 	return false;
 }
-
+//中断，执行调度
 __visible noinstr void do_syscall_64(struct pt_regs *regs, int nr)
 {
 	add_random_kstack_offset();

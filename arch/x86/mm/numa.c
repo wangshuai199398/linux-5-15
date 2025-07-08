@@ -21,7 +21,7 @@
 
 int numa_off;
 nodemask_t numa_nodes_parsed __initdata;
-
+//既然整个内存被分成了多个节点，那 pglist_data 应该放在一个数组里面。每个节点一项
 struct pglist_data *node_data[MAX_NUMNODES] __read_mostly;
 EXPORT_SYMBOL(node_data);
 
@@ -543,7 +543,9 @@ static void __init numa_clear_kernel_node_hotplug(void)
 		memblock_clear_hotplug(mb->start, mb->end - mb->start);
 	}
 }
-
+/*
+3. 再次打印memblock信息
+*/
 static int __init numa_register_memblks(struct numa_meminfo *mi)
 {
 	int i, nid;
@@ -553,7 +555,7 @@ static int __init numa_register_memblks(struct numa_meminfo *mi)
 	numa_nodemask_from_meminfo(&node_possible_map, mi);
 	if (WARN_ON(nodes_empty(node_possible_map)))
 		return -EINVAL;
-
+	//1. 将每一个memblock region与NUMA节点号关联
 	for (i = 0; i < mi->nr_blks; i++) {
 		struct numa_memblk *mb = &mi->blk[i];
 		memblock_set_node(mb->start, mb->end - mb->start,
@@ -587,6 +589,7 @@ static int __init numa_register_memblks(struct numa_meminfo *mi)
 		return -EINVAL;
 
 	/* Finally register nodes. */
+	//2. 为所有可能存在的node申请pglist_data结构体空间
 	for_each_node_mask(nid, node_possible_map) {
 		u64 start = PFN_PHYS(max_pfn);
 		u64 end = 0;
@@ -600,11 +603,12 @@ static int __init numa_register_memblks(struct numa_meminfo *mi)
 
 		if (start >= end)
 			continue;
-
+		//为nid申请一个pglist_data结构题
 		alloc_node_data(nid);
 	}
 
 	/* Dump memblock with node info and return. */
+	//打印memblock内存分配器的详细调试信息
 	memblock_dump_all();
 	return 0;
 }
@@ -666,9 +670,9 @@ static int __init numa_init(int (*init_func)(void))
 	ret = numa_cleanup_meminfo(&numa_meminfo);
 	if (ret < 0)
 		return ret;
-
+	//numa信息保存到numa_meminfo中，每一项都是(起始地址、结束地址、节点编号)的三元组,描述了内存块与NUMA节点的关联关系
 	numa_emulation(&numa_meminfo, numa_distance_cnt);
-
+	// memblock添加NUMA信息, 并为每个node申请对象
 	ret = numa_register_memblks(&numa_meminfo);
 	if (ret < 0)
 		return ret;
@@ -681,6 +685,7 @@ static int __init numa_init(int (*init_func)(void))
 		if (!node_online(nid))
 			numa_clear_node(i);
 	}
+	//用于将各个 CPU 核与 NUMA 节点关联
 	numa_init_array();
 
 	return 0;

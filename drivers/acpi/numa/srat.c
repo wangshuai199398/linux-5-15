@@ -454,6 +454,8 @@ int __init acpi_numa_init(void)
 	 */
 
 	/* SRAT: System Resource Affinity Table */
+	//解析 SRAT 表中的NUMA信息，之后就知道内存和node的关系了
+	//具体包括：CPU_AFFINITY、MEMORY_AFFINITY 等
 	if (!acpi_table_parse(ACPI_SIG_SRAT, acpi_parse_srat)) {
 		struct acpi_subtable_proc srat_proc[4];
 

@@ -1262,6 +1262,9 @@ static void print_page_fragment_data(struct page *page, size_t offset, size_t le
 
     kunmap_local(addr);
 }
+/*
+msg: 用户要写入的数据, 要拷贝到内核协议栈里面去发送
+*/
 
 int tcp_sendmsg_locked(struct sock *sk, struct msghdr *msg, size_t size)
 {
@@ -1530,13 +1533,14 @@ new_segment:
 
 		if (skb->len < size_goal || (flags & MSG_OOB) || unlikely(tp->repair))
 			continue;
-		//发送判断
+		//积累的数据内容太多了
 		if (forced_push(tp)) {
 			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
 				printk(KERN_INFO "%s: __tcp_push_pending_frames write_seq %u, pushed_seq %u max_window %u\n", __func__, tp->write_seq, tp->pushed_seq, tp->max_window);
 			tcp_mark_push(tp, skb);
 			__tcp_push_pending_frames(sk, mss_now, TCP_NAGLE_PUSH);
 		} else if (skb == tcp_send_head(sk)) {
+			//第一个网络包, 需要马上发送
 			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
 				printk(KERN_INFO "%s: -> tcp_push_one write_seq %u, pushed_seq %u max_window %u\n",  __func__, tp->write_seq, tp->pushed_seq, tp->max_window);
 			tcp_push_one(sk, mss_now);
@@ -2437,11 +2441,10 @@ static int tcp_inq_hint(struct sock *sk)
 }
 
 /*
- *	This routine copies from a sock struct into the user buffer.
+ *	这个函数将数据从 sock 结构复制到用户缓冲区中
  *
- *	Technical note: in 2.3 we work on _locked_ socket, so that
- *	tricks with *seq access order and skb->users are not required.
- *	Probably, code can be easily improved even more.
+ *	技术说明：在 2.3 内核中，我们在已加锁的 socket 上操作，因此不再需要对 *seq 的访问顺序或 skb->users 的使用做特别处理。
+ *  这个代码很可能还能进一步优化
  */
 
 static int tcp_recvmsg_locked(struct sock *sk, struct msghdr *msg, size_t len,

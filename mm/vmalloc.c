@@ -2957,22 +2957,20 @@ fail:
 }
 
 /**
- * __vmalloc_node_range - allocate virtually contiguous memory
- * @size:		  allocation size
- * @align:		  desired alignment
- * @start:		  vm area range start
- * @end:		  vm area range end
- * @gfp_mask:		  flags for the page level allocator
- * @prot:		  protection mask for the allocated pages
- * @vm_flags:		  additional vm area flags (e.g. %VM_NO_GUARD)
- * @node:		  node to use for allocation or NUMA_NO_NODE
- * @caller:		  caller's return address
+ * 分配虚拟连续内存
+ * @size:		  分配的大小
+ * @align:		  所需的对齐方式
+ * @start:		  虚拟内存区域的起始地址范围
+ * @end:		  虚拟内存区域的结束地址范围
+ * @gfp_mask:     用于页级分配器的标志
+ * @prot:		  为所分配页面设置的页表保护权限
+ * @vm_flags:     额外的虚拟内存区域标志（例如 %VM_NO_GUARD）
+ * @node:         用于分配的节点，或为 NUMA_NO_NODE
+ * @caller:       调用者的返回地址
  *
- * Allocate enough pages to cover @size from the page level
- * allocator with @gfp_mask flags.  Map them into contiguous
- * kernel virtual space, using a pagetable protection of @prot.
+ * 使用 @gfp_mask 标志从页级分配器中分配足够的页面以覆盖 @size，并将它们映射到连续的内核虚拟地址空间中，所用的页表保护属性由 @prot 指定。
  *
- * Return: the address of the area or %NULL on failure
+ * 返回值：成功时返回该区域的地址，失败时返回 %NULL
  */
 void *__vmalloc_node_range(unsigned long size, unsigned long align,
 			unsigned long start, unsigned long end, gfp_t gfp_mask,
@@ -3057,23 +3055,20 @@ fail:
 }
 
 /**
- * __vmalloc_node - allocate virtually contiguous memory
- * @size:	    allocation size
- * @align:	    desired alignment
- * @gfp_mask:	    flags for the page level allocator
- * @node:	    node to use for allocation or NUMA_NO_NODE
- * @caller:	    caller's return address
+ * 分配虚拟连续内存
+ * @size:	    分配的大小
+ * @align:	    所需的对齐方式
+ * @gfp_mask:	用于页级分配器的标志
+ * @node:	    用于分配的节点，或为 NUMA_NO_NODE
+ * @caller:	    调用者的返回地址
  *
- * Allocate enough pages to cover @size from the page level allocator with
- * @gfp_mask flags.  Map them into contiguous kernel virtual space.
+ * 从页级分配器中使用 @gfp_mask 标志分配足够的页面以覆盖 @size，并将它们映射到连续的内核虚拟地址空间中。
  *
- * Reclaim modifiers in @gfp_mask - __GFP_NORETRY, __GFP_RETRY_MAYFAIL
- * and __GFP_NOFAIL are not supported
+ * @gfp_mask 中的回收修饰符，如 __GFP_NORETRY、__GFP_RETRY_MAYFAIL 和 __GFP_NOFAIL 不被支持。
  *
- * Any use of gfp flags outside of GFP_KERNEL should be consulted
- * with mm people.
+ * 如需使用 GFP_KERNEL 以外的 gfp 标志，应先与内存管理（mm）方面的开发人员沟通确认。
  *
- * Return: pointer to the allocated memory or %NULL on error
+ * 返回值：返回分配到的内存指针，若出错则返回 %NULL。
  */
 void *__vmalloc_node(unsigned long size, unsigned long align,
 			    gfp_t gfp_mask, int node, const void *caller)
@@ -3098,16 +3093,14 @@ void *__vmalloc(unsigned long size, gfp_t gfp_mask)
 EXPORT_SYMBOL(__vmalloc);
 
 /**
- * vmalloc - allocate virtually contiguous memory
- * @size:    allocation size
+ * vmalloc - 分配虚拟连续内存
+ * @size:    分配的大小
  *
- * Allocate enough pages to cover @size from the page level
- * allocator and map them into contiguous kernel virtual space.
+ * 从页级分配器中分配足够的页面以覆盖 @size，并将它们映射到连续的内核虚拟地址空间中。
  *
- * For tight control over page level allocator and protection flags
- * use __vmalloc() instead.
+ * 如果需要对页级分配器和保护标志进行更精细的控制，请使用 __vmalloc()。
  *
- * Return: pointer to the allocated memory or %NULL on error
+ * Return: 返回分配到的内存指针，若出错则返回 %NULL。
  */
 void *vmalloc(unsigned long size)
 {

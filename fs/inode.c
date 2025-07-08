@@ -1464,12 +1464,11 @@ again:
 EXPORT_SYMBOL(ilookup5);
 
 /**
- * ilookup - search for an inode in the inode cache
- * @sb:		super block of file system to search
- * @ino:	inode number to search for
+ * 在 inode 缓存中查找 inode
+ * @sb:		要查找的文件系统的超级块（super block）
+ * @ino:	要查找的 inode 编号
  *
- * Search for the inode @ino in the inode cache, and if the inode is in the
- * cache, the inode is returned with an incremented reference count.
+ * 在 inode 缓存中查找编号为 @ino 的 inode，如果该 inode 存在于缓存中，则返回该 inode，并将其引用计数加一
  */
 struct inode *ilookup(struct super_block *sb, unsigned long ino)
 {
@@ -2174,13 +2173,15 @@ void __init inode_init(void)
 					0,
 					0);
 }
-
+//这个 inode 可以关联字符设备、块设备、FIFO 文件、Socket 等
 void init_special_inode(struct inode *inode, umode_t mode, dev_t rdev)
 {
 	inode->i_mode = mode;
+	//字符设备
 	if (S_ISCHR(mode)) {
 		inode->i_fop = &def_chr_fops;
 		inode->i_rdev = rdev;
+	//块设备
 	} else if (S_ISBLK(mode)) {
 		inode->i_fop = &def_blk_fops;
 		inode->i_rdev = rdev;

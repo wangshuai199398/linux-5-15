@@ -210,7 +210,7 @@ getname_uflags(const char __user *filename, int uflags)
 
 	return getname_flags(filename, flags, NULL);
 }
-
+//安全地从用户空间复制一个字符串（路径名）到内核空间中
 struct filename *
 getname(const char __user * filename)
 {
@@ -562,7 +562,10 @@ void path_put(const struct path *path)
 EXPORT_SYMBOL(path_put);
 
 #define EMBEDDED_LEVELS 2
+//文件都是一串的路径名称，需要逐个解析。nameidata在解析和查找路径的时候提供辅助作用
+// 文件“/root/hello/world/data”
 struct nameidata {
+	// 文件目录“/root/hello/world”
 	struct path	path;
 	struct qstr	last;
 	struct path	root;
@@ -578,6 +581,7 @@ struct nameidata {
 		const char *name;
 		unsigned seq;
 	} *stack, internal[EMBEDDED_LEVELS];
+	//路径名的最后一部分“data”
 	struct filename	*name;
 	struct nameidata *saved;
 	unsigned	root_seq;
@@ -603,7 +607,7 @@ static void __set_nameidata(struct nameidata *p, int dfd, struct filename *name)
 	p->saved = old;
 	current->nameidata = p;
 }
-
+//设置 nameidata 结构体
 static inline void set_nameidata(struct nameidata *p, int dfd, struct filename *name,
 			  const struct path *root)
 {
@@ -2575,7 +2579,7 @@ struct dentry *kern_path_locked(const char *name, struct path *path)
 	putname(filename);
 	return res;
 }
-
+//在 devtmpfs 文件系统中一直找到它对应的 dentry
 int kern_path(const char *name, unsigned int flags, struct path *path)
 {
 	struct filename *filename = getname_kernel(name);
@@ -3350,19 +3354,16 @@ static struct dentry *atomic_open(struct nameidata *nd, struct dentry *dentry,
 }
 
 /*
- * Look up and maybe create and open the last component.
+ * 查找并在必要时创建并打开最后一个路径组件
  *
- * Must be called with parent locked (exclusive in O_CREAT case).
+ * 必须在父目录已加锁的情况下调用（如果使用 O_CREAT，则需要加独占锁）。
  *
- * Returns 0 on success, that is, if
- *  the file was successfully atomically created (if necessary) and opened, or
- *  the file was not completely opened at this time, though lookups and
- *  creations were performed.
- * These case are distinguished by presence of FMODE_OPENED on file->f_mode.
- * In the latter case dentry returned in @path might be negative if O_CREAT
- * hadn't been specified.
+ * 返回值为 0 表示成功，即：
+ *  文件已被成功地（如果需要）原子性地创建并打开，或者
+ *  文件尚未完全打开，但查找和创建操作已经执行
+ * 这两种情况可通过 file->f_mode 中是否包含 FMODE_OPENED 来区分。
+ * 在后一种情况下，如果未指定 O_CREAT，则返回的 @path 中的 dentry 可能是负的（即表示文件不存在）。
  *
- * An error code is returned on failure.
  */
 static struct dentry *lookup_open(struct nameidata *nd, struct file *file,
 				  const struct open_flags *op,
@@ -3381,25 +3382,34 @@ static struct dentry *lookup_open(struct nameidata *nd, struct file *file,
 		return ERR_PTR(-ENOENT);
 
 	file->f_mode &= ~FMODE_CREATED;
+	//在dir目录中查找文件缓存，在 dir（父目录）的子项中查找dir 目录下名为 nd->last.name 的子项
 	dentry = d_lookup(dir, &nd->last);
 	for (;;) {
 		if (!dentry) {
+			//没找到，创建一个dentry，一种并发友好的 dentry 分配方式
 			dentry = d_alloc_parallel(dir, &nd->last, &wq);
 			if (IS_ERR(dentry))
 				return dentry;
 		}
+		//该 dentry 正在被其他线程 lookup
 		if (d_in_lookup(dentry))
 			break;
-
+		//判断该 dentry 是否依然有效（缓存是否还可用）
 		error = d_revalidate(dentry, nd->flags);
+		//dentry 是有效的
 		if (likely(error > 0))
 			break;
+		//验证出错，跳出并释放
 		if (error)
 			goto out_dput;
+		//清除缓存
 		d_invalidate(dentry);
+		//释放引用
 		dput(dentry);
+		//重新查找
 		dentry = NULL;
 	}
+	//如果找到了，并且它有 inode
 	if (dentry->d_inode) {
 		/* Cached positive dentry: will open in f_op->open */
 		return dentry;
@@ -3437,6 +3447,7 @@ static struct dentry *lookup_open(struct nameidata *nd, struct file *file,
 	}
 
 	if (d_in_lookup(dentry)) {
+		// ext4_lookup
 		struct dentry *res = dir_inode->i_op->lookup(dir_inode, dentry,
 							     nd->flags);
 		d_lookup_done(dentry);
@@ -3458,7 +3469,7 @@ static struct dentry *lookup_open(struct nameidata *nd, struct file *file,
 			error = -EACCES;
 			goto out_dput;
 		}
-
+		//如果发现文件夹下面没有这个文件，同时又设置了 O_CREAT,创建一个文件 ext4_create
 		error = dir_inode->i_op->create(mnt_userns, dir_inode, dentry,
 						mode, open_flag & O_EXCL);
 		if (error)
@@ -3475,6 +3486,18 @@ out_dput:
 	return ERR_PTR(error);
 }
 
+/*
+Linux 为了提高目录项对象的处理效率，设计与实现了目录项高速缓存 dentry cache，简称 dcache。它主要由两个数据结构组成：
+- 哈希表 dentry_hashtable：dcache 中的所有 dentry 对象都通过 d_hash 指针链到相应的 dentry 哈希链表中；
+- 未使用的 dentry 对象链表 s_dentry_lru：dentry 对象通过其 d_lru 指针链入 LRU 链表中。LRU 的意思是最近最少使用，我们已经好几次看到它了。只要有它，就说明长时间不使用，就应该释放了
+这两个列表之间会产生复杂的关系：
+	引用为 0：一个在散列表中的 dentry 变成没有人引用了，就会被加到 LRU 表中去；
+	再次被引用：一个在 LRU 表中的 dentry 再次被引用了，则从 LRU 表中移除；
+	分配：当 dentry 在散列表中没有找到，则从 Slub 分配器中分配一个；
+	过期归还：当 LRU 表中最长时间没有使用的 dentry 应该释放回 Slub 分配器；
+	文件删除：文件被删除了，相应的 dentry 应该释放回 Slub 分配器；
+	结构复用：当需要分配一个 dentry，但是无法分配新的，就从 LRU 表中取出一个来复用。
+*/
 static const char *open_last_lookups(struct nameidata *nd,
 		   struct file *file, const struct open_flags *op)
 {
@@ -3497,7 +3520,7 @@ static const char *open_last_lookups(struct nameidata *nd,
 	if (!(open_flag & O_CREAT)) {
 		if (nd->last.name[nd->last.len])
 			nd->flags |= LOOKUP_FOLLOW | LOOKUP_DIRECTORY;
-		/* we _can_ be in RCU mode here */
+		/* we _can_ be in RCU mode here 先从缓存中查找 */
 		dentry = lookup_fast(nd, &inode, &seq);
 		if (IS_ERR(dentry))
 			return ERR_CAST(dentry);
@@ -3529,6 +3552,7 @@ static const char *open_last_lookups(struct nameidata *nd,
 		inode_lock(dir->d_inode);
 	else
 		inode_lock_shared(dir->d_inode);
+	//缓存中没有找到，就需要真的到文件系统里面去找了
 	dentry = lookup_open(nd, file, op, got_write);
 	if (!IS_ERR(dentry) && (file->f_mode & FMODE_CREATED))
 		fsnotify_create(dir->d_inode, dentry);
@@ -3718,7 +3742,12 @@ static int do_o_path(struct nameidata *nd, unsigned flags, struct file *file)
 	}
 	return error;
 }
-
+/*
+1. alloc_empty_file 生成一个 struct file 结构；
+2. path_init 初始化 nameidata，准备开始节点路径查找；
+3. link_path_walk 对于路径名逐层进行节点路径查找，这里面有一个大的循环，用“/”分隔逐层处理；
+4. open_last_lookups 获取文件对应的 inode 对象，并且初始化 file 对象
+*/
 static struct file *path_openat(struct nameidata *nd,
 			const struct open_flags *op, unsigned flags)
 {
@@ -3728,17 +3757,22 @@ static struct file *path_openat(struct nameidata *nd,
 	file = alloc_empty_file(op->open_flag, current_cred());
 	if (IS_ERR(file))
 		return file;
-
+	//要创建一个临时文件，但它不会在文件系统中出现名称（匿名 inode）
 	if (unlikely(file->f_flags & __O_TMPFILE)) {
+		//创建临时文件并关联到挂载点和 file
 		error = do_tmpfile(nd, flags, op, file);
+	//仅获取“路径句柄”，不会打开文件内容，也不能用于读/写
 	} else if (unlikely(file->f_flags & O_PATH)) {
+		//设置 file 中的一些字段，不进行实际打开
 		error = do_o_path(nd, flags, file);
+	//进入标准路径解析和文件创建/打开逻辑
 	} else {
 		const char *s = path_init(nd, flags);
 		while (!(error = link_path_walk(s, nd)) &&
 		       (s = open_last_lookups(nd, file, op)) != NULL)
 			;
 		if (!error)
+			//真正打开文件
 			error = do_open(nd, file, op);
 		terminate_walk(nd);
 	}
@@ -3764,7 +3798,7 @@ struct file *do_filp_open(int dfd, struct filename *pathname,
 	struct nameidata nd;
 	int flags = op->lookup_flags;
 	struct file *filp;
-
+	//初始化了 struct nameidata
 	set_nameidata(&nd, dfd, pathname, NULL);
 	filp = path_openat(&nd, op, flags | LOOKUP_RCU);
 	if (unlikely(filp == ERR_PTR(-ECHILD)))
@@ -3800,7 +3834,7 @@ struct file *do_file_open_root(const struct path *root,
 	putname(filename);
 	return file;
 }
-
+//创建一个新的文件名对应的 dentry, 这里会进行路径查找，并准备好新文件的创建位置
 static struct dentry *filename_create(int dfd, struct filename *name,
 				      struct path *path, unsigned int lookup_flags)
 {
@@ -3940,7 +3974,7 @@ int vfs_mknod(struct user_namespace *mnt_userns, struct inode *dir,
 	error = security_inode_mknod(dir, dentry, mode, dev);
 	if (error)
 		return error;
-
+	// /dev下的文件系统为 devtmpfs   shmem_mknod   ext4_mknod
 	error = dir->i_op->mknod(mnt_userns, dir, dentry, mode, dev);
 	if (!error)
 		fsnotify_create(dir, dentry);
@@ -3964,7 +3998,14 @@ static int may_mknod(umode_t mode)
 		return -EINVAL;
 	}
 }
-
+/*
+在文件系统中创建一个特殊文件（比如字符设备、块设备或命名管道）
+ * @dfd:  目录文件描述符（类似于相对路径的基础目录）
+ * @name: 指向 struct filename 的指针，代表要创建的节点名称
+ * @mode: 文件的权限以及类型（决定是字符设备、块设备还是FIFO等）。
+ * @dev:  设备号（主设备号和次设备号，组合成 dev_t 类型）。
+ */
+*/
 static int do_mknodat(int dfd, struct filename *name, umode_t mode,
 		unsigned int dev)
 {
@@ -3978,6 +4019,7 @@ static int do_mknodat(int dfd, struct filename *name, umode_t mode,
 	if (error)
 		goto out1;
 retry:
+	//对于这个管道文件创建一个 dentry
 	dentry = filename_create(dfd, name, &path, lookup_flags);
 	error = PTR_ERR(dentry);
 	if (IS_ERR(dentry))
@@ -4000,7 +4042,8 @@ retry:
 			error = vfs_mknod(mnt_userns, path.dentry->d_inode,
 					  dentry, mode, new_decode_dev(dev));
 			break;
-		case S_IFIFO: case S_IFSOCK:
+		case S_IFIFO: case S_IFSOCK:\
+			//由于这个管道文件是创建在一个普通文件系统上的，假设是在 ext4 文件上，于是 vfs_mknod 会调用 ext4_dir_inode_operations 的 mknod，也即会调用 ext4_mknod
 			error = vfs_mknod(mnt_userns, path.dentry->d_inode,
 					  dentry, mode, 0);
 			break;
@@ -4021,7 +4064,7 @@ SYSCALL_DEFINE4(mknodat, int, dfd, const char __user *, filename, umode_t, mode,
 {
 	return do_mknodat(dfd, getname(filename), mode, dev);
 }
-
+// mknod_wangs
 SYSCALL_DEFINE3(mknod, const char __user *, filename, umode_t, mode, unsigned, dev)
 {
 	return do_mknodat(AT_FDCWD, getname(filename), mode, dev);

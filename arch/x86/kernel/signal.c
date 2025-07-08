@@ -275,7 +275,7 @@ get_sigframe(struct k_sigaction *ka, struct pt_regs *regs, size_t frame_size,
 	sp = fpu__alloc_mathframe(sp, IS_ENABLED(CONFIG_X86_32),
 				  &buf_fx, &math_size);
 	*fpstate = (void __user *)sp;
-
+	//将 sp 减去 sizeof(struct rt_sigframe)，也就是把这个栈帧塞到了栈里面
 	sp = align_sigframe(sp - frame_size);
 
 	/*
@@ -467,7 +467,7 @@ static int __setup_rt_frame(int sig, struct ksignal *ksig,
 	/* x86-64 should always use SA_RESTORER. */
 	if (!(ksig->ka.sa.sa_flags & SA_RESTORER))
 		return -EFAULT;
-
+	//fp: 得到 pt_regs 的 sp 变量,也就是原来这个程序在用户态的栈顶指针
 	frame = get_sigframe(&ksig->ka, regs, sizeof(struct rt_sigframe), &fp);
 	uc_flags = frame_uc_flags(regs);
 
@@ -479,9 +479,10 @@ static int __setup_rt_frame(int sig, struct ksignal *ksig,
 	unsafe_put_user(0, &frame->uc.uc_link, Efault);
 	unsafe_save_altstack(&frame->uc.uc_stack, regs->sp, Efault);
 
-	/* Set up to return from userspace.  If provided, use a stub
-	   already in userspace.  */
+	/* Set up to return from userspace.  If provided, use a stub already in userspace.  */
+	//将sa_restorer放到了frame->pretcode中，而且还是按照函数栈的规则。函数栈里面包含了函数执行完跳回去的地址。当sa_handler执行完之后，弹出的函数栈是frame，也就应该跳到sa_restorer的地址
 	unsafe_put_user(ksig->ka.sa.sa_restorer, &frame->pretcode, Efault);
+	//sa_handler返回后，为了能回到程序原来在用户态运行的地方，这里将原来的 pt_regs 保存在了 frame 中的 uc_mcontext 里面
 	unsafe_put_sigcontext(&frame->uc.uc_mcontext, fp, regs, set, Efault);
 	unsafe_put_sigmask(set, frame, Efault);
 	user_access_end();
@@ -500,8 +501,10 @@ static int __setup_rt_frame(int sig, struct ksignal *ksig,
 	   next argument after the signal number on the stack. */
 	regs->si = (unsigned long)&frame->info;
 	regs->dx = (unsigned long)&frame->uc;
+	//最后将 regs->ip 设置为用户定义的信号处理函数 sa_handler。这意味着，本来返回用户态应该接着原来的代码执行的，现在不了，要执行 sa_handler 了
+	//执行完会按照函数栈的规则，弹出上一个栈帧来，也就是弹出了 frame
 	regs->ip = (unsigned long) ksig->ka.sa.sa_handler;
-
+	//把 regs->sp 设置成等于 frame。这就相当于强行在程序原来的用户态的栈里面插入了一个栈帧
 	regs->sp = (unsigned long)frame;
 
 	/*
@@ -654,13 +657,14 @@ badframe:
 }
 #endif /* CONFIG_X86_32 */
 
+//rt_sigreturn_wangs 信号处理系统调用
 SYSCALL_DEFINE0(rt_sigreturn)
 {
 	struct pt_regs *regs = current_pt_regs();
 	struct rt_sigframe __user *frame;
 	sigset_t set;
 	unsigned long uc_flags;
-
+	//把上次填充的那个 rt_sigframe 拿出来
 	frame = (struct rt_sigframe __user *)(regs->sp - sizeof(long));
 	if (!access_ok(frame, sizeof(*frame)))
 		goto badframe;
@@ -670,7 +674,7 @@ SYSCALL_DEFINE0(rt_sigreturn)
 		goto badframe;
 
 	set_current_blocked(&set);
-
+	//将 pt_regs 恢复成为原来用户态的样子。从这个系统调用返回的时候，应用还误以为从上次的系统调用返回的呢
 	if (!restore_sigcontext(regs, &frame->uc.uc_mcontext, uc_flags))
 		goto badframe;
 
@@ -783,17 +787,17 @@ setup_rt_frame(struct ksignal *ksig, struct pt_regs *regs)
 		return __setup_rt_frame(ksig->sig, ksig, set, regs);
 	}
 }
-
+//当用户进程收到了一个信号时（比如 SIGINT, SIGTERM, SIGSEGV 等），内核会调用这个函数来设置进程的执行状态，使它能在返回用户态时，跳转到用户注册的信号处理函数
 static void
 handle_signal(struct ksignal *ksig, struct pt_regs *regs)
 {
 	bool stepping, failed;
 	struct fpu *fpu = &current->thread.fpu;
-
+	//如果当前进程处于虚拟 8086 模式（老式 DOS 程序），就保存它的状态。这在现代系统里比较少见
 	if (v8086_mode(regs))
 		save_v86_state((struct kernel_vm86_regs *) regs, VM86_SIGNAL);
 
-	/* Are we from a system call? */
+	/* 是否从系统调用中返回 */
 	if (syscall_get_nr(current, regs) != -1) {
 		/* If so, check system call restarting.. */
 		switch (syscall_get_error(current, regs)) {
@@ -801,7 +805,7 @@ handle_signal(struct ksignal *ksig, struct pt_regs *regs)
 		case -ERESTARTNOHAND:
 			regs->ax = -EINTR;
 			break;
-
+		//当发现出现错误 ERESTARTSYS 的时候，就知道这是从一个没有调用完的系统调用返回的，设置系统调用错误码 EINTR
 		case -ERESTARTSYS:
 			if (!(ksig->ka.sa.sa_flags & SA_RESTART)) {
 				regs->ax = -EINTR;
@@ -819,11 +823,12 @@ handle_signal(struct ksignal *ksig, struct pt_regs *regs)
 	 * If TF is set due to a debugger (TIF_FORCED_TF), clear TF now
 	 * so that register information in the sigcontext is correct and
 	 * then notify the tracer before entering the signal handler.
+	 * 如果进程正在被调试（开启了单步执行标志 TF），则清除该状态，防止干扰信号处理
 	 */
 	stepping = test_thread_flag(TIF_SINGLESTEP);
 	if (stepping)
 		user_disable_single_step(current);
-
+	//设置pt_regs，构造信号帧（signal frame）并设置用户态返回地址，使得返回用户态后自动执行信号处理函数 
 	failed = (setup_rt_frame(ksig, regs) < 0);
 	if (!failed) {
 		/*
@@ -835,6 +840,9 @@ handle_signal(struct ksignal *ksig, struct pt_regs *regs)
 		 *
 		 * Clear TF for the case when it wasn't set by debugger to
 		 * avoid the recursive send_sigtrap() in SIGTRAP handler.
+		 * 清除方向标志（DF），符合函数调用 ABI。
+		 * 清除恢复标志（RF）和单步标志（TF）是为了避免调试异常。
+		 * 清除用户 FPU 状态：防止信号处理器用到 FPU 时遇到旧状态。
 		 */
 		regs->flags &= ~(X86_EFLAGS_DF|X86_EFLAGS_RF|X86_EFLAGS_TF);
 		/*
@@ -842,6 +850,7 @@ handle_signal(struct ksignal *ksig, struct pt_regs *regs)
 		 */
 		fpu__clear_user_states(fpu);
 	}
+	//这一步告诉内核，“信号准备好了”，下一次从内核返回用户态时会跳转到 signal handler。如果失败了，通常进程会被终止
 	signal_setup_done(failed, ksig, stepping);
 }
 
@@ -868,7 +877,7 @@ void arch_do_signal_or_restart(struct pt_regs *regs, bool has_signal)
 	struct ksignal ksig;
 
 	if (has_signal && get_signal(&ksig)) {
-		/* Whee! Actually deliver the signal.  */
+		/* Actually deliver the signal. 有信号需要处理，按说，信号处理就是调用用户提供的信号处理函数，但是信号处理函数是在用户态*/
 		handle_signal(&ksig, regs);
 		return;
 	}

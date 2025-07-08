@@ -56,6 +56,7 @@
 #define SA_ONSTACK	0x08000000
 #endif
 #ifndef SA_RESTART
+//当一个被阻塞的系统调用因信号中断而返回错误时，如果设置了 SA_RESTART，系统将自动重新启动该系统调用，而不是直接返回错误
 #define SA_RESTART	0x10000000
 #endif
 #ifndef SA_NODEFER
@@ -64,8 +65,9 @@
 #ifndef SA_RESETHAND
 #define SA_RESETHAND	0x80000000
 #endif
-
+//控制信号处理期间的 屏蔽（mask）行为
 #define SA_NOMASK	SA_NODEFER
+//信号处理函数只起一次作用, 处理完后会自动恢复为默认处理方式
 #define SA_ONESHOT	SA_RESETHAND
 
 #ifndef SIG_BLOCK

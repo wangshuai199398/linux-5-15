@@ -1884,6 +1884,7 @@ out:
  * If there is a page cache page, it is returned with an increased refcount.
  *
  * Return: The found page or %NULL otherwise.
+ * 根据 pgoff_t index 这个长整型，在这棵树里面查找缓存页，如果找不到就会创建一个缓存页
  */
 struct page *pagecache_get_page(struct address_space *mapping, pgoff_t index,
 		int fgp_flags, gfp_t gfp_mask)
@@ -1936,7 +1937,7 @@ no_page:
 			gfp_mask |= __GFP_WRITE;
 		if (fgp_flags & FGP_NOFS)
 			gfp_mask &= ~__GFP_FS;
-
+		//显示分配一个缓存页
 		page = __page_cache_alloc(gfp_mask);
 		if (!page)
 			return NULL;
@@ -1947,7 +1948,7 @@ no_page:
 		/* Init accessed so avoid atomic mark_page_accessed later */
 		if (fgp_flags & FGP_ACCESSED)
 			__SetPageReferenced(page);
-
+		//将这一页加到 lru 表里面
 		err = add_to_page_cache_lru(page, mapping, index, gfp_mask);
 		if (unlikely(err)) {
 			put_page(page);
@@ -2383,6 +2384,7 @@ static int filemap_read_page(struct file *file, struct address_space *mapping,
 	 */
 	ClearPageError(page);
 	/* Start the actual read. The read will unlock the page. */
+	//将文件内容读到内存中 ext4文件系统为 ext4_readpage
 	error = mapping->a_ops->readpage(file, page);
 	if (error)
 		return error;
@@ -2548,6 +2550,7 @@ retry:
 	if (!pagevec_count(pvec)) {
 		if (iocb->ki_flags & IOCB_NOIO)
 			return -EAGAIN;
+		//预取
 		page_cache_sync_readahead(mapping, ra, filp, index,
 				last_index - index);
 		filemap_get_read_batch(mapping, index, last_index - 1, pvec);
@@ -2564,6 +2567,7 @@ retry:
 
 	page = pvec->pages[pagevec_count(pvec) - 1];
 	if (PageReadahead(page)) {
+		//如果第一次找缓存页就找到了，我们还是要判断，是不是应该继续预读；如果需要，就调用 page_cache_async_readahead 发起一个异步预读
 		err = filemap_readahead(iocb, filp, mapping, page, last_index);
 		if (err)
 			goto err;
@@ -2630,7 +2634,7 @@ ssize_t filemap_read(struct kiocb *iocb, struct iov_iter *iter,
 		 */
 		if ((iocb->ki_flags & IOCB_WAITQ) && already_read)
 			iocb->ki_flags |= IOCB_NOWAIT;
-
+		//先找到 page cache 里面是否有缓存页。如果没有找到，不但读取这一页，还要进行预读
 		error = filemap_get_pages(iocb, iter, &pvec);
 		if (error < 0)
 			break;
@@ -2694,7 +2698,7 @@ ssize_t filemap_read(struct kiocb *iocb, struct iov_iter *iter,
 				for (j = 0; j < thp_nr_pages(page); j++)
 					flush_dcache_page(page + j);
 			}
-
+			//将内容从内核缓存页拷贝到用户内存空间
 			copied = copy_page_to_iter(page, offset, bytes, iter);
 
 			already_read += copied;
@@ -2747,7 +2751,7 @@ generic_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 
 	if (!count)
 		return 0; /* skip atime */
-
+	//设置了 IOCB_DIRECT，则会调用 address_space 的 direct_IO 的函数，将数据直接读取硬盘
 	if (iocb->ki_flags & IOCB_DIRECT) {
 		struct file *file = iocb->ki_filp;
 		struct address_space *mapping = file->f_mapping;
@@ -2768,7 +2772,7 @@ generic_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 		}
 
 		file_accessed(file);
-
+		// noop_direct_IO
 		retval = mapping->a_ops->direct_IO(iocb, iter);
 		if (retval >= 0) {
 			iocb->ki_pos += retval;
@@ -3052,6 +3056,7 @@ static struct file *do_async_mmap_readahead(struct vm_fault *vmf,
 vm_fault_t filemap_fault(struct vm_fault *vmf)
 {
 	int error;
+	//vm_file 就是咱们当时 mmap 的时候映射的那个文件
 	struct file *file = vmf->vma->vm_file;
 	struct file *fpin = NULL;
 	struct address_space *mapping = file->f_mapping;
@@ -3068,6 +3073,7 @@ vm_fault_t filemap_fault(struct vm_fault *vmf)
 
 	/*
 	 * Do we have something in the page cache already?
+	 * 对于文件映射来说，一般这个文件会在物理内存里面有页面作为它的缓存，find_get_page 就是找那个页
 	 */
 	page = find_get_page(mapping, offset);
 	if (likely(page)) {
@@ -3076,6 +3082,7 @@ vm_fault_t filemap_fault(struct vm_fault *vmf)
 		 * the lock.
 		 */
 		if (!(vmf->flags & FAULT_FLAG_TRIED))
+			//找到了预读一些数据到内存里面
 			fpin = do_async_mmap_readahead(vmf, page);
 		if (unlikely(!PageUptodate(page))) {
 			filemap_invalidate_lock_shared(mapping);
@@ -3096,6 +3103,7 @@ retry_find:
 			filemap_invalidate_lock_shared(mapping);
 			mapping_locked = true;
 		}
+		//没有物理内存中的缓存页, 显示分配一个缓存页, 将这一页加到 lru 表里面, 后面调用 address_space_operations 的 readpage 函数，将文件内容读到内存中
 		page = pagecache_get_page(mapping, offset,
 					  FGP_CREAT|FGP_FOR_MMAP,
 					  vmf->gfp_mask);
@@ -3171,6 +3179,7 @@ page_not_uptodate:
 	 * and we need to check for errors.
 	 */
 	fpin = maybe_unlock_mmap_for_io(vmf, fpin);
+	//将文件内容读到内存
 	error = filemap_read_page(file, mapping, page);
 	if (fpin)
 		goto out_retry;
@@ -3683,7 +3692,7 @@ generic_file_direct_write(struct kiocb *iocb, struct iov_iter *from)
 			return 0;
 		goto out;
 	}
-
+	// noop_direct_IO
 	written = mapping->a_ops->direct_IO(iocb, from);
 
 	/*
@@ -3745,6 +3754,13 @@ struct page *grab_cache_page_write_begin(struct address_space *mapping,
 }
 EXPORT_SYMBOL(grab_cache_page_write_begin);
 
+/*
+当发现缓存的数据太多的时候，会触发回写，这仅仅是回写的一种场景。另外还有几种场景也会触发回写:
+    用户主动调用 sync，将缓存刷到硬盘上去，最终会调用 wakeup_flusher_threads，同步脏页；
+	当内存十分紧张，以至于无法分配页面的时候，会调用 free_more_memory，最终会调用 wakeup_flusher_threads，释放脏页；
+	脏页已经更新了较长时间，时间上超过了 timer，需要及时回写，保持内存和磁盘上数据一致性。
+写操作由一个 timer 触发, 然后调用 wb_workfn 向硬盘写入页面
+*/
 ssize_t generic_perform_write(struct file *file,
 				struct iov_iter *i, loff_t pos)
 {
@@ -3753,7 +3769,7 @@ ssize_t generic_perform_write(struct file *file,
 	long status = 0;
 	ssize_t written = 0;
 	unsigned int flags = 0;
-
+	//找出这次写入影响的所有的页，然后依次写入
 	do {
 		struct page *page;
 		unsigned long offset;	/* Offset into pagecache page */
@@ -3781,7 +3797,7 @@ again:
 			status = -EINTR;
 			break;
 		}
-
+		// 做一些准备 ext4_write_begin
 		status = a_ops->write_begin(file, mapping, pos, bytes, flags,
 						&page, &fsdata);
 		if (unlikely(status < 0))
@@ -3789,10 +3805,10 @@ again:
 
 		if (mapping_writably_mapped(mapping))
 			flush_dcache_page(page);
-
+		//将写入的内容从用户态拷贝到内核态的页中
 		copied = copy_page_from_iter_atomic(page, offset, bytes, i);
 		flush_dcache_page(page);
-
+		//完成写操作 ext4_write_end
 		status = a_ops->write_end(file, mapping, pos, bytes, copied,
 						page, fsdata);
 		if (unlikely(status != copied)) {
@@ -3815,7 +3831,7 @@ again:
 		}
 		pos += status;
 		written += status;
-
+		//回写脏页 看脏页是否太多，需要写回硬盘。所谓脏页，就是写入到缓存，但是还没有写入到硬盘的页面
 		balance_dirty_pages_ratelimited(mapping);
 	} while (iov_iter_count(i));
 

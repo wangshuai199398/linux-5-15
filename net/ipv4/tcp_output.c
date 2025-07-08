@@ -391,6 +391,7 @@ static void tcp_ecn_send(struct sock *sk, struct sk_buff *skb,
 
 /* Constructs common control bits of non-data skb. If SYN/FIN is present,
  * auto increment end seqno.
+ * 初始化一个 SYN 包
  */
 static void tcp_init_nondata_skb(struct sk_buff *skb, u32 seq, u8 flags)
 {
@@ -1492,7 +1493,10 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	}
 	return err;
 }
-
+/*
+第一件事情就是填充 TCP 头
+第二调用 icsk_af_ops 的 queue_xmit 方法，icsk_af_ops 指向 ipv4_specific，也即调用的是 ip_queue_xmit 函数
+*/
 static int tcp_transmit_skb(struct sock *sk, struct sk_buff *skb, int clone_it,
 			    gfp_t gfp_mask)
 {
@@ -2029,12 +2033,13 @@ static void tcp_minshall_update(struct tcp_sock *tp, unsigned int mss_now,
 		tp->snd_sml = TCP_SKB_CB(skb)->end_seq;
 }
 
-/* Return false, if packet can be sent now without violation Nagle's rules:
+/* 如果当前可以发送该数据包且不违反 Nagle 规则，则返回 false：
  * 1. It is full sized. (provided by caller in %partial bool)
  * 2. Or it contains FIN. (already checked by caller)
  * 3. Or TCP_CORK is not set, and TCP_NODELAY is set.
  * 4. Or TCP_CORK is not set, and all sent packets are ACKed.
  *    With Minshall's modification: all sent small packets are ACKed.
+ * 检查是否满足 Nagle 算法的条件
  */
 static bool tcp_nagle_check(bool partial, const struct tcp_sock *tp,
 			    int nonagle)
@@ -2083,6 +2088,7 @@ static u32 tcp_tso_segs(struct sock *sk, unsigned int mss_now)
 }
 
 /* Returns the portion of skb which can be sent right away */
+//你现在这个大 skb，最多能从里面分出多少字节的数据发出去，并且不违反 TCP 拥塞、窗口、Nagle 规则
 static unsigned int tcp_mss_split_point(const struct sock *sk,
 					const struct sk_buff *skb,
 					unsigned int mss_now,
@@ -2091,40 +2097,37 @@ static unsigned int tcp_mss_split_point(const struct sock *sk,
 {
 	const struct tcp_sock *tp = tcp_sk(sk);
 	u32 partial, needed, window, max_len;
-
+	//计算从该 skb 开始还能发多少数据不超过发送窗口（剩余窗口大小）
 	window = tcp_wnd_end(tp) - TCP_SKB_CB(skb)->seq;
+	//最多可以发送 max_segs 个 MSS 的长度
 	max_len = mss_now * max_segs;
-
+	//如果可以完整地发送 max_segs * mss 字节，并且该 skb 不是写队列的最后一个包，就直接发全部的 max_len
 	if (likely(max_len <= window && skb != tcp_write_queue_tail(sk)))
 		return max_len;
-
+	//需要发送的数据不能超过 skb 实际长度 和 window 中的较小者
 	needed = min(skb->len, window);
-
+	//如果 max_len 本来就小于 needed，也直接发送 max_len
 	if (max_len <= needed)
 		return max_len;
-
+	//计算 needed 中除完整的 MSS 外的“剩余字节”（即不满一个 MSS 的部分）
 	partial = needed % mss_now;
-	/* If last segment is not a full MSS, check if Nagle rules allow us
-	 * to include this last segment in this skb.
-	 * Otherwise, we'll split the skb at last MSS boundary
-	 */
+	//如果最后一段不是完整的 MSS，并且 Nagle 算法不允许发送这种“小包”，就减去最后那部分，按完整的 MSS 分段
 	if (tcp_nagle_check(partial != 0, tp, nonagle))
 		return needed - partial;
 
 	return needed;
 }
 
-/* Can at least one segment of SKB be sent right now, according to the
- * congestion window rules?  If so, return how many segments are allowed.
+/* 
+ * 返回值是当前允许发送的段数, 最大只能返回窗口的一半
  */
 static inline unsigned int tcp_cwnd_test(const struct tcp_sock *tp,
 					 const struct sk_buff *skb)
 {
 	u32 in_flight, cwnd, halfcwnd;
 
-	/* Don't be strict about the congestion window for the final FIN.  */
-	if ((TCP_SKB_CB(skb)->tcp_flags & TCPHDR_FIN) &&
-	    tcp_skb_pcount(skb) == 1)
+	/* 对最后一个 FIN 不要严格遵守拥塞窗口限制  */
+	if ((TCP_SKB_CB(skb)->tcp_flags & TCPHDR_FIN) && tcp_skb_pcount(skb) == 1)
 		return 1;
 
 	in_flight = tcp_packets_in_flight(tp);
@@ -2132,16 +2135,14 @@ static inline unsigned int tcp_cwnd_test(const struct tcp_sock *tp,
 	if (in_flight >= cwnd)
 		return 0;
 
-	/* For better scheduling, ensure we have at least
-	 * 2 GSO packets in flight.
-	 */
+	/* 至少保留一半窗口用于活跃传输 */
 	halfcwnd = max(cwnd >> 1, 1U);
 	return min(halfcwnd, cwnd - in_flight);
 }
 
-/* Initialize TSO state of a skb.
- * This must be invoked the first time we consider transmitting
- * SKB onto the wire.
+/* 初始化 skb 的 TSO 状态
+ * 在我们第一次考虑将该 SKB 发送到网络时，必须调用此函数
+ * 计算应该分成几个段
  */
 static int tcp_init_tso_segs(struct sk_buff *skb, unsigned int mss_now)
 {
@@ -2180,7 +2181,10 @@ static inline bool tcp_nagle_test(const struct tcp_sock *tp, const struct sk_buf
 	return false;
 }
 
-/* Does at least the first segment of SKB fit into the send window? */
+/* SKB 的第一个分段能放入发送窗口吗 
+   判断 sk_buff 中的 end_seq 和 tcp_wnd_end(tp) 之间的关系，也即这个 sk_buff 是否在滑动窗口的允许范围之内。
+   如果不在范围内，说明发送要受限制了，我们就要把 is_rwnd_limited 设置为 true
+*/
 static bool tcp_snd_wnd_test(const struct tcp_sock *tp,
 			     const struct sk_buff *skb,
 			     unsigned int cur_mss)
@@ -2714,6 +2718,9 @@ void tcp_chrono_stop(struct sock *sk, const enum tcp_chrono type)
 
  * 如果当前没有在传输中的段，而且发送队列中还有待发送的数据段，但由于 SWS（Silly Window Syndrome）或其他原因 无法发送，
  * 那么这个函数会返回 true
+ * TSO
+ * 拥塞窗口
+ * 滑动窗口
  */
 static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 			   int push_one, gfp_t gfp)
@@ -2764,7 +2771,7 @@ static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 
 		tso_segs = tcp_init_tso_segs(skb, mss_now);
 		BUG_ON(!tso_segs);
-		//拥塞窗口：当前发送的包数量小于拥塞窗口允许的最大值，就可以发送新数据，否则不能发送，需要等待ACK回来释放窗口
+		//拥塞窗口：当前发送的包数量小于拥塞窗口，就可以发送新数据，否则不能发送，需要等待ACK回来释放窗口
 		cwnd_quota = tcp_cwnd_test(tp, skb);
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
 			printk(KERN_INFO "%s: cwnd_quota %d tcp_packets_in_flight: %u tcp_snd_cwnd: %u\n", __func__, cwnd_quota, tcp_packets_in_flight(tp), tcp_snd_cwnd(tp));
@@ -2778,7 +2785,7 @@ static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 		}
 		//检查发送数据是否受到接收窗口的限制
 		//接收方 snd_wnd 告诉发送方“我还能接多少”
-		//发送方 cwnd    根据拥塞算法控制“你最多发这么多”
+		//发送方 cwnd    根据拥塞算法控制“最多发这么多”
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
 			printk(KERN_INFO "%s: TCP_SKB_CB(skb)->end_seq %u TCP_SKB_CB(skb)->seq %u tcp_wnd_end(tp) %u\n", __func__, TCP_SKB_CB(skb)->end_seq, TCP_SKB_CB(skb)->seq, tcp_wnd_end(tp));
 		if (unlikely(!tcp_snd_wnd_test(tp, skb, mss_now))) {
@@ -2818,8 +2825,7 @@ static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
 			printk(KERN_INFO "%s: ->skb->len %d limit %u\n", __func__, skb->len, limit);
-		if (skb->len > limit &&
-		    unlikely(tso_fragment(sk, skb, limit, mss_now, gfp)))
+		if (skb->len > limit && unlikely(tso_fragment(sk, skb, limit, mss_now, gfp)))
 			break;
 		//检查TCP发送队列是否满足一定的条件（比如是否过小或拥塞），以决定是否需要采取某些拥塞控制或流量控制措施
 		if (tcp_small_queue_check(sk, skb, 0))
@@ -4087,6 +4093,7 @@ int tcp_connect(struct sock *sk)
 	TCP_INC_STATS(sock_net(sk), TCP_MIB_ACTIVEOPENS);
 
 	/* Timer for repeating the SYN until an answer. 重启重传定时器 */
+	//设置了一个 timer，如果 SYN 发送不成功，则再次发送
 	inet_csk_reset_xmit_timer(sk, ICSK_TIME_RETRANS,
 				  inet_csk(sk)->icsk_rto, TCP_RTO_MAX);
 	return 0;

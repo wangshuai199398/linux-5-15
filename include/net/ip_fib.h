@@ -376,14 +376,14 @@ static inline int fib_lookup(struct net *net, struct flowi4 *flp,
 	rcu_read_lock();
 
 	res->tclassid = 0;
-
+	//在 RT_TABLE_MAIN 中查找路由表
 	tb = rcu_dereference_rtnl(net->ipv4.fib_main);
 	if (tb)
 		err = fib_table_lookup(tb, flp, res, flags);
 
 	if (!err)
 		goto out;
-
+	//在 RT_TABLE_LOCAL 中查找路由表
 	tb = rcu_dereference_rtnl(net->ipv4.fib_default);
 	if (tb)
 		err = fib_table_lookup(tb, flp, res, flags);

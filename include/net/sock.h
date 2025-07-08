@@ -1782,7 +1782,7 @@ static inline void sock_not_owned_by_me(const struct sock *sk)
 	WARN_ON_ONCE(lockdep_sock_is_held(sk) && debug_locks);
 #endif
 }
-
+//当前这个 sock 是不是正有一个用户态进程等着读数据呢，如果没有，内核协议栈调用 tcp_add_backlog，暂存在 backlog 队列中，并且抓紧离开软中断的处理过程
 static inline bool sock_owned_by_user(const struct sock *sk)
 {
 	sock_owned_by_me(sk);
@@ -2021,7 +2021,7 @@ static inline void sk_set_socket(struct sock *sk, struct socket *sock)
 {
 	sk->sk_socket = sock;
 }
-
+//返回 socket 所属的 等待队列头（wait_queue_head_t *）
 static inline wait_queue_head_t *sk_sleep(struct sock *sk)
 {
 	BUILD_BUG_ON(offsetof(struct socket_wq, wait) != 0);

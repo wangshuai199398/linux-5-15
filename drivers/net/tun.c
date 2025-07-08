@@ -115,16 +115,12 @@ struct tap_filter {
 
 #define TUN_FLOW_EXPIRE (3 * HZ)
 
-/* A tun_file connects an open character device to a tuntap netdevice. It
- * also contains all socket related structures (except sock_fprog and tap_filter)
- * to serve as one transmit queue for tuntap device. The sock_fprog and
- * tap_filter were kept in tun_struct since they were used for filtering for the
- * netdevice not for a specific queue (at least I didn't see the requirement for
- * this).
- *
- * RCU usage:
- * The tun_file and tun_struct are loosely coupled, the pointer from one to the
- * other can only be read while rcu_read_lock or rtnl_lock is held.
+/* 一个 tun_file（结构体）连接一个已打开的字符设备与一个 tuntap 网络设备
+ * 它还包含了所有与 socket 相关的结构（除了 sock_fprog 和 tap_filter），用于作为 tuntap 设备的一个发送队列（transmit queue）。
+ * sock_fprog 和 tap_filter 被保留在 tun_struct 中，因为它们用于整个网络设备的过滤功能，而不是特定队列的（至少我没看到必须为每个队列单独设置的需求）
+ * 
+ * 关于 RCU（Read-Copy-Update）的使用：
+ * tun_file 和 tun_struct 是松耦合的结构体，彼此之间的指针只能在持有 rcu_read_lock 或 rtnl_lock 锁的情况下读取
  */
 struct tun_file {
 	struct sock sk;
@@ -181,7 +177,7 @@ struct tun_struct {
 	unsigned int 		flags;
 	kuid_t			owner;
 	kgid_t			group;
-
+	// 表示宿主机上的 tuntap 网络设备
 	struct net_device	*dev;
 	netdev_features_t	set_features;
 #define TUN_USER_FEATURES (NETIF_F_HW_CSUM|NETIF_F_TSO_ECN|NETIF_F_TSO| \
@@ -1719,6 +1715,7 @@ out:
 }
 
 /* Get packet from user space buffer */
+//从用户区接收数据，将数据存入 skb 中，然后调用关键的函数 netif_rx_ni ，将 skb 送给 tcp/ip 协议栈处理，最终完成虚拟网卡的数据接收
 static ssize_t tun_get_user(struct tun_struct *tun, struct tun_file *tfile,
 			    void *msg_control, struct iov_iter *from,
 			    int noblock, bool more)
@@ -2015,7 +2012,7 @@ static ssize_t tun_chr_write_iter(struct kiocb *iocb, struct iov_iter *from)
 
 	if ((file->f_flags & O_NONBLOCK) || (iocb->ki_flags & IOCB_NOWAIT))
 		noblock = 1;
-
+	//使用 write 系统调用向 tun/tap 设备的字符设备文件写入数据时
 	result = tun_get_user(tun, tfile, NULL, from, noblock, false);
 
 	tun_put(tun);
@@ -2798,7 +2795,7 @@ static int tun_set_iff(struct net *net, struct file *file, struct ifreq *ifr)
 		tun->file = file;
 
 		tun_net_initialize(dev);
-
+		//将这个 tuntap 网络设备注册到内核中, 这样，我们就能在宿主机上通过 ip addr 看到这个网卡了
 		err = register_netdevice(tun->dev);
 		if (err < 0) {
 			free_netdev(dev);
@@ -3029,6 +3026,7 @@ static long __tun_chr_ioctl(struct file *file, unsigned int cmd,
 
 	if (cmd == TUNSETIFF || cmd == TUNSETQUEUE ||
 	    (_IOC_TYPE(cmd) == SOCK_IOC_TYPE && cmd != SIOCGSKNS)) {
+		//把配置从用户态拷贝到内核态
 		if (copy_from_user(&ifr, argp, ifreq_len))
 			return -EFAULT;
 	} else {
@@ -3058,7 +3056,7 @@ static long __tun_chr_ioctl(struct file *file, unsigned int cmd,
 			goto unlock;
 
 		ifr.ifr_name[IFNAMSIZ-1] = '\0';
-
+		//设置 tuntap 网络设备
 		ret = tun_set_iff(net, file, &ifr);
 
 		if (ret)
@@ -3100,7 +3098,7 @@ static long __tun_chr_ioctl(struct file *file, unsigned int cmd,
 			ifr.ifr_flags |= IFF_DETACH_QUEUE;
 		if (!tfile->socket.sk->sk_filter)
 			ifr.ifr_flags |= IFF_NOFILTER;
-
+		//将配置结果返回
 		if (copy_to_user(argp, &ifr, ifreq_len))
 			ret = -EFAULT;
 		break;
@@ -3400,7 +3398,7 @@ static int tun_chr_open(struct inode *inode, struct file * file)
 {
 	struct net *net = current->nsproxy->net_ns;
 	struct tun_file *tfile;
-
+	//创建了 tun_file 结构
 	tfile = (struct tun_file *)sk_alloc(net, AF_UNSPEC, GFP_KERNEL,
 					    &tun_proto, 0);
 	if (!tfile)
@@ -3463,7 +3461,7 @@ static void tun_chr_show_fdinfo(struct seq_file *m, struct file *file)
 	seq_printf(m, "iff:\t%s\n", ifr.ifr_name);
 }
 #endif
-
+//tun_wangs
 static const struct file_operations tun_fops = {
 	.owner	= THIS_MODULE,
 	.llseek = no_llseek,
@@ -3481,7 +3479,7 @@ static const struct file_operations tun_fops = {
 	.show_fdinfo = tun_chr_show_fdinfo,
 #endif
 };
-
+// /dev/net/tun 字符设备
 static struct miscdevice tun_miscdev = {
 	.minor = TUN_MINOR,
 	.name = "tun",
@@ -3652,7 +3650,7 @@ static int tun_device_event(struct notifier_block *unused,
 static struct notifier_block tun_notifier_block __read_mostly = {
 	.notifier_call	= tun_device_event,
 };
-
+//tun_wangs
 static int __init tun_init(void)
 {
 	int ret = 0;
@@ -3664,7 +3662,7 @@ static int __init tun_init(void)
 		pr_err("Can't register link_ops\n");
 		goto err_linkops;
 	}
-
+	//注册字符设备
 	ret = misc_register(&tun_miscdev);
 	if (ret) {
 		pr_err("Can't register misc device %d\n", TUN_MINOR);

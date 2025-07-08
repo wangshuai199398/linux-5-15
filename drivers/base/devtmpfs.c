@@ -446,8 +446,8 @@ static int __ref devtmpfsd(void *p)
 }
 
 /*
- * Create devtmpfs instance, driver-core devices will add their device
- * nodes here.
+ * Create devtmpfs instance, driver-core devices will add their device nodes here.
+ * devtmpfs_wangs
  */
 int __init devtmpfs_init(void)
 {

@@ -131,7 +131,7 @@ static bool inode_io_list_move_locked(struct inode *inode,
 	wb_io_lists_depopulated(wb);
 	return false;
 }
-
+//bdi_wq 是一个全局变量，所有回写的任务都挂在这个队列上
 static void wb_wakeup(struct bdi_writeback *wb)
 {
 	spin_lock_irq(&wb->work_lock);
@@ -1643,7 +1643,7 @@ __writeback_single_inode(struct inode *inode, struct writeback_control *wbc)
 	WARN_ON(!(inode->i_state & I_SYNC));
 
 	trace_writeback_single_inode_start(inode, wbc, nr_to_write);
-
+	//写入页面到硬盘
 	ret = do_writepages(mapping, wbc);
 
 	/*
@@ -1927,7 +1927,7 @@ static long writeback_sb_inodes(struct super_block *sb,
 		 * We use I_SYNC to pin the inode in memory. While it is set
 		 * evict_inode() will wait so the inode cannot be freed.
 		 */
-		__writeback_single_inode(inode, &wbc);
+		__writeback_single_inode(inode, &wbc);//
 
 		wbc_detach_inode(&wbc);
 		work->nr_pages -= write_chunk - wbc.nr_to_write;
@@ -2101,7 +2101,7 @@ static long wb_writeback(struct bdi_writeback *wb,
 		if (list_empty(&wb->b_io))
 			queue_io(wb, work, dirtied_before);
 		if (work->sb)
-			progress = writeback_sb_inodes(work->sb, wb, work);
+			progress = writeback_sb_inodes(work->sb, wb, work);//
 		else
 			progress = __writeback_inodes_wb(wb, work);
 		trace_writeback_written(wb, work);
@@ -2244,6 +2244,7 @@ static long wb_do_writeback(struct bdi_writeback *wb)
 	set_bit(WB_writeback_running, &wb->state);
 	while ((work = get_next_work_item(wb)) != NULL) {
 		trace_writeback_exec(wb, work);
+		//
 		wrote += wb_writeback(wb, work);
 		finish_writeback_work(wb, work);
 	}
@@ -2266,6 +2267,7 @@ static long wb_do_writeback(struct bdi_writeback *wb)
 /*
  * Handle writeback of dirty data for the device backed by this bdi. Also
  * reschedules periodically and does kupdated style flushing.
+ * wb_workfn->wb_do_writeback->wb_writeback->writeback_sb_inodes->__writeback_single_inode->do_writepages，写入页面到硬盘
  */
 void wb_workfn(struct work_struct *work)
 {
@@ -2285,6 +2287,7 @@ void wb_workfn(struct work_struct *work)
 		 * rescuer as work_list needs to be drained.
 		 */
 		do {
+			//
 			pages_written = wb_do_writeback(wb);
 			trace_writeback_pages_written(pages_written);
 		} while (!list_empty(&wb->work_list));

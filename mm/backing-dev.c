@@ -31,6 +31,8 @@ static struct rb_root bdi_tree = RB_ROOT;
 LIST_HEAD(bdi_list);
 
 /* bdi_wq serves all asynchronous writeback tasks */
+//所有回写的任务都挂在这个队列上 bdi: backing device info 用于描述后端存储相关的信息
+//每个块设备都会有这样一个结构，并且在初始化块设备的时候，调用 bdi_init 初始化这个结构，在初始化 bdi 的时候，也会调用 wb_init 初始化 bdi_writeback
 struct workqueue_struct *bdi_wq;
 
 #define K(x) ((x) << (PAGE_SHIFT - 10))
@@ -303,6 +305,7 @@ static int wb_init(struct bdi_writeback *wb, struct backing_dev_info *bdi,
 
 	spin_lock_init(&wb->work_lock);
 	INIT_LIST_HEAD(&wb->work_list);
+	//初始化一个 timer，也即定时器，到时候我们就执行 wb_workfn 这个函数
 	INIT_DELAYED_WORK(&wb->dwork, wb_workfn);
 	INIT_DELAYED_WORK(&wb->bw_dwork, wb_update_bandwidth_workfn);
 	wb->dirty_sleep = jiffies;

@@ -2152,8 +2152,8 @@ EXPORT_SYMBOL(alloc_pages_vma);
 
 /**
  * alloc_pages - Allocate pages.
- * @gfp: GFP flags.
- * @order: Power of two of number of pages to allocate.
+ * @gfp:   希望在哪个区域中分配这个内存
+ * @order: 分配 2 的 order 次方个页
  *
  * Allocate 1 << @order contiguous pages.  The physical address of the
  * first page is naturally aligned (eg an order-3 allocation will be aligned

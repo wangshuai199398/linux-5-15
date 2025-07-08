@@ -38,7 +38,7 @@
 /* NF_VERDICT_BITS should be 8 now, but userspace might break if this changes */
 #define NF_VERDICT_BITS 16
 #endif
-
+//netfilter_wangs
 enum nf_inet_hooks {
 	NF_INET_PRE_ROUTING,
 	NF_INET_LOCAL_IN,

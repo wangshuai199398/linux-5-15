@@ -767,7 +767,7 @@ SYSCALL_DEFINE3(fchown, unsigned int, fd, uid_t, user, gid_t, group)
 {
 	return ksys_fchown(fd, user, group);
 }
-
+//调用 ext4_file_open 并将打开文件的所有信息，填写到 struct file 结构里面
 static int do_dentry_open(struct file *f,
 			  struct inode *inode,
 			  int (*open)(struct inode *, struct file *))
@@ -824,6 +824,7 @@ static int do_dentry_open(struct file *f,
 	if (!open)
 		open = f->f_op->open;
 	if (open) {
+		// ext4_file_open
 		error = open(inode, f);
 		if (error)
 			goto cleanup_all;
@@ -1248,15 +1249,17 @@ static long do_sys_openat2(int dfd, const char __user *filename,
 	tmp = getname(filename);
 	if (IS_ERR(tmp))
 		return PTR_ERR(tmp);
-
+	//获取一个空闲的文件描述符
 	fd = get_unused_fd_flags(how->flags);
 	if (fd >= 0) {
+		//创建这个 struct file 结构
 		struct file *f = do_filp_open(dfd, tmp, &op);
 		if (IS_ERR(f)) {
 			put_unused_fd(fd);
 			fd = PTR_ERR(f);
 		} else {
 			fsnotify_open(f);
+			//将文件描述符和file结构关联起来
 			fd_install(fd, f);
 		}
 	}

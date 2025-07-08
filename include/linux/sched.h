@@ -398,6 +398,7 @@ struct sched_info {
 
 struct load_weight {
 	unsigned long			weight;
+	//为了提高计算性能用到的一个辅助值
 	u32				inv_weight;
 };
 
@@ -531,15 +532,19 @@ struct sched_statistics {
 } ____cacheline_aligned;
 
 struct sched_entity {
-	/* For load-balancing: */
+	/* 当前进程的权重信息 */
 	struct load_weight		load;
+	//指向自己在红黑树上的节点位置
 	struct rb_node			run_node;
 	struct list_head		group_node;
 	unsigned int			on_rq;
-
+	//进程开始执行的时间，将来用来计算运行时长
 	u64				exec_start;
+	// 进程总共执行的实际时间
 	u64				sum_exec_runtime;
+	// 进程的虚拟运行时间，也是红黑树中的key，最小的在树的左侧，最多的在树的右侧
 	u64				vruntime;
+	// 上次该进程被调度时已经占用的实际时间
 	u64				prev_sum_exec_runtime;
 
 	u64				nr_migrations;
@@ -720,6 +725,11 @@ struct kmap_ctrl {
 #endif
 };
 
+/*
+每个进程都有独立的地址空间，为了这个进程独立完成映射，每个进程都有独立的进程页表，这个页表的最顶级的 pgd 存放在 task_struct->mm_struct->pgd 变量里面
+一个进程的虚拟地址空间包含用户态和内核态两部分。为了从虚拟地址空间映射到物理页面，页表也分为用户地址空间的页表和内核页表，这就 vmalloc 有关系了。
+在内核里面，映射靠内核页表，这里内核页表会拷贝一份到进程的页表
+*/
 struct task_struct {
 #ifdef CONFIG_THREAD_INFO_IN_TASK
 	/* 由于头文件混乱的问题（参见 current_thread_info()），这个成员必须是 task_struct 的第一个元素 */
@@ -761,7 +771,7 @@ struct task_struct {
 #endif
 	//是否在运行队列上
 	int				on_rq;
-	//进程调度动态优先级
+	//进程调度动态优先级, 实时进程优先级范围0-99, 普通进程优先级100-139
 	int				prio;
 	//静态优先级 可以通过nice命令修改 范围：100-139
 	int				static_prio;
@@ -769,11 +779,13 @@ struct task_struct {
 	int				normal_prio;
 	//实时优先级 0-99
 	unsigned int			rt_priority;
-	//调度器类
+	//调度器类 dl_sched_class rt_sched_class fair_sched_class idle_sched_class 通过 DEFINE_SCHED_CLASS 定义
 	const struct sched_class	*sched_class;
-	//调度实体
+	//完全公平算法调度实体
 	struct sched_entity		se;
+	//实时调度实体
 	struct sched_rt_entity		rt;
+	//Deadline 调度实体
 	struct sched_dl_entity		dl;
 
 #ifdef CONFIG_SCHED_CORE
@@ -807,6 +819,7 @@ struct task_struct {
 	unsigned int			policy;
 	//可以使用哪些CPU
 	int				nr_cpus_allowed;
+	//调度亲和性相关
 	const cpumask_t			*cpus_ptr;
 	cpumask_t			*user_cpus_ptr;
 	cpumask_t			cpus_mask;
@@ -1048,6 +1061,7 @@ struct task_struct {
 	struct nameidata		*nameidata;
 
 #ifdef CONFIG_SYSVIPC
+	//undo操作
 	struct sysv_sem			sysvsem;
 	struct sysv_shm			sysvshm;
 #endif
@@ -1461,7 +1475,8 @@ struct task_struct {
 	/* task_struct 的新字段应该添加在此处之上，以便它们被包含在 task_struct 的随机化部分中 */
 	randomized_struct_fields_end
 
-	/* CPU-specific state of this task: */
+	/* CPU-specific state of this task: 保留了要切换进程的时候需要修改的寄存器 */
+	//进程切换，就是将某个进程的 thread_struct 里面的寄存器的值，写入到 CPU 的 TR 指向的 tss_struct，对于 CPU 来讲，这就算是完成了切换
 	struct thread_struct		thread;
 
 	/* 警告：在 x86 架构上，thread_struct 包含一个可变大小的结构体。它必须放在 task_struct 的末尾 */
@@ -1960,7 +1975,7 @@ static inline int test_tsk_thread_flag(struct task_struct *tsk, int flag)
 {
 	return test_ti_thread_flag(task_thread_info(tsk), flag);
 }
-
+//标记进程应该被抢占，但是此时此刻，并不真的抢占，而是打上一个标签 TIF_NEED_RESCHED
 static inline void set_tsk_need_resched(struct task_struct *tsk)
 {
 	set_tsk_thread_flag(tsk,TIF_NEED_RESCHED);

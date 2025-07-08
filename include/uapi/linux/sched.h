@@ -110,6 +110,9 @@ struct clone_args {
 
 /*
  * Scheduling policies
+ * 1、2、6是实时进程调度策略, 0、3、5是普通进程调度策略
+ * SCHED_FIFO: 先来先服务 SCHED_RR: 轮流调度算法 SCHED_DEADLINE: 选择距离当前时间点最近的任务
+ * SCHED_BATCH:后台进程   SCHED_IDLE: 空闲的时候跑的进程
  */
 #define SCHED_NORMAL		0
 #define SCHED_FIFO		1

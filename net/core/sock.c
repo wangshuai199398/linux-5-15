@@ -1924,7 +1924,7 @@ struct sock *sk_alloc(struct net *net, int family, gfp_t priority,
 		      struct proto *prot, int kern)
 {
 	struct sock *sk;
-
+	//这里创建的是 tcp_sock
 	sk = sk_prot_alloc(prot, priority | __GFP_ZERO, family);
 	if (sk) {
 		sk->sk_family = family;
@@ -1932,7 +1932,7 @@ struct sock *sk_alloc(struct net *net, int family, gfp_t priority,
 		 * See comment in struct sock definition to understand
 		 * why we need sk_prot_creator -acme
 		 */
-		sk->sk_prot = sk->sk_prot_creator = prot;
+		sk->sk_prot = sk->sk_prot_creator = prot;// tcp_prot
 		sk->sk_kern_sock = kern;
 		sock_lock_init(sk);
 		sk->sk_net_refcnt = kern ? 0 : 1;
@@ -3301,18 +3301,19 @@ EXPORT_SYMBOL(lock_sock_nested);
 void release_sock(struct sock *sk)
 {
 	spin_lock_bh(&sk->sk_lock.slock);
+	// 如果 backlog 中还有数据，就处理它们
 	if (sk->sk_backlog.tail)
 		__release_sock(sk);
 
-	/* Warning : release_cb() might need to release sk ownership,
-	 * ie call sock_release_ownership(sk) before us.
-	 */
+	/* 警告：release_cb() 可能需要释放 sk 的所有权，也就是说，它可能会在我们之前调用 sock_release_ownership(sk) */
 	if (sk->sk_prot->release_cb)
 		sk->sk_prot->release_cb(sk);
-
+	//释放所有权
 	sock_release_ownership(sk);
+	// 如果有人在等锁，唤醒他们
 	if (waitqueue_active(&sk->sk_lock.wq))
 		wake_up(&sk->sk_lock.wq);
+	// 解锁
 	spin_unlock_bh(&sk->sk_lock.slock);
 }
 EXPORT_SYMBOL(release_sock);

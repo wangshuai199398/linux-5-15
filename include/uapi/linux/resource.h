@@ -41,6 +41,7 @@ struct	rusage {
 };
 
 struct rlimit {
+	//栈空间大小的限制
 	__kernel_ulong_t	rlim_cur;
 	__kernel_ulong_t	rlim_max;
 };

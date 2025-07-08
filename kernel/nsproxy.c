@@ -28,7 +28,7 @@
 #include <linux/perf_event.h>
 
 static struct kmem_cache *nsproxy_cachep;
-
+//nsproxy_wangs
 struct nsproxy init_nsproxy = {
 	.count			= ATOMIC_INIT(1),
 	.uts_ns			= &init_uts_ns,
@@ -525,7 +525,7 @@ static void commit_nsset(struct nsset *nsset)
 	switch_task_namespaces(me, nsset->nsproxy);
 	nsset->nsproxy = NULL;
 }
-
+//setns_wangs
 SYSCALL_DEFINE2(setns, int, fd, int, flags)
 {
 	struct file *file;

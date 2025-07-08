@@ -145,6 +145,7 @@ static void sock_show_fdinfo(struct seq_file *m, struct file *f)
 /*
  *	Socket files have a set of 'special' operations as well as the generic file ones. These don't appear
  *	in the operation structures but are done directly via the socketcall() multiplexor.
+ *  socket_wangs
  */
 
 static const struct file_operations socket_file_ops = {
@@ -220,6 +221,7 @@ static const char * const pf_family_names[] = {
  */
 
 static DEFINE_SPINLOCK(net_family_lock);
+//sock_register注册进来,如inet_family_ops
 static const struct net_proto_family __rcu *net_families[NPROTO] __read_mostly;
 
 /*
@@ -1083,6 +1085,7 @@ static ssize_t sock_read_iter(struct kiocb *iocb, struct iov_iter *to)
 static ssize_t sock_write_iter(struct kiocb *iocb, struct iov_iter *from)
 {
 	struct file *file = iocb->ki_filp;
+	//通过 VFS 中的 file->private_data 获取 socket 对象
 	struct socket *sock = file->private_data;
 	struct msghdr msg = {.msg_iter = *from,
 			     .msg_iocb = iocb};
@@ -1581,7 +1584,14 @@ int sock_create_kern(struct net *net, int family, int type, int protocol, struct
 	return __sock_create(net, family, type, protocol, res, 1);
 }
 EXPORT_SYMBOL(sock_create_kern);
+/*
+family：协议族，如 AF_INET, AF_UNIX, AF_INET6
+type：socket 类型，如 SOCK_STREAM, SOCK_DGRAM, SOCK_RAW 可以直接操作 IP 层, 还可以 OR 上 SOCK_CLOEXEC, SOCK_NONBLOCK
+protocol：通常为 0（自动选择默认协议），或指定如 IPPROTO_TCP
 
+创建一个 struct socket 结构
+通过 sock_map_fd 和文件描述符对应起来
+*/
 int __sys_socket(int family, int type, int protocol)
 {
 	int retval;
@@ -1730,15 +1740,16 @@ int __sys_bind(int fd, struct sockaddr __user *umyaddr, int addrlen)
 	struct socket *sock;
 	struct sockaddr_storage address;
 	int err, fput_needed;
-
+	//根据 fd 文件描述符，找到 socket
 	sock = sockfd_lookup_light(fd, &err, &fput_needed);
 	if (sock) {
+		//将 sockaddr 从用户态拷贝到内核态
 		err = move_addr_to_kernel(umyaddr, addrlen, &address);
 		if (!err) {
 			err = security_socket_bind(sock,
 						   (struct sockaddr *)&address,
 						   addrlen);
-			//pr_err("%s: %s __sys_bind pid %d fd %d addrlen %d \n", __func__, current->comm, current->pid, fd, addrlen);
+			// inet_bind
 			if (!err)
 				err = sock->ops->bind(sock,
 						      (struct sockaddr *)
@@ -1756,11 +1767,8 @@ SYSCALL_DEFINE3(bind, int, fd, struct sockaddr __user *, umyaddr, int, addrlen)
 }
 
 /*
- *	Perform a listen. Basically, we allow the protocol to do anything
- *	necessary for a listen, and if that works, we mark the socket as
- *	ready for listening.
+ *	执行 listen 操作。基本上，我们允许协议执行任何 listen 所需的操作，如果这些操作成功，我们就将该 socket 标记为已准备好监听
  */
-
 int __sys_listen(int fd, int backlog)
 {
 	struct socket *sock;
@@ -1824,7 +1832,7 @@ struct file *do_accept(struct file *file, unsigned file_flags,
 		goto out_fd;
 	//接收连接
 	err = sock->ops->accept(sock, newsock, sock->file->f_flags | file_flags,
-					false);//inet_csk_accept
+					false);// inet_accept
 	if (err < 0)
 		goto out_fd;
 
@@ -1887,6 +1895,8 @@ int __sys_accept4_file(struct file *file, unsigned file_flags,
  *	1003.1g adds the ability to recvmsg() to query connection pending
  *	status to recvmsg. We need to add that support in a way thats
  *	clean when we restructure accept also.
+ * 找到原来的 struct socket，并基于它去创建一个新的 newsock。这才是连接 socket。
+ * 除此之外，我们还会创建一个新的 struct file 和 fd，并关联到 socket
  */
 
 int __sys_accept4(int fd, struct sockaddr __user *upeer_sockaddr,
@@ -1916,7 +1926,7 @@ SYSCALL_DEFINE4(accept4, int, fd, struct sockaddr __user *, upeer_sockaddr,
 SYSCALL_DEFINE3(accept, int, fd, struct sockaddr __user *, upeer_sockaddr,
 		int __user *, upeer_addrlen)
 {
-	//accept的重点工作就是从已经建立好的全连接队列中取出一个返回给用户进程
+	//accept的重点工作就是从已经建立好的全连接队列中取出一个返回给用户进程,如果还没有完成就阻塞等待
 	return __sys_accept4(fd, upeer_sockaddr, upeer_addrlen, 0);
 }
 

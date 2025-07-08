@@ -83,6 +83,8 @@ static int __init control_va_addr_alignment(char *str)
 }
 __setup("align_va_addr=", control_va_addr_alignment);
 
+// mmap_wangs
+// 申请一大块内存，就要用 mmap
 SYSCALL_DEFINE6(mmap, unsigned long, addr, unsigned long, len,
 		unsigned long, prot, unsigned long, flags,
 		unsigned long, fd, unsigned long, off)
@@ -118,7 +120,7 @@ static void find_start_end(unsigned long addr, unsigned long flags,
 	else
 		*end = task_size_64bit(addr > DEFAULT_MAP_WINDOW);
 }
-
+//在表示虚拟内存区域的 vm_area_struct 红黑树上找到相应的位置
 unsigned long
 arch_get_unmapped_area(struct file *filp, unsigned long addr,
 		unsigned long len, unsigned long pgoff, unsigned long flags)

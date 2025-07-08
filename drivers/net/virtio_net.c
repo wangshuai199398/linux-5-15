@@ -2951,6 +2951,8 @@ static int virtnet_find_vqs(struct virtnet_info *vi)
 	}
 
 	/* Allocate/initialize parameters for send/receive virtqueues */
+	//指定接收队列的 callback 函数为 skb_recv_done，发送队列的 callback 函数为 skb_xmit_done。
+	//那当 buffer 使用发生变化的时候，我们可以调用这个 callback 函数进行通知
 	for (i = 0; i < vi->max_queue_pairs; i++) {
 		callbacks[rxq2vq(i)] = skb_recv_done;
 		callbacks[txq2vq(i)] = skb_xmit_done;
@@ -3037,7 +3039,7 @@ err_sq:
 err_ctrl:
 	return -ENOMEM;
 }
-
+//这里建立的 struct virtqueue 是客户机前端对于队列的管理的数据结构
 static int init_vqs(struct virtnet_info *vi)
 {
 	int ret;
@@ -3046,7 +3048,7 @@ static int init_vqs(struct virtnet_info *vi)
 	ret = virtnet_alloc_queues(vi);
 	if (ret)
 		goto err;
-
+	//查找或者生成
 	ret = virtnet_find_vqs(vi);
 	if (ret)
 		goto err_free;
@@ -3173,6 +3175,7 @@ static int virtnet_probe(struct virtio_device *vdev)
 		max_queue_pairs = 1;
 
 	/* Allocate ourselves a network device with room for our info */
+	// 创建 net_device
 	dev = alloc_etherdev_mq(sizeof(struct virtnet_info), max_queue_pairs);
 	if (!dev)
 		return -ENOMEM;
@@ -3307,6 +3310,7 @@ static int virtnet_probe(struct virtio_device *vdev)
 	vi->max_queue_pairs = max_queue_pairs;
 
 	/* Allocate/initialize the rx/tx queues, and invoke find_vqs */
+	//初始化发送和接收的 virtqueue
 	err = init_vqs(vi);
 	if (err)
 		goto free;
@@ -3330,7 +3334,7 @@ static int virtnet_probe(struct virtio_device *vdev)
 
 	/* serialize netdev register + virtio_device_ready() with ndo_open() */
 	rtnl_lock();
-
+	//注册网络设备
 	err = register_netdevice(dev);
 	if (err) {
 		pr_debug("virtio_net: registering device failed\n");
@@ -3494,7 +3498,7 @@ static struct virtio_driver virtio_net_driver = {
 	.restore =	virtnet_restore,
 #endif
 };
-
+//virtio_wangs
 static __init int virtio_net_driver_init(void)
 {
 	int ret;
@@ -3509,8 +3513,8 @@ static __init int virtio_net_driver_init(void)
 				      NULL, virtnet_cpu_dead);
 	if (ret)
 		goto err_dead;
-
-        ret = register_virtio_driver(&virtio_net_driver);
+	//注册驱动
+    ret = register_virtio_driver(&virtio_net_driver);
 	if (ret)
 		goto err_virtio;
 	return 0;

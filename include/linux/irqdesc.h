@@ -18,39 +18,39 @@ struct irq_domain;
 struct pt_regs;
 
 /**
- * struct irq_desc - interrupt descriptor
- * @irq_common_data:	per irq and chip data passed down to chip functions
- * @kstat_irqs:		irq stats per cpu
- * @handle_irq:		highlevel irq-events handler
- * @action:		the irq action chain
- * @status_use_accessors: status information
- * @core_internal_state__do_not_mess_with_it: core internal status information
- * @depth:		disable-depth, for nested irq_disable() calls
- * @wake_depth:		enable depth, for multiple irq_set_irq_wake() callers
- * @tot_count:		stats field for non-percpu irqs
- * @irq_count:		stats field to detect stalled irqs
- * @last_unhandled:	aging timer for unhandled count
- * @irqs_unhandled:	stats field for spurious unhandled interrupts
- * @threads_handled:	stats field for deferred spurious detection of threaded handlers
- * @threads_handled_last: comparator field for deferred spurious detection of threaded handlers
- * @lock:		locking for SMP
- * @affinity_hint:	hint to user space for preferred irq affinity
- * @affinity_notify:	context for notification of affinity changes
- * @pending_mask:	pending rebalanced interrupts
- * @threads_oneshot:	bitfield to handle shared oneshot threads
- * @threads_active:	number of irqaction threads currently running
- * @wait_for_threads:	wait queue for sync_irq to wait for threaded handlers
- * @nr_actions:		number of installed actions on this descriptor
- * @no_suspend_depth:	number of irqactions on a irq descriptor with
- *			IRQF_NO_SUSPEND set
- * @force_resume_depth:	number of irqactions on a irq descriptor with
- *			IRQF_FORCE_RESUME set
- * @rcu:		rcu head for delayed free
- * @kobj:		kobject used to represent this struct in sysfs
- * @request_mutex:	mutex to protect request/free before locking desc->lock
- * @dir:		/proc/irq/ procfs entry
- * @debugfs_file:	dentry for the debugfs file
- * @name:		flow handler name for /proc/interrupts output
+ * 中断描述符
+ * @irq_common_data:    每个中断和中断控制器相关的数据，会传递给中断芯片（chip）函数使用
+ * @kstat_irqs:		    每个 CPU 的中断统计数据
+ * @handle_irq:		    highlevel irq-events handler
+ * @action:		        该中断的中断处理函数链（可以注册多个处理函数）。
+ * @status_use_accessors: 中断状态信息（通过 accessor 函数访问）
+ * @core_internal_state__do_not_mess_with_it: 内核内部状态信息（不要随意修改）
+ * @depth:		        中断关闭深度，用于嵌套的 irq_disable() 调用
+ * @wake_depth:		    中断唤醒使能深度，用于多个 irq_set_irq_wake() 调用者
+ * @tot_count:		    用于非 per-CPU 中断的统计字段
+ * @irq_count:		    用于检测中断是否“卡住”（stalled）的统计字段
+ * @last_unhandled:	    用于处理未处理中断计数的老化定时器
+ * @irqs_unhandled:	    未处理中断的统计字段，用于判断是否为伪中断
+ * @threads_handled:    线程化处理程序的延迟伪中断检测用统计字段
+ * @threads_handled_last: 线程化处理程序的延迟伪中断检测用比较字段
+ * @lock:		        用于 SMP（多核）系统中的锁机制
+ * @affinity_hint:	    用户空间设置的中断亲和性（affinity）提示
+ * @affinity_notify:    当中断亲和性变化时的通知上下文
+ * @pending_mask:	    待重新绑定（rebalance）的中断掩码
+ * @threads_oneshot:    处理共享 oneshot 中断线程的位图
+ * @threads_active:	    当前正在运行的中断处理线程数量
+ * @wait_for_threads:   sync_irq() 使用的等待队列，用于等待线程处理完成
+ * @nr_actions:		    该中断描述符上已安装的中断处理函数数量
+ * @no_suspend_depth:   该描述符上带有 IRQF_NO_SUSPEND 标志的处理函数数量
+ * @force_resume_depth: 该描述符上带有 IRQF_FORCE_RESUME 标志的处理函数数量
+ * @rcu:		        用于延迟释放的 RCU 头
+ * @kobj:		        用于在 sysfs 中表示该中断描述符的 kobject 对象
+ * @request_mutex:	    在获取 desc->lock 之前用于保护中断申请/释放的互斥锁
+ * @dir:		        该中断在 /proc/irq/ 中对应的 proc 文件目录项
+ * @debugfs_file:	    对应 debugfs 中的文件节点
+ * @name:		        中断流控制处理函数的名称，用于 /proc/interrupts 输出
+ * 
+ * 对于每一个中断，都有一个对中断的描述结构 struct irq_desc，它有一个重要的成员变量是 struct irqaction，用于表示处理这个中断的动作
  */
 struct irq_desc {
 	struct irq_common_data	irq_common_data;
@@ -150,8 +150,8 @@ static inline void *irq_desc_get_handler_data(struct irq_desc *desc)
 }
 
 /*
- * Architectures call this to let the generic IRQ layer
- * handle an interrupt.
+ * Architectures call this to let the generic IRQ layer handle an interrupt.
+ * 这里的 handle_irq，最终会调用 __handle_irq_event_percpu
  */
 static inline void generic_handle_irq_desc(struct irq_desc *desc)
 {

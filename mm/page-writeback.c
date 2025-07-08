@@ -1683,7 +1683,7 @@ free_running:
 		}
 
 		if (unlikely(!writeback_in_progress(wb)))
-			wb_start_background_writeback(wb);
+			wb_start_background_writeback(wb);//启动一个后台线程开始回写
 
 		mem_cgroup_flush_foreign(wb);
 
@@ -1944,7 +1944,7 @@ void balance_dirty_pages_ratelimited(struct address_space *mapping)
 		current->nr_dirtied += nr_pages_dirtied;
 	}
 	preempt_enable();
-
+	//脏页的数目超过了规定的数目
 	if (unlikely(current->nr_dirtied >= ratelimit))
 		balance_dirty_pages(wb, current->nr_dirtied);
 
@@ -2383,7 +2383,7 @@ int do_writepages(struct address_space *mapping, struct writeback_control *wbc)
 	wb_bandwidth_estimate_start(wb);
 	while (1) {
 		if (mapping->a_ops->writepages)
-			ret = mapping->a_ops->writepages(mapping, wbc);
+			ret = mapping->a_ops->writepages(mapping, wbc);// ext4_writepages
 		else
 			ret = generic_writepages(mapping, wbc);
 		if ((ret != -ENOMEM) || (wbc->sync_mode != WB_SYNC_ALL))

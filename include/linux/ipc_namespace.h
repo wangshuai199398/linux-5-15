@@ -16,9 +16,12 @@
 struct user_namespace;
 
 struct ipc_ids {
+	//当前有多少个 ipc
 	int in_use;
+	//seq 和 next_id 用于生成 ipc 唯一的id
 	unsigned short seq;
 	struct rw_semaphore rwsem;
+	//基数树
 	struct idr ipcs_idr;
 	int max_idx;
 	int last_idx;	/* For wrap around detection */
@@ -27,7 +30,7 @@ struct ipc_ids {
 #endif
 	struct rhashtable key_ht;
 };
-
+//ipc_wangs
 struct ipc_namespace {
 	struct ipc_ids	ids[3];
 

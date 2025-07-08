@@ -482,7 +482,7 @@ ssize_t vfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
 	if (file->f_op->read)
 		ret = file->f_op->read(file, buf, count, pos);
 	else if (file->f_op->read_iter)
-		ret = new_sync_read(file, buf, count, pos);
+		ret = new_sync_read(file, buf, count, pos);// ext4_file_read_iter sock_read_iter
 	else
 		ret = -EINVAL;
 	if (ret > 0) {
@@ -589,10 +589,11 @@ ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_
 	if (count > MAX_RW_COUNT)
 		count =  MAX_RW_COUNT;
 	file_start_write(file);
+	//对于
 	if (file->f_op->write)
-		ret = file->f_op->write(file, buf, count, pos);
+		ret = file->f_op->write(file, buf, count, pos);//打印机是 lp_write
 	else if (file->f_op->write_iter)
-		ret = new_sync_write(file, buf, count, pos);
+		ret = new_sync_write(file, buf, count, pos);// ext4_file_write_iter sock_write_iter
 	else
 		ret = -EINVAL;
 	if (ret > 0) {

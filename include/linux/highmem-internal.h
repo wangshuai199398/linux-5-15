@@ -188,6 +188,7 @@ static inline void __kunmap_local(void *addr)
 #endif
 }
 
+//用来做临时内核映射的
 static inline void *kmap_atomic(struct page *page)
 {
 	if (IS_ENABLED(CONFIG_PREEMPT_RT))
@@ -195,6 +196,7 @@ static inline void *kmap_atomic(struct page *page)
 	else
 		preempt_disable();
 	pagefault_disable();
+	//__va(PFN_PHYS(page_to_pfn(x)
 	return page_address(page);
 }
 

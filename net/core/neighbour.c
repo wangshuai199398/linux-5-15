@@ -603,7 +603,7 @@ ___neigh_create(struct neigh_table *tbl, const void *pkey,
 	n->dev = dev;
 	dev_hold(dev);
 
-	/* Protocol specific setup. */
+	/* arp_constructor */
 	if (tbl->constructor &&	(error = tbl->constructor(n)) < 0) {
 		rc = ERR_PTR(error);
 		goto out_neigh_release;
@@ -632,14 +632,14 @@ ___neigh_create(struct neigh_table *tbl, const void *pkey,
 
 	if (atomic_read(&tbl->entries) > (1 << nht->hash_shift))
 		nht = neigh_hash_grow(tbl, nht->hash_shift + 1);
-
+	//先计算出哈希值 hash_val
 	hash_val = tbl->hash(n->primary_key, dev, nht->hash_rnd) >> (32 - nht->hash_shift);
 
 	if (n->parms->dead) {
 		rc = ERR_PTR(-EINVAL);
 		goto out_tbl_unlock;
 	}
-
+	//这是一个数组加链表的链式哈希表, 得到相应的链表, 然后循环这个链表找到对应的项，如果找不到就在最后插入一项
 	for (n1 = rcu_dereference_protected(nht->hash_buckets[hash_val],
 					    lockdep_is_held(&tbl->lock));
 	     n1 != NULL;
@@ -1013,7 +1013,7 @@ static void neigh_invalidate(struct neighbour *neigh)
 	__skb_queue_purge(&neigh->arp_queue);
 	neigh->arp_queue_len_bytes = 0;
 }
-
+//从 arp_queue 中拿出 ARP 包来，然后调用 struct neighbour 的 solicit 操作
 static void neigh_probe(struct neighbour *neigh)
 	__releases(neigh->lock)
 {
@@ -1125,7 +1125,11 @@ out:
 
 	neigh_release(neigh);
 }
-
+/*
+激活 ARP 分两种情况
+  第一种情况是马上激活，也即 immediate_probe。如果马上激活，就直接调用 neigh_probe；
+  另一种情况是延迟激活则仅仅设置一个 timer。然后将 ARP 包放在 arp_queue 上。如果延迟激活，则定时器到了就会触发 neigh_timer_handler，在这里面还是会调用 neigh_probe
+*/
 int __neigh_event_send(struct neighbour *neigh, struct sk_buff *skb)
 {
 	int rc;
@@ -1523,7 +1527,7 @@ int neigh_resolve_output(struct neighbour *neigh, struct sk_buff *skb)
 	int rc = 0;
 	if (skb_network_header(skb) && ((const struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
 		printk(KERN_ERR "%s: ->neigh_event_send\n", __func__);
-	//这里可能会触发arp请求
+	//触发一个事件，看能否激活 ARP, 这里可能会触发arp请求
 	if (!neigh_event_send(neigh, skb)) {
 		int err;
 		struct net_device *dev = neigh->dev;

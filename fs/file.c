@@ -303,7 +303,7 @@ struct files_struct *dup_fd(struct files_struct *oldf, struct fd_range *punch_ho
 	unsigned int open_files, i;
 	struct fdtable *old_fdt, *new_fdt;
 	int error;
-	//为新files_struct申请内存
+	//创建一个新的 files_struct, 将所有的文件描述符数组 fdtable 拷贝一份
 	newf = kmem_cache_alloc(files_cachep, GFP_KERNEL);
 	if (!newf)
 		return ERR_PTR(-ENOMEM);
@@ -477,7 +477,8 @@ static unsigned int find_next_fd(struct fdtable *fdt, unsigned int start)
 }
 
 /*
- * allocate a file descriptor, mark it busy.
+ * 从文件描述符列表中获取一个fd, mark it busy.
+ * 文件描述符列表的每一项都是一个指向 struct file 的指针，也就是说，每打开一个文件，都会有一个 struct file 对应
  */
 static int alloc_fd(unsigned start, unsigned end, unsigned flags)
 {
@@ -1266,7 +1267,7 @@ SYSCALL_DEFINE3(dup3, unsigned int, oldfd, unsigned int, newfd, int, flags)
 {
 	return ksys_dup3(oldfd, newfd, flags);
 }
-
+//dup2_wangs
 SYSCALL_DEFINE2(dup2, unsigned int, oldfd, unsigned int, newfd)
 {
 	if (unlikely(newfd == oldfd)) { /* corner case */
@@ -1281,7 +1282,7 @@ SYSCALL_DEFINE2(dup2, unsigned int, oldfd, unsigned int, newfd)
 	}
 	return ksys_dup3(oldfd, newfd, 0);
 }
-
+//dup_wangs
 SYSCALL_DEFINE1(dup, unsigned int, fildes)
 {
 	int ret = -EBADF;

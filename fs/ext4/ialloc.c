@@ -1056,6 +1056,7 @@ got_group:
 		}
 
 		brelse(inode_bitmap_bh);
+		//从文件系统里面读取 inode 位图
 		inode_bitmap_bh = ext4_read_inode_bitmap(sb, group);
 		/* Skip groups with suspicious inode tables */
 		if (IS_ERR(inode_bitmap_bh)) {
@@ -1067,6 +1068,7 @@ got_group:
 			goto next_group;
 
 repeat_in_this_group:
+		//然后找到下一个为 0 的 inode，就是空闲的 inode
 		ret2 = find_inode_bit(sb, group, inode_bitmap_bh, &ino);
 		if (!ret2)
 			goto next_group;

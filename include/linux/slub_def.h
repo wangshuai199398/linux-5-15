@@ -42,14 +42,16 @@ enum stat_item {
 	NR_SLUB_STAT_ITEMS };
 
 /*
- * When changing the layout, make sure freelist and tid are still compatible
- * with this_cpu_cmpxchg_double() alignment requirements.
+ * 在更改布局时，请确保 freelist 和 tid 仍然符合 this_cpu_cmpxchg_double() 的对齐要求
  */
 struct kmem_cache_cpu {
+	//指向大内存块里面第一个空闲的项。按照上面说的，这一项会有指针指向下一个空闲的项，最终所有空闲的项会形成一个链表
 	void **freelist;	/* Pointer to next available object */
 	unsigned long tid;	/* Globally unique transaction id */
+	//指向大内存块的第一个页，缓存块就是从里面分配的
 	struct page *page;	/* The slab from which we are allocating */
 #ifdef CONFIG_SLUB_CPU_PARTIAL
+	//指向的也是大内存块的第一个页, 它里面部分被分配出去了，部分是空的。这是一个备用列表，当 page 满了，就会从这里找
 	struct page *partial;	/* Partially allocated frozen slabs */
 #endif
 	local_lock_t lock;	/* Protects the fields above */
@@ -79,6 +81,7 @@ struct kmem_cache_cpu {
  * Word size structure that can be atomically updated or read and that
  * contains both the order and the number of objects that a slab of the
  * given order would contain.
+ * 这里面的 order，就是 2 的 order 次方个页面的大内存块，objects 就是能够存放的缓存对象的数量
  */
 struct kmem_cache_order_objects {
 	unsigned int x;
@@ -88,13 +91,17 @@ struct kmem_cache_order_objects {
  * Slab cache management.
  */
 struct kmem_cache {
+	//快速通道, 先从这里分配对象, 没有的话到kmem_cache_node里分配, 如果还没有到伙伴系统分配新的页
 	struct kmem_cache_cpu __percpu *cpu_slab;
 	/* Used for retrieving partial slabs, etc. */
 	slab_flags_t flags;
 	unsigned long min_partial;
+	//包含下一个空闲对象指针的大小
 	unsigned int size;	/* The size of an object including metadata */
+	//纯对象的大小
 	unsigned int object_size;/* The size of an object without metadata */
 	struct reciprocal_value reciprocal_size;
+	//把下一个空闲对象的指针存放在这一项里的偏移量
 	unsigned int offset;	/* Free pointer offset */
 #ifdef CONFIG_SLUB_CPU_PARTIAL
 	/* Number of per cpu partial objects to keep around */
@@ -112,6 +119,7 @@ struct kmem_cache {
 	unsigned int align;		/* Alignment */
 	unsigned int red_left_pad;	/* Left redzone padding size */
 	const char *name;	/* Name (only for display!) */
+	//所有的缓存最后都会放在一个链表LIST_HEAD(slab_caches)中
 	struct list_head list;	/* List of slab caches */
 #ifdef CONFIG_SYSFS
 	struct kobject kobj;	/* For sysfs */
@@ -137,7 +145,7 @@ struct kmem_cache {
 
 	unsigned int useroffset;	/* Usercopy region offset */
 	unsigned int usersize;		/* Usercopy region size */
-
+	//普通通道
 	struct kmem_cache_node *node[MAX_NUMNODES];
 };
 

@@ -286,6 +286,7 @@ struct tcp_sock {
  *	Slow start and congestion control (see also Nagle, and Karn & Partridge)
  */
  	u32	snd_ssthresh;	/* Slow start size threshold		*/
+	//TCP 连接的发送拥塞窗口值
  	u32	snd_cwnd;	/* Sending congestion window		*/
 	u32	snd_cwnd_cnt;	/* Linear increase counter		*/
 	u32	snd_cwnd_clamp; /* Do not allow snd_cwnd to grow above this */

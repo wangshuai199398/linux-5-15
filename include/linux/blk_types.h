@@ -35,8 +35,10 @@ struct block_device {
 	int			bd_holders;
 	bool			bd_write_holder;
 	struct kobject		*bd_holder_dir;
+	//这个设备是第几个分区
 	u8			bd_partno;
 	spinlock_t		bd_size_lock; /* for bd_inode->i_size updates */
+	//描述整个设备的，指向 /dev/sda
 	struct gendisk *	bd_disk;
 
 	/* The counter of freeze processes */

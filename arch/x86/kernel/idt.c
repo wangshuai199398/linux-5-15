@@ -156,6 +156,7 @@ static const __initconst struct idt_data apic_idts[] = {
 };
 
 /* Must be page-aligned because the real IDT is used in the cpu entry area */
+//记录着每一个中断对应的处理方法
 static gate_desc idt_table[IDT_ENTRIES] __page_aligned_bss;
 
 static struct desc_ptr idt_descr __ro_after_init = {
@@ -188,7 +189,7 @@ idt_setup_from_table(gate_desc *idt, const struct idt_data *t, int size, bool sy
 			set_bit(t->vector, system_vectors);
 	}
 }
-
+//将每个中断都设置了中断处理函数，放在中断向量表 idt_table 中
 static __init void set_intr_gate(unsigned int n, const void *addr)
 {
 	struct idt_data data;
@@ -214,6 +215,7 @@ void __init idt_setup_early_traps(void)
 
 /**
  * idt_setup_traps - Initialize the idt table with default traps
+ * 设置前32个中断向量的处理函数
  */
 void __init idt_setup_traps(void)
 {
@@ -263,6 +265,8 @@ static void __init idt_map_in_cea(void)
 
 /**
  * idt_setup_apic_and_irq_gates - Setup APIC/SMP and normal interrupt gates
+ * 从第 32 个中断开始，到最后 NR_VECTORS 为止，对于 used_vectors 中没有标记为 1 的位置，都会调用 set_intr_gate 设置中断向量表
+ * used_vectors 中没有标记为 1 的，都是设备中断的部分
  */
 void __init idt_setup_apic_and_irq_gates(void)
 {
@@ -270,7 +274,7 @@ void __init idt_setup_apic_and_irq_gates(void)
 	void *entry;
 
 	idt_setup_from_table(idt_table, apic_idts, ARRAY_SIZE(apic_idts), true);
-
+	//所有的设备中断的中断处理函数，在中断向量表里面都会设置为从 irq_entries_start 开始，偏移量为 i - FIRST_EXTERNAL_VECTOR 的一项
 	for_each_clear_bit_from(i, system_vectors, FIRST_SYSTEM_VECTOR) {
 		entry = irq_entries_start + 8 * (i - FIRST_EXTERNAL_VECTOR);
 		set_intr_gate(i, entry);

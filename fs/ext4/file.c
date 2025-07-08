@@ -657,8 +657,10 @@ ext4_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 		return ext4_dax_write_iter(iocb, from);
 #endif
 	if (iocb->ki_flags & IOCB_DIRECT)
+		//直接写操作
 		return ext4_dio_write_iter(iocb, from);
 	else
+		//带缓存的写操作
 		return ext4_buffered_write_iter(iocb, from);
 }
 
@@ -762,6 +764,7 @@ static int ext4_file_mmap(struct file *file, struct vm_area_struct *vma)
 
 	file_accessed(file);
 	if (IS_DAX(file_inode(file))) {
+		//这里将 vm_area_struct 的内存操作设置为文件系统操作，也就是说，读写内存其实就是读写文件系统
 		vma->vm_ops = &ext4_dax_vm_ops;
 		vma->vm_flags |= VM_HUGEPAGE;
 	} else {

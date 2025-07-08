@@ -284,7 +284,7 @@ int __register_chrdev(unsigned int major, unsigned int baseminor,
 	cdev->owner = fops->owner;
 	cdev->ops = fops;
 	kobject_set_name(&cdev->kobj, "%s", name);
-
+	//MKDEV表示将主设备号和次设备号生成一个 dev_t 的整数，然后将这个整数 dev_t 和 cdev 关联起来
 	err = cdev_add(cdev, MKDEV(cd->major, baseminor), count);
 	if (err)
 		goto out;
@@ -379,6 +379,7 @@ static int chrdev_open(struct inode *inode, struct file *filp)
 
 	spin_lock(&cdev_lock);
 	p = inode->i_cdev;
+	//如果第一次打开，这个 inode 的 i_cdev 还没有关联到 cdev, 通过记录的i_rdev 找到cdev
 	if (!p) {
 		struct kobject *kobj;
 		int idx;
@@ -408,8 +409,9 @@ static int chrdev_open(struct inode *inode, struct file *filp)
 	fops = fops_get(p->ops);
 	if (!fops)
 		goto out_cdev_put;
-
+	//fops是设备驱动程序自己定义的,可以通过它来操作设备驱动程序, 把它赋给 struct file 里面的 file_operations,这样以后操作文件描述符,就是直接操作设备了
 	replace_fops(filp, fops);
+	//调用设备驱动程序的 file_operations 的 open 函数，真正打开设备。对于打印机，调用的是 lp_open, 对于鼠标调用的是 input_proc_devices_open->logibm_open
 	if (filp->f_op->open) {
 		ret = filp->f_op->open(inode, filp);
 		if (ret)
@@ -448,6 +450,7 @@ static void cdev_purge(struct cdev *cdev)
  * Dummy default file-operations: the only thing this does
  * is contain the open that then fills in the correct operations
  * depending on the special file...
+ * 在进程里面调用 open 函数，最终会调用到这个特殊的 inode 的 open 函数，也就是 chrdev_open
  */
 const struct file_operations def_chr_fops = {
 	.open = chrdev_open,
@@ -485,7 +488,7 @@ int cdev_add(struct cdev *p, dev_t dev, unsigned count)
 
 	if (WARN_ON(dev == WHITEOUT_DEV))
 		return -EBUSY;
-
+	//将这个字符设备添加到cdev_map结构中，来统一管理所有字符设备
 	error = kobj_map(cdev_map, dev, count, NULL,
 			 exact_match, exact_lock, p);
 	if (error)

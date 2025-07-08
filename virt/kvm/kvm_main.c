@@ -1082,7 +1082,9 @@ int __weak kvm_arch_create_vm_debugfs(struct kvm *kvm)
 {
 	return 0;
 }
-
+/*
+创建一个kvm结构，这个结构在内核里面代表一个虚拟机
+*/
 static struct kvm *kvm_create_vm(unsigned long type)
 {
 	struct kvm *kvm = kvm_arch_alloc_vm();
@@ -3655,6 +3657,8 @@ static struct file_operations kvm_vcpu_fops = {
 
 /*
  * Allocates an inode for the vcpu.
+ * KVM 的内核模块是一个文件，可以通过 ioctl 进行操作。基于这个内核模块创建的 VM 也是一个文件，也可以通过 ioctl 进行操作。
+ * 在这个 VM 上创建的 vcpu 同样是一个文件，同样可以通过 ioctl 进行操作
  */
 static int create_vcpu_fd(struct kvm_vcpu *vcpu)
 {
@@ -3721,7 +3725,7 @@ static int kvm_vm_ioctl_create_vcpu(struct kvm *kvm, u32 id)
 	vcpu->run = page_address(page);
 
 	kvm_vcpu_init(vcpu, kvm, id);
-
+	//创建 CPU
 	r = kvm_arch_vcpu_create(vcpu);
 	if (r)
 		goto vcpu_free_run_page;
@@ -3748,6 +3752,7 @@ static int kvm_vm_ioctl_create_vcpu(struct kvm *kvm, u32 id)
 
 	/* Now it's all set up, let userspace reach it */
 	kvm_get_kvm(kvm);
+	//创建了一个 file, file_operations 指向 kvm_vcpu_fops
 	r = create_vcpu_fd(vcpu);
 	if (r < 0) {
 		kvm_put_kvm_no_destroy(kvm);
@@ -3844,7 +3849,7 @@ static int kvm_vcpu_ioctl_get_stats_fd(struct kvm_vcpu *vcpu)
 
 	return fd;
 }
-
+//vcpu_wangs
 static long kvm_vcpu_ioctl(struct file *filp,
 			   unsigned int ioctl, unsigned long arg)
 {
@@ -4459,7 +4464,7 @@ static int kvm_vm_ioctl_get_stats_fd(struct kvm *kvm)
 
 	return fd;
 }
-
+//kvm_wangs
 static long kvm_vm_ioctl(struct file *filp,
 			   unsigned int ioctl, unsigned long arg)
 {
@@ -4744,7 +4749,9 @@ bool file_is_kvm(struct file *file)
 	return file && file->f_op == &kvm_vm_fops;
 }
 EXPORT_SYMBOL_GPL(file_is_kvm);
-
+/*
+kvm_dev_ioctl_create_vm 结束之后，对于一台虚拟机而言，只是在内核中有一个数据结构，对于相应的资源还没有分配
+*/
 static int kvm_dev_ioctl_create_vm(unsigned long type)
 {
 	int r;
@@ -4759,13 +4766,14 @@ static int kvm_dev_ioctl_create_vm(unsigned long type)
 	if (r < 0)
 		goto put_kvm;
 #endif
+	//创建一个文件描述符
 	r = get_unused_fd_flags(O_CLOEXEC);
 	if (r < 0)
 		goto put_kvm;
 
 	snprintf(kvm->stats_id, sizeof(kvm->stats_id),
 			"kvm-%d", task_pid_nr(current));
-
+	//与 file 关联起来，这个 file 的 file_operations 会被设置为 kvm_vm_fops
 	file = anon_inode_getfile("kvm-vm", &kvm_vm_fops, kvm, O_RDWR);
 	if (IS_ERR(file)) {
 		put_unused_fd(r);
@@ -4800,11 +4808,13 @@ static long kvm_dev_ioctl(struct file *filp,
 	long r = -EINVAL;
 
 	switch (ioctl) {
+	//查看版本号
 	case KVM_GET_API_VERSION:
 		if (arg)
 			goto out;
 		r = KVM_API_VERSION;
 		break;
+	//创建虚拟机
 	case KVM_CREATE_VM:
 		r = kvm_dev_ioctl_create_vm(arg);
 		break;
@@ -5621,7 +5631,7 @@ static void check_processor_compat(void *data)
 
 	*c->ret = kvm_arch_check_processor_compat(c->opaque);
 }
-
+//kvm_wangs
 int kvm_init(void *opaque, unsigned vcpu_size, unsigned vcpu_align,
 		  struct module *module)
 {

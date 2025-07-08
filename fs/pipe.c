@@ -807,7 +807,7 @@ struct pipe_inode_info *alloc_pipe_info(void)
 
 	if (too_many_pipe_buffers_hard(user_bufs) && pipe_is_unprivileged_user())
 		goto out_revert_acct;
-
+	//所谓的匿名管道/命名管道，其实就是内核里面的一串缓存
 	pipe->bufs = kcalloc(pipe_bufs, sizeof(struct pipe_buffer),
 			     GFP_KERNEL_ACCOUNT);
 
@@ -874,6 +874,7 @@ static const struct dentry_operations pipefs_dentry_operations = {
 
 static struct inode * get_pipe_inode(void)
 {
+	//创建一个 inode
 	struct inode *inode = new_inode_pseudo(pipe_mnt->mnt_sb);
 	struct pipe_inode_info *pipe;
 
@@ -889,6 +890,7 @@ static struct inode * get_pipe_inode(void)
 	inode->i_pipe = pipe;
 	pipe->files = 2;
 	pipe->readers = pipe->writers = 1;
+	//将来对文件描述符的操作，在内核里面都是对应这里面的操作
 	inode->i_fop = &pipefifo_fops;
 
 	/*
@@ -914,6 +916,7 @@ fail_inode:
 
 int create_pipe_files(struct file **res, int flags)
 {
+	//
 	struct inode *inode = get_pipe_inode();
 	struct file *f;
 	int error;
@@ -929,7 +932,7 @@ int create_pipe_files(struct file **res, int flags)
 			return error;
 		}
 	}
-
+	//创建file，对应的操作为 pipefifo_fops
 	f = alloc_file_pseudo(inode, pipe_mnt, "",
 				O_WRONLY | (flags & (O_NONBLOCK | O_DIRECT)),
 				&pipefifo_fops);
@@ -938,7 +941,7 @@ int create_pipe_files(struct file **res, int flags)
 		iput(inode);
 		return PTR_ERR(f);
 	}
-
+	//然后把 private_data 设置为 pipe_inode_info。这样从 struct file 这个层级上，就能直接操作底层的读写操作
 	f->private_data = inode->i_pipe;
 
 	res[0] = alloc_file_clone(f, O_RDONLY | (flags & O_NONBLOCK),
@@ -954,7 +957,7 @@ int create_pipe_files(struct file **res, int flags)
 	stream_open(inode, res[1]);
 	return 0;
 }
-
+//如果对于 fd[1]写入，调用的是 pipe_write，向 pipe_buffer 里面写入数据；如果对于 fd[0]的读入，调用的是 pipe_read，也就是从 pipe_buffer 里面读取数据
 static int __do_pipe_flags(int *fd, struct file **files, int flags)
 {
 	int error;
@@ -962,7 +965,7 @@ static int __do_pipe_flags(int *fd, struct file **files, int flags)
 
 	if (flags & ~(O_CLOEXEC | O_NONBLOCK | O_DIRECT | O_NOTIFICATION_PIPE))
 		return -EINVAL;
-
+	//创建file
 	error = create_pipe_files(files, flags);
 	if (error)
 		return error;
@@ -978,6 +981,7 @@ static int __do_pipe_flags(int *fd, struct file **files, int flags)
 	fdw = error;
 
 	audit_fd_pair(fdr, fdw);
+	//fd[0]是用于读的，fd[1]是用于写的
 	fd[0] = fdr;
 	fd[1] = fdw;
 	return 0;
@@ -1007,7 +1011,9 @@ int do_pipe_flags(int *fd, int flags)
  */
 static int do_pipe2(int __user *fildes, int flags)
 {
+	//file数组用来存放管道的两端的打开文件
 	struct file *files[2];
+	//数组 fd 存放管道的两端的文件描述符
 	int fd[2];
 	int error;
 
@@ -1020,6 +1026,7 @@ static int do_pipe2(int __user *fildes, int flags)
 			put_unused_fd(fd[1]);
 			error = -EFAULT;
 		} else {
+			//将两个 fd 和两个 struct file 关联起来
 			fd_install(fd[0], files[0]);
 			fd_install(fd[1], files[1]);
 		}
@@ -1031,7 +1038,7 @@ SYSCALL_DEFINE2(pipe2, int __user *, fildes, int, flags)
 {
 	return do_pipe2(fildes, flags);
 }
-
+//pipe_wangs
 SYSCALL_DEFINE1(pipe, int __user *, fildes)
 {
 	return do_pipe2(fildes, 0);
@@ -1109,6 +1116,7 @@ static int fifo_open(struct inode *inode, struct file *filp)
 		spin_unlock(&inode->i_lock);
 	} else {
 		spin_unlock(&inode->i_lock);
+		//命名管道创建 pipe_inode_info
 		pipe = alloc_pipe_info();
 		if (!pipe)
 			return -ENOMEM;
@@ -1433,7 +1441,7 @@ static int pipefs_init_fs_context(struct fs_context *fc)
 	ctx->dops = &pipefs_dentry_operations;
 	return 0;
 }
-
+//匿名管道来自一个特殊的文件系统 pipefs
 static struct file_system_type pipe_fs_type = {
 	.name		= "pipefs",
 	.init_fs_context = pipefs_init_fs_context,

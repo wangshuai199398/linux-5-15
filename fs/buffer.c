@@ -2082,6 +2082,7 @@ static int __block_commit_write(struct inode *inode, struct page *page,
 				partial = 1;
 		} else {
 			set_buffer_uptodate(bh);
+			//将修改过的缓存标记为脏页
 			mark_buffer_dirty(bh);
 		}
 		if (buffer_new(bh))

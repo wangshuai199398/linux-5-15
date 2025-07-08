@@ -853,7 +853,7 @@ int setup_arg_pages(struct linux_binprm *bprm,
 	else
 		stack_base = vma->vm_start - stack_expand;
 #endif
-	//新的栈
+	//把前面准备的进程栈的地址空间指针设置到新进程mm对象上
 	current->mm->start_stack = bprm->p;
 	ret = expand_stack(vma, stack_base);
 	if (ret)

@@ -527,6 +527,7 @@ static inline bool fault_flag_allow_retry_first(enum fault_flag flags)
  * alter it if its implementation requires a different allocation context.
  *
  * pgoff should be used in favour of virtual_address, if possible.
+ * pud 二级页表项         pmd  三级页表项       pte  四级页表项
  */
 struct vm_fault {
 	const struct {
@@ -537,8 +538,10 @@ struct vm_fault {
 	};
 	enum fault_flag flags;		/* FAULT_FLAG_xxx flags
 					 * XXX: should really be 'const' */
+	//用于中间页目录项
 	pmd_t *pmd;			/* Pointer to pmd entry matching
 					 * the 'address' */
+	//用于上层页目录项
 	pud_t *pud;			/* Pointer to pud entry matching
 					 * the 'address'
 					 */
@@ -556,6 +559,7 @@ struct vm_fault {
 					 * VM_FAULT_ERROR).
 					 */
 	/* These three entries are valid only while holding ptl lock */
+	//用于直接页表项
 	pte_t *pte;			/* Pointer to pte entry matching
 					 * the 'address'. NULL if the page
 					 * table hasn't been allocated.
@@ -1637,6 +1641,7 @@ void page_address_init(void);
 #endif
 
 #if !defined(HASHED_PAGE_VIRTUAL) && !defined(WANT_PAGE_VIRTUAL)
+//
 #define page_address(page) lowmem_page_address(page)
 #define set_page_address(page, address)  do { } while(0)
 #define page_address_init()  do { } while(0)

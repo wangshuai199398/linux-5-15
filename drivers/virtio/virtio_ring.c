@@ -626,8 +626,8 @@ static inline int virtqueue_add_split(struct virtqueue *_vq,
 	pr_debug("Added buffer head %i to %p\n", head, vq);
 	END_USE(vq);
 
-	/* This is very unlikely, but theoretically possible.  Kick
-	 * just in case. */
+	/* This is very unlikely, but theoretically possible.  Kick just in case. */
+	// 将网络包放入队列中后通知接收方
 	if (unlikely(vq->num_added == (1 << 16) - 1))
 		virtqueue_kick(_vq);
 
@@ -949,6 +949,7 @@ static struct virtqueue *vring_create_virtqueue_split(
 
 	/* TODO: allocate each queue chunk individually */
 	for (; num && vring_size(num, vring_align) > PAGE_SIZE; num /= 2) {
+		// 创建队列所需要的内存空间
 		queue = vring_alloc_queue(vdev, vring_size(num, vring_align),
 					  &dma_addr,
 					  GFP_KERNEL|__GFP_NOWARN|__GFP_ZERO);
@@ -970,8 +971,9 @@ static struct virtqueue *vring_create_virtqueue_split(
 		return NULL;
 
 	queue_size_in_bytes = vring_size(num, vring_align);
+	//初始化结构 vring, 来管理队列的内存空间
 	vring_init(&vring, num, queue, vring_align);
-
+	//创建 vring_virtqueue
 	vq = __vring_new_virtqueue(index, vring, vdev, weak_barriers, context,
 				   notify, callback, name);
 	if (!vq) {
@@ -1804,6 +1806,7 @@ err_ring:
 
 /*
  * Generic functions and exported symbols.
+ * 将网络包放入队列中
  */
 
 static inline int virtqueue_add(struct virtqueue *_vq,
@@ -2171,6 +2174,7 @@ irqreturn_t vring_interrupt(int irq, void *_vq)
 		vq->event_triggered = true;
 
 	pr_debug("virtqueue callback for %p (%p)\n", vq, vq->vq.callback);
+	// virtblk_done
 	if (vq->vq.callback)
 		vq->vq.callback(&vq->vq);
 

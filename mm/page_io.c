@@ -333,7 +333,7 @@ int swap_readpage(struct page *page, bool synchronous)
 	if (data_race(sis->flags & SWP_FS_OPS)) {
 		struct file *swap_file = sis->swap_file;
 		struct address_space *mapping = swap_file->f_mapping;
-
+		//读取普通文件和读取 swap 文件，过程是一样的，同样需要用 kmap_atomic 做临时映射, ext4_readpage
 		ret = mapping->a_ops->readpage(swap_file, page);
 		if (!ret)
 			count_vm_event(PSWPIN);

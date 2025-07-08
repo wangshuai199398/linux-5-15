@@ -73,7 +73,7 @@ static inline void update_task_stack(struct task_struct *task)
 #else
 	/* Xen PV enters the kernel on the thread stack. */
 	if (static_cpu_has(X86_FEATURE_XENPV))
-		load_sp0(task_top_of_stack(task));
+		load_sp0(task_top_of_stack(task));//将下一个进程的 thread_struct 的 sp0 的值加载到 tss_struct 里面去
 #endif
 }
 

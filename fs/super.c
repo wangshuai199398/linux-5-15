@@ -634,12 +634,13 @@ retry:
 	}
 	if (!s) {
 		spin_unlock(&sb_lock);
+		//分配一个 super_block
 		s = alloc_super(type, (flags & ~SB_SUBMOUNT), user_ns);
 		if (!s)
 			return ERR_PTR(-ENOMEM);
 		goto retry;
 	}
-
+	//调用 set_bdev_super 这个 callback 函数。这里的 super_block 是 ext4 文件系统的 super_block
 	err = set(s, data);
 	if (err) {
 		spin_unlock(&sb_lock);
@@ -1230,7 +1231,7 @@ int get_tree_keyed(struct fs_context *fc,
 EXPORT_SYMBOL(get_tree_keyed);
 
 #ifdef CONFIG_BLOCK
-
+//将 block_device 设置进了 super_block
 static int set_bdev_super(struct super_block *s, void *data)
 {
 	s->s_bdev = data;
@@ -1342,7 +1343,14 @@ static int test_bdev_super(struct super_block *s, void *data)
 {
 	return (void *)s->s_bdev == data;
 }
-
+/*
+	1.	mount_bdev 打开并验证块设备。
+	2.	分配并初始化超级块结构。
+	3.	调用传入的 fill_super 函数初始化超级块。
+	4.	如果一切正常，返回成功，并设置挂载点的根目录。
+从文件系统里面读取超级块。在文件系统的实现中，每个在硬盘上的结构，在内存中也对应相同格式的结构。
+当所有的数据结构都读到内存里面，内核就可以通过操作这些数据结构，来操作文件系统了。
+*/
 struct dentry *mount_bdev(struct file_system_type *fs_type,
 	int flags, const char *dev_name, void *data,
 	int (*fill_super)(struct super_block *, void *, int))
@@ -1354,7 +1362,7 @@ struct dentry *mount_bdev(struct file_system_type *fs_type,
 
 	if (!(flags & SB_RDONLY))
 		mode |= FMODE_WRITE;
-
+	//根据 /dev/xxx 这个名字，找到相应的设备并打开它
 	bdev = blkdev_get_by_path(dev_name, mode, fs_type);
 	if (IS_ERR(bdev))
 		return ERR_CAST(bdev);
@@ -1370,8 +1378,8 @@ struct dentry *mount_bdev(struct file_system_type *fs_type,
 		error = -EBUSY;
 		goto error_bdev;
 	}
-	s = sget(fs_type, test_bdev_super, set_bdev_super, flags | SB_NOSEC,
-		 bdev);
+	//根据打开的设备文件，填充 ext4 文件系统的 super_block, 从而以此为基础，建立一整套体系
+	s = sget(fs_type, test_bdev_super, set_bdev_super, flags | SB_NOSEC, bdev);
 	mutex_unlock(&bdev->bd_fsfreeze_mutex);
 	if (IS_ERR(s))
 		goto error_s;
@@ -1527,6 +1535,7 @@ int vfs_get_tree(struct fs_context *fc)
 	/* Get the mountable root in fc->root, with a ref on the root and a ref
 	 * on the superblock.
 	 */
+	// legacy_get_tree pseudo_fs_get_tree
 	error = fc->ops->get_tree(fc);
 	if (error < 0)
 		return error;

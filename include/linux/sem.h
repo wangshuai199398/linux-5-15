@@ -10,6 +10,7 @@ struct sem_undo_list;
 #ifdef CONFIG_SYSVIPC
 
 struct sysv_sem {
+	//将这个进程所有的 semop 所带来的 undo 操作都串起来
 	struct sem_undo_list *undo_list;
 };
 

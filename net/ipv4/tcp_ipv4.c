@@ -242,6 +242,7 @@ int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 	if (usin->sin_addr.s_addr == 0xa4dc77a) {
 		printk(KERN_INFO "%s: inet->inet_saddr 0x%x sk_bound_dev_if %d", __func__, inet->inet_saddr, sk->sk_bound_dev_if);
 	}
+	//路由选择
 	rt = ip_route_connect(fl4, nexthop, inet->inet_saddr,
 			      RT_CONN_FLAGS(sk), sk->sk_bound_dev_if,
 			      IPPROTO_TCP,
@@ -1744,6 +1745,8 @@ INDIRECT_CALLABLE_DECLARE(struct dst_entry *ipv4_dst_check(struct dst_entry *,
  * 
  * 这里有可能发生双重加锁的情况，因此即使是处理 backlog 时，也使用 BH 锁定机制
  * backlog 处理：指的是延迟处理接收数据（例如中断上下文中收包，延迟到软中断或进程上下文中处理）
+ * 
+ * 分两种情况，一种情况是连接已经建立，处于 TCP_ESTABLISHED 状态，调用 tcp_rcv_established。另一种情况，就是其他的状态，调用 tcp_rcv_state_process
  */
 int tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
 {
@@ -1771,7 +1774,7 @@ int tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
 		}
 		if (is_src_k2pro(skb))
 			printk(KERN_ERR "%s: ->tcp_rcv_established\n", __func__);
-		//执行连接状态下的数据处理
+		//将skb放到 sk_receive_queue 中
 		tcp_rcv_established(sk, skb);
 		return 0;
 	}
@@ -2056,7 +2059,6 @@ int tcp_v4_rcv(struct sk_buff *skb)
 	if (skb->pkt_type != PACKET_HOST)
 		goto discard_it;
 
-	/* Count it even if it's bad */
 	//统计收到的TCP段（segment）数量，即使这个段之后会被丢弃或处理失败，也仍然会被计入统计
 	//cat /proc/net/snmp | grep TCP
 	__TCP_INC_STATS(net, TCP_MIB_INSEGS);
@@ -2073,10 +2075,6 @@ int tcp_v4_rcv(struct sk_buff *skb)
 	if (!pskb_may_pull(skb, th->doff * 4))
 		goto discard_it;
 
-	/* An explanation is required here, I think.
-	 * Packet length and doff are validated by header prediction,
-	 * provided case of th->doff==0 is eliminated.
-	 * So, we defer the checks. */
 	//初始化并验证接收到的数据包的TCP校验和（checksum）是否正确。
 	if (skb_checksum_init(skb, IPPROTO_TCP, inet_compute_pseudo))
 		goto csum_error;
@@ -2133,13 +2131,9 @@ process:
 			}
 			//迁移成功，替换当前 sk，并持有一个引用
 			sk = nsk;
-			/* reuseport_migrate_sock() has already held one sk_refcnt
-			 * before returning.
-			 */
+			/* reuseport_migrate_sock() 在返回之前，已经持有了一个 sk_refcnt（socket 引用计数）*/
 		} else {
-			/* We own a reference on the listener, increase it again
-			 * as we might lose it too soon.
-			 */
+			/* 我们已经持有了对监听 socket 的一个引用，但还是要再次增加引用计数，因为这个引用可能会很快失效	*/
 			//是监听socket，增加引用计数，防止过早释放
 			sock_hold(sk);
 		}
@@ -2161,11 +2155,7 @@ process:
 			reqsk_put(req);
 			if (req_stolen) {
 				//被其他 CPU 抢先处理，这个包还是有用的，不应该丢
-				/* Another cpu got exclusive access to req
-				 * and created a full blown socket.
-				 * Try to feed this packet to this socket
-				 * instead of discarding it.
-				 */
+				/* 另一个 CPU 获得了对 req 的独占访问，并创建了一个完整的 socket。尝试将这个数据包交给该 socket 处理，而不是直接丢弃它 */
 				tcp_v4_restore_cb(skb);//恢复 skb->cb 的控制块
 				sock_put(sk);//放掉当前持有的 socket 引用
 				goto lookup;//回退重新查找 socket 并处理

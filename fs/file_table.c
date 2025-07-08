@@ -120,15 +120,11 @@ static struct file *__alloc_file(int flags, const struct cred *cred)
 	return f;
 }
 
-/* Find an unused file structure and return a pointer to it.
- * Returns an error pointer if some error happend e.g. we over file
- * structures limit, run out of memory or operation is not permitted.
+/* 寻找一个未使用的文件结构，并返回一个指向它的指针。如果发生了某些错误（例如超过了文件结构的限制、内存耗尽，或操作不被允许），则返回一个错误指针
  *
- * Be very careful using this.  You are responsible for
- * getting write access to any mount that you might assign
- * to this filp, if it is opened for write.  If this is not
- * done, you will imbalance int the mount's writer count
- * and a warning at __fput() time.
+ * 使用此函数时必须非常小心。如果你打算将某个挂载点（mount）赋值给这个 filp（即文件结构），而这个文件是以写模式打开的，你必须负责获取该挂载点的写访问权限。
+ * 如果你没有这样做，挂载点的写计数将会不平衡，在 __fput()（文件关闭）时会出现警告。
+ * 分配一个新的 struct file 结构体（表示一个文件描述符对应的“文件对象”）
  */
 struct file *alloc_empty_file(int flags, const struct cred *cred)
 {
@@ -223,7 +219,7 @@ struct file *alloc_file_pseudo(struct inode *inode, struct vfsmount *mnt,
 	struct qstr this = QSTR_INIT(name, strlen(name));
 	struct path path;
 	struct file *file;
-	//申请dentry
+	//申请dentry 并与 inode 关联
 	path.dentry = d_alloc_pseudo(mnt->mnt_sb, &this);
 	if (!path.dentry)
 		return ERR_PTR(-ENOMEM);

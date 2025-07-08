@@ -4577,7 +4577,11 @@ static inline bool tcp_sack_extend(struct tcp_sack_block *sp, u32 seq,
 	}
 	return false;
 }
-
+/*
+处理 D-SACK（Duplicate SACK）
+D-SACK 用于告知发送方，“你发来的这部分数据我已经收到了”，用于诊断网络中是否存在不必要的重传
+这里记录的是已经接收过的这部分重复数据 [seq, rcv_nxt)
+*/
 static void tcp_dsack_set(struct sock *sk, u32 seq, u32 end_seq)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
@@ -4855,8 +4859,10 @@ static void tcp_drop(struct sock *sk, struct sk_buff *skb)
 	__kfree_skb(skb);
 }
 
-/* This one checks to see if we can put data from the
- * out_of_order queue into the receive_queue.
+/* 这一部分用于检查是否可以将乱序队列（out_of_order queue）中的数据移动到接收队列（receive_queue）中
+ * 例如，客户端发送的网络包序号为 5、6、7、8、9。在 5 还没有到达的时候，服务端的 rcv_nxt 应该是 5，也即期望下一个网络包是 5。但是由于中间网络通路的问题，5、6 还没到达服务端，7、8 已经到达了服务端了，这就出现了乱序。
+ * 乱序的包不能进入 sk_receive_queue 队列。因为一旦进入到这个队列，意味着可以发送给用户进程。然而，按照 TCP 的定义，用户进程应该是按顺序收到包的，没有排好序，就不能给用户进程。所以，7、8 不能进入 sk_receive_queue 队列，只能暂时放在 out_of_order_queue 乱序队列中。
+ * 当 5、6 到达的时候，5、6 先进入 sk_receive_queue 队列。这个时候我们再来看 out_of_order_queue 乱序队列中的 7、8，发现能够接上。于是，7、8 也能进入 sk_receive_queue 队列了。tcp_ofo_queue 函数就是做这个事情的
  */
 static void tcp_ofo_queue(struct sock *sk)
 {
@@ -5166,13 +5172,13 @@ void tcp_data_ready(struct sock *sk)
    │
    ├─ 特例处理 (MPTCP、空包)
    │
-   ├─ 如果 skb.seq == rcv_nxt → 顺序包 → 放接收队列
+   ├─ 1. 如果 skb.seq == rcv_nxt → 顺序包 → 放接收队列
    │
-   ├─ 如果 skb.end_seq <= rcv_nxt → 重复包 → DSACK，丢包
+   ├─ 2. 如果 skb.end_seq <= rcv_nxt → 重复包 → DSACK，丢包
    │
-   ├─ 如果 skb.seq >= rcv_nxt + 窗口 → 窗口外 → 丢包
+   ├─ 3. 如果 skb.seq >= rcv_nxt + 窗口 → 窗口外 → 丢包
    │
-   ├─ 如果 skb.seq < rcv_nxt → 部分重叠 → 剪头入队
+   ├─ 4. 如果 skb.seq < rcv_nxt → 部分重叠 → 剪头入队
    │
    └─ 其他情况 → 乱序包 → 调用 tcp_data_queue_ofo
 */
@@ -5255,10 +5261,10 @@ queue_and_out:
 			tcp_data_ready(sk);
 		return;
 	}
-	// 处理重复包（完全在窗口左侧）
+	// end_seq 不大于 rcv_nxt, 处理重复包（完全在窗口左侧）
 	if (!after(TCP_SKB_CB(skb)->end_seq, tp->rcv_nxt)) {
 		tcp_rcv_spurious_retrans(sk, skb);
-		/* A retransmit, 2nd most common case.  Force an immediate ack. */
+		/* 一个重传，这是第二常见的情况。强制立即发送确认（ACK） */
 		NET_INC_STATS(sock_net(sk), LINUX_MIB_DELAYEDACKLOST);
 		tcp_dsack_set(sk, TCP_SKB_CB(skb)->seq, TCP_SKB_CB(skb)->end_seq);
 
@@ -5271,25 +5277,24 @@ drop:
 		return;
 	}
 
-	/* Out of window. F.e. zero window probe. */
-	//包在窗口之外（可能是探测包） → 丢包
+	/* 超出窗口。例如，零窗口探测 */
+	//seq 不小于 rcv_nxt + tcp_receive_window, 包在窗口之外（可能是探测包） → 丢包
 	if (!before(TCP_SKB_CB(skb)->seq, tp->rcv_nxt + tcp_receive_window(tp)))
 		goto out_of_window;
-	//部分重叠（头部在窗口左侧，尾部在窗口内）
+	//seq 小于 rcv_nxt，但是 end_seq 大于 rcv_nxt, 部分重叠（头部在窗口左侧，尾部在窗口内）
 	if (before(TCP_SKB_CB(skb)->seq, tp->rcv_nxt)) {
 		/* Partial packet, seq < rcv_next < end_seq */
 		tcp_dsack_set(sk, TCP_SKB_CB(skb)->seq, tp->rcv_nxt);
 
-		/* If window is closed, drop tail of packet. But after
-		 * remembering D-SACK for its head made in previous line.
-		 */
+		/* 如果窗口关闭，则丢弃数据包的尾部。但要在此之前，先记录前一行中为其头部所做的 D-SACK */
 		if (!tcp_receive_window(tp)) {
 			NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPZEROWINDOWDROP);
 			goto out_of_window;
 		}
+		//将新数据放入队列
 		goto queue_and_out;
 	}
-	//乱序包（在窗口内但不是 rcv_nxt）
+	//乱序包（在窗口内但不是 rcv_nxt）, 进入 out_of_order_queue 乱序队列
 	tcp_data_queue_ofo(sk, skb);
 }
 
@@ -5972,27 +5977,21 @@ discard:
 }
 
 /*
- *	TCP receive function for the ESTABLISHED state.
+ *	TCP 在 ESTABLISHED（已建立）状态下的数据接收函数
  *
- *	It is split into a fast path and a slow path. The fast path is
- * 	disabled when:
- *	- A zero window was announced from us - zero window probing
- *        is only handled properly in the slow path.
- *	- Out of order segments arrived.
- *	- Urgent data is expected.
- *	- There is no buffer space left
- *	- Unexpected TCP flags/window values/header lengths are received
- *	  (detected by checking the TCP header against pred_flags)
- *	- Data is sent in both directions. Fast path only supports pure senders
- *	  or pure receivers (this means either the sequence number or the ack
- *	  value must stay constant)
- *	- Unexpected TCP option.
+ *	它被划分为快速路径（fast path）和慢速路径（slow path）
+ *  当出现以下情况时，将禁用快速路径：
+ *	- 我方宣布了窗口为 0 —— 零窗口探测（zero window probing）只能在慢速路径中正确处理
+ *	- 收到了乱序的段（Out of order segments）
+ *	- 预期将接收紧急数据（Urgent data）
+ *	- 没有剩余的缓冲区空间
+ *	- 到意外的 TCP 标志、窗口值或头部长度（通过将 TCP 头与 pred_flags 进行比对检测）
+ *	- 数据是双向发送的。快速路径只支持“纯发送方”或“纯接收方”, （这意味着序列号或确认号必须保持不变）
+ *	- 收到意外的 TCP 选项（Unexpected TCP option）
  *
- *	When these conditions are not satisfied it drops into a standard
- *	receive procedure patterned after RFC793 to handle all cases.
- *	The first three cases are guaranteed by proper pred_flags setting,
- *	the rest is checked inline. Fast processing is turned on in
- *	tcp_data_queue when everything is OK.
+ *	当上述条件不成立时，会退回到一个基于 RFC793 标准的常规接收流程，以处理所有情况
+ *  前三种情况通过正确设置 pred_flags 来保证，其余的条件会在内联代码中进行检查
+ *  当所有条件都满足时，在 tcp_data_queue 中会启用快速处理路径
  */
 void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 {
@@ -6000,7 +5999,6 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 	struct tcp_sock *tp = tcp_sk(sk);
 	unsigned int len = skb->len;
 
-	/* TCP congestion window tracking */
 	trace_tcp_probe(sk, skb);
 	//刷新当前TCP时间戳tp->tcp_mstamp
 	tcp_mstamp_refresh(tp);
@@ -6008,31 +6006,9 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 	//例如，对于 IPv4，它会设置dst_entry，用于后续发送ACK或其他响应包时做路由决策
 	if (unlikely(!rcu_access_pointer(sk->sk_rx_dst)))
 		inet_csk(sk)->icsk_af_ops->sk_rx_dst_set(sk, skb);
-	/*
-	 *	Header prediction.
-	 *	The code loosely follows the one in the famous
-	 *	"30 instruction TCP receive" Van Jacobson mail.
-	 *
-	 *	Van's trick is to deposit buffers into socket queue
-	 *	on a device interrupt, to call tcp_recv function
-	 *	on the receive process context and checksum and copy
-	 *	the buffer to user space. smart...
-	 *
-	 *	Our current scheme is not silly either but we take the
-	 *	extra cost of the net_bh soft interrupt processing...
-	 *	We do checksum and copy also but from device to kernel.
-	 */
+
 	//为了避免误用之前接收包的时间戳信息
 	tp->rx_opt.saw_tstamp = 0;
-
-	/*	pred_flags is 0xS?10 << 16 + snd_wnd
-	 *	if header_prediction is to be made
-	 *	'S' will always be tp->tcp_header_len >> 2
-	 *	'?' will be 0 for the fast path, otherwise pred_flags is 0 to
-	 *  turn it off	(when there are holes in the receive
-	 *	 space for instance)
-	 *	PSH flag is ignored.
-	 */
 	if (is_src_k2pro(skb)) {
 		printk(KERN_INFO "%s: !rcu_access_pointer\n", __func__);
 	}
@@ -6048,51 +6024,34 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 		//是一个纯ACK包（可能带数据） 数据正好是我们期望接收的下一个段  ACK确认合法，不是伪造或异常ACK
 		int tcp_header_len = tp->tcp_header_len;
 
-		/* Timestamp header prediction: tcp_header_len
-		 * is automatically equal to th->doff*4 due to pred_flags
-		 * match.
-		 */
-
-		/* Check timestamp */
+		/* 时间戳头部预测：由于 pred_flags 匹配的缘故，tcp_header_len 自动等于 th->doff * 4 */
 		if (is_src_k2pro(skb)) {
 			printk(KERN_INFO "%s: fast process tcp_header_len %d len %d\n", __func__, tcp_header_len, len);
 		}
 		//当前报文的 TCP 头长度是否精确等于基本 TCP 首部 + 时间戳选项（aligned 后的长度）
 		//这个包只带了 时间戳选项，没有其他复杂选项（如 SACK、窗口缩放等）
 		if (tcp_header_len == sizeof(struct tcphdr) + TCPOLEN_TSTAMP_ALIGNED) {
-			/* No? Slow path! */
 			//解析时间戳值,如果格式不正确（时间戳字段损坏或不规范），则放弃快路径，走慢路径处理
 			if (!tcp_parse_aligned_timestamp(tp, th))
 				goto slow_path;
 
-			/* If PAWS failed, check it more carefully in slow path */
 			//检查这个时间戳是否小于之前接收到的时间戳，如果是，说明可能是重放旧包
 			if ((s32)(tp->rx_opt.rcv_tsval - tp->rx_opt.ts_recent) < 0)
 				goto slow_path;
-
-			/* DO NOT update ts_recent here, if checksum fails
-			 * and timestamp was corrupted part, it will result
-			 * in a hung connection since we will drop all
-			 * future packets due to the PAWS test.
-			 */
+			/* 不要在这里更新 ts_recent，如果校验和失败，且时间戳是损坏部分的一部分，那么我们会因为 PAWS 检查丢弃所有后续数据包，从而导致连接挂起 */
 		}
 		//说明这个包没有数据
 		if (len <= tcp_header_len) {
 			/* Bulk data transfer: sender */
 			//一个标准的、无负载的 ACK 包
 			if (len == tcp_header_len) {
-				/* Predicted packet is in window by definition.
-				 * seq == rcv_nxt and rcv_wup <= rcv_nxt.
-				 * Hence, check seq<=rcv_wup reduces to:
-				 */
+				/* 根据定义，预测命中的数据包一定在接收窗口内。因为 seq == rcv_nxt 且 rcv_wup <= rcv_nxt。因此，检查 seq <= rcv_wup 可简化为：*/
 				if (tcp_header_len ==
 				    (sizeof(struct tcphdr) + TCPOLEN_TSTAMP_ALIGNED) &&
 				    tp->rcv_nxt == tp->rcv_wup)//rcv_nxt == rcv_wup：窗口更新指针和下一个期望序列号相同，说明窗口干净、无乱序
 					tcp_store_ts_recent(tp);//存储最近一次的 ts_recent
 
-				/* We know that such packets are checksummed
-				 * on entry.
-				 */
+				/* 我们知道这类数据包在进入时已经完成了校验和计算 */
 				if (is_src_k2pro(skb))
 					printk(KERN_INFO "%s: tcp_ack tcp_data_snd_check\n", __func__);
 				//处理ACK
@@ -6101,10 +6060,7 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 				__kfree_skb(skb);
 				//检查是否需要发数据,看看现在有没有数据可以发，比如窗口扩大或新数据待发送
 				tcp_data_snd_check(sk);
-				/* When receiving pure ack in fast path, update
-				 * last ts ecr directly instead of calling
-				 * tcp_rcv_rtt_measure_ts()
-				 */
+				/* 当在快速路径中接收到纯 ACK 时，直接更新最近的 ts_ecr（时间戳回显）值，而不是调用 tcp_rcv_rtt_measure_ts */
 				//快路径中，不调用 tcp_rcv_rtt_measure_ts()，直接更新一个用于后续 RTT 估算的时间戳副本
 				tp->rcv_rtt_last_tsecr = tp->rx_opt.rcv_tsecr;
 				return;
@@ -6122,10 +6078,7 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 			if ((int)skb->truesize > sk->sk_forward_alloc)
 				goto step5;
 
-			/* Predicted packet is in window by definition.
-			 * seq == rcv_nxt and rcv_wup <= rcv_nxt.
-			 * Hence, check seq<=rcv_wup reduces to:
-			 */
+			/* 根据定义，预测命中的数据包一定在接收窗口内。因为 seq == rcv_nxt 且 rcv_wup <= rcv_nxt。因此，检查 seq <= rcv_wup 可以简化为：*/
 			if (tcp_header_len ==
 			    (sizeof(struct tcphdr) + TCPOLEN_TSTAMP_ALIGNED) &&
 			    tp->rcv_nxt == tp->rcv_wup)
@@ -6146,7 +6099,6 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 			tcp_event_data_recv(sk, skb);
 			//如果 ACK 号与未确认号不同（说明这个数据包顺便确认了一些新数据）
 			if (TCP_SKB_CB(skb)->ack_seq != tp->snd_una) {
-				/* Well, only one small jumplet in fast path... */
 				if (is_src_k2pro(skb))
 					printk(KERN_INFO "%s: tcp_ack\n", __func__);
 				//处理 ACK，更新发送窗口，看看是否要立即发送 ACK 响应
@@ -6365,7 +6317,7 @@ static void tcp_try_undo_spurious_syn(struct sock *sk)
 	    syn_stamp == tp->rx_opt.rcv_tsecr)
 		tp->undo_marker = 0;
 }
-
+//客户端收到SYN_ACK
 static int tcp_rcv_synsent_state_process(struct sock *sk, struct sk_buff *skb,
 					 const struct tcphdr *th)
 {
@@ -6666,6 +6618,8 @@ static void tcp_rcv_synrecv_state_fastopen(struct sock *sk)
  *	此函数实现了 RFC 793 中除 ESTABLISHED 和 TIME_WAIT 之外所有状态的接收过程。
  *  它会被 tcp_v4_rcv 和 tcp_v6_rcv 调用，并且应当与地址无关。
  * 除了 ESTABLISHED 和 TIME_WAIT，其他状态下的TCP处理都走这里
+ * 
+ * 用来处理接收一个网络包后引起状态变化的
  */
 
 int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb)

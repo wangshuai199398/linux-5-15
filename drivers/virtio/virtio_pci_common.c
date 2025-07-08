@@ -185,7 +185,7 @@ static struct virtqueue *vp_setup_vq(struct virtio_device *vdev, unsigned index,
 	/* fill out our structure that represents an active queue */
 	if (!info)
 		return ERR_PTR(-ENOMEM);
-
+	// setup_vq
 	vq = vp_dev->setup_vq(vp_dev, info, index, callback, name, ctx,
 			      msix_vec);
 	if (IS_ERR(vq))
@@ -361,7 +361,8 @@ static int vp_find_vqs_intx(struct virtio_device *vdev, unsigned nvqs,
 	vp_dev->vqs = kcalloc(nvqs, sizeof(*vp_dev->vqs), GFP_KERNEL);
 	if (!vp_dev->vqs)
 		return -ENOMEM;
-
+	//注册一个中断处理函数 vp_interrupt, 当设备的配置信息发生改变，会产生一个中断，当设备向队列中写入信息时，也会产生一个中断，称为 vq 中断
+	//中断处理函数需要调用相应的队列的回调函数
 	err = request_irq(vp_dev->pci_dev->irq, vp_interrupt, IRQF_SHARED,
 			dev_name(&vdev->dev), vp_dev);
 	if (err)
@@ -374,6 +375,7 @@ static int vp_find_vqs_intx(struct virtio_device *vdev, unsigned nvqs,
 			vqs[i] = NULL;
 			continue;
 		}
+		//完成 virtqueue、vring 的分配和初始化
 		vqs[i] = vp_setup_vq(vdev, queue_idx++, callbacks[i], names[i],
 				     ctx ? ctx[i] : false,
 				     VIRTIO_MSI_NO_VECTOR);

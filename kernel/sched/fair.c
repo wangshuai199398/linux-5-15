@@ -67,6 +67,7 @@ static unsigned int sched_nr_latency = 8;
 /*
  * After fork, child runs first. If set to 0 (default) then
  * parent will (try to) run first.
+ * 设置父进程和子进程谁先运行。如果设置了子进程先运行，即便两个进程的 vruntime 一样，也要把子进程的 sched_entity 放在前面
  */
 unsigned int sysctl_sched_child_runs_first __read_mostly;
 
@@ -232,6 +233,7 @@ static void __update_inv_weight(struct load_weight *lw)
  *
  * Or, weight =< lw.weight (because lw.weight is the runqueue weight), thus
  * weight/lw.weight <= 1, and therefore our shift will also be positive.
+ * 将实际的运行时间进行缩放
  */
 static u64 __calc_delta(u64 delta_exec, unsigned long weight, struct load_weight *lw)
 {
@@ -260,7 +262,7 @@ static u64 __calc_delta(u64 delta_exec, unsigned long weight, struct load_weight
 	return mul_u64_u32_shr(delta_exec, fact, shift);
 }
 
-
+//DEFINE_SCHED_CLASS
 const struct sched_class fair_sched_class;
 
 /**************************************************************
@@ -566,7 +568,7 @@ static void update_min_vruntime(struct cfs_rq *cfs_rq)
 	cfs_rq->min_vruntime_copy = cfs_rq->min_vruntime;
 #endif
 }
-
+//判断两个节点谁的vruntime更小
 static inline bool __entity_less(struct rb_node *a, const struct rb_node *b)
 {
 	return entity_before(__node_2_se(a), __node_2_se(b));
@@ -584,7 +586,7 @@ static void __dequeue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
 	rb_erase_cached(&se->run_node, &cfs_rq->tasks_timeline);
 }
-
+//从红黑树里面取最左面的节点
 struct sched_entity *__pick_first_entity(struct cfs_rq *cfs_rq)
 {
 	struct rb_node *left = rb_first_cached(&cfs_rq->tasks_timeline);
@@ -643,9 +645,10 @@ int sched_update_scaling(void)
  */
 static inline u64 calc_delta_fair(u64 delta, struct sched_entity *se)
 {
+	//先判断当前进程的权重是不是nice为0的进程所对应的权重
 	if (unlikely(se->load.weight != NICE_0_LOAD))
 		delta = __calc_delta(delta, NICE_0_LOAD, &se->load);
-
+	//如果相等则直接返回实际运行时间
 	return delta;
 }
 
@@ -656,6 +659,8 @@ static inline u64 calc_delta_fair(u64 delta, struct sched_entity *se)
  * this period because otherwise the slices get too small.
  *
  * p = (nr <= nl) ? l : l*nr/nl
+ * 计算调度周期
+ * sysctl -a
  */
 static u64 __sched_period(unsigned long nr_running)
 {
@@ -670,6 +675,7 @@ static u64 __sched_period(unsigned long nr_running)
  * proportional to the weight.
  *
  * s = p*P[w/rw]
+ * 调度器分配给每个任务的理论 CPU 时间份额
  */
 static u64 sched_slice(struct cfs_rq *cfs_rq, struct sched_entity *se)
 {
@@ -678,13 +684,13 @@ static u64 sched_slice(struct cfs_rq *cfs_rq, struct sched_entity *se)
 
 	if (sched_feat(ALT_PERIOD))
 		nr_running = rq_of(cfs_rq)->cfs.h_nr_running;
-
+	//先计算一个调度周期
 	slice = __sched_period(nr_running + !se->on_rq);
-
+	//暂时不考虑组调度，此处的循环只会执行一次
 	for_each_sched_entity(se) {
 		struct load_weight *load;
 		struct load_weight lw;
-
+		//获取整个运行队列cfs_rq的总权重
 		cfs_rq = cfs_rq_of(se);
 		load = &cfs_rq->load;
 
@@ -694,6 +700,7 @@ static u64 sched_slice(struct cfs_rq *cfs_rq, struct sched_entity *se)
 			update_load_add(&lw, se->load.weight);
 			load = &lw;
 		}
+		//调度函数获得se在整个队列中的权重比例
 		slice = __calc_delta(slice, se->load.weight, load);
 	}
 
@@ -820,7 +827,7 @@ static void update_tg_load_avg(struct cfs_rq *cfs_rq)
 #endif /* CONFIG_SMP */
 
 /*
- * Update the current task's runtime statistics.
+ * 更新进程运行的统计量
  */
 static void update_curr(struct cfs_rq *cfs_rq)
 {
@@ -830,7 +837,7 @@ static void update_curr(struct cfs_rq *cfs_rq)
 
 	if (unlikely(!curr))
 		return;
-
+	//当前进程运行了多长时间
 	delta_exec = now - curr->exec_start;
 	if (unlikely((s64)delta_exec <= 0))
 		return;
@@ -847,7 +854,7 @@ static void update_curr(struct cfs_rq *cfs_rq)
 
 	curr->sum_exec_runtime += delta_exec;
 	schedstat_add(cfs_rq->exec_clock, delta_exec);
-
+	//将实际运行时间转化为vuntime
 	curr->vruntime += calc_delta_fair(delta_exec, curr);
 	update_min_vruntime(cfs_rq);
 
@@ -4400,6 +4407,7 @@ place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int initial)
 	 * So, cutting off on the sleep time of
 	 *     2^63 / scale_load_down(NICE_0_LOAD) ~ 104 days
 	 * should be safe.
+	 * 调整醒来后进程的vruntime
 	 */
 	if (entity_is_long_sleeper(se))
 		se->vruntime = vruntime;
@@ -4468,19 +4476,18 @@ enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
 	bool curr = cfs_rq->curr == se;
 
 	/*
-	 * If we're the current task, we must renormalise before calling
-	 * update_curr().
+	 * If we're the current task, we must renormalise before calling update_curr().
+	 * 任务是当前正在运行的, 运行时间归一化
 	 */
 	if (renorm && curr)
 		se->vruntime += cfs_rq->min_vruntime;
-
+	//更新运行的统计量
 	update_curr(cfs_rq);
 
 	/*
-	 * Otherwise, renormalise after, such that we're placed at the current
-	 * moment in time, instead of some random moment in the past. Being
-	 * placed in the past could significantly boost this task to the
-	 * fairness detriment of existing tasks.
+	 * 如果我们太早归一化一个不在运行的任务，它可能被认为是“很久没运行”，从而 被过度优先调度，破坏公平性
+	 * 所以必须分开处理，避免不一致带来的调度偏差
+	 * 任务不是当前运行的
 	 */
 	if (renorm && !curr)
 		se->vruntime += cfs_rq->min_vruntime;
@@ -4493,11 +4500,12 @@ enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
 	 *     its group cfs_rq
 	 *   - Add its new weight to cfs_rq->load.weight
 	 */
+	//更新负载平均值
 	update_load_avg(cfs_rq, se, UPDATE_TG | DO_ATTACH);
 	se_update_runnable(se);
 	update_cfs_group(se);
 	account_entity_enqueue(cfs_rq, se);
-
+	//对睡眠后醒来的进程的vruntime做调整
 	if (flags & ENQUEUE_WAKEUP)
 		place_entity(cfs_rq, se, 0);
 	/* Entity has migrated, no longer consider this task hot */
@@ -4508,7 +4516,8 @@ enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
 	update_stats_enqueue(cfs_rq, se, flags);
 	check_spread(cfs_rq, se);
 	if (!curr)
-		__enqueue_entity(cfs_rq, se);
+		__enqueue_entity(cfs_rq, se);//将 sched_entity 加入到红黑树里面等待调度
+	//标记当前任务已经进入就绪队列等待了
 	se->on_rq = 1;
 
 	/*
@@ -4623,7 +4632,9 @@ dequeue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
 }
 
 /*
- * Preempt the current task with a newly woken task if needed:
+ * 判断是否有其他进程需要抢占当前任务
+ * 1. 当前进程实际运行时间比预期长了
+ * 2. 当前进程的vruntime已经比其他进程大不少了
  */
 static void
 check_preempt_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr)
@@ -4631,8 +4642,9 @@ check_preempt_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr)
 	unsigned long ideal_runtime, delta_exec;
 	struct sched_entity *se;
 	s64 delta;
-
+	//预期时间
 	ideal_runtime = sched_slice(cfs_rq, curr);
+	//这次调度占用实际时间大于 ideal_runtime，则应该被抢占了
 	delta_exec = curr->sum_exec_runtime - curr->prev_sum_exec_runtime;
 	if (delta_exec > ideal_runtime) {
 		resched_curr(rq_of(cfs_rq));
@@ -4645,14 +4657,14 @@ check_preempt_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr)
 	}
 
 	/*
-	 * Ensure that a task that missed wakeup preemption by a
-	 * narrow margin doesn't have to wait for a full slice.
-	 * This also mitigates buddy induced latencies under load.
+	 * 确保因微小时间差错过唤醒抢占的任务，不必等待一个完整的时间片。这同样有助于缓解在负载较高时由 buddy 系统引起的延迟
+	 * 避免当前进程运行得太短
 	 */
 	if (delta_exec < sysctl_sched_min_granularity)
 		return;
-
+	//取出红黑树中最小的进程
 	se = __pick_first_entity(cfs_rq);
+	//如果当前进程的 vruntime 大于红黑树中最小的进程的 vruntime, 且差值大于 ideal_runtime, 也应该被抢占了
 	delta = curr->vruntime - se->vruntime;
 
 	if (delta < 0)
@@ -4704,11 +4716,11 @@ static int
 wakeup_preempt_entity(struct sched_entity *curr, struct sched_entity *se);
 
 /*
- * Pick the next process, keeping these things in mind, in this order:
- * 1) keep things fair between processes/task groups
- * 2) pick the "next" process, since someone really wants that to run
- * 3) pick the "last" process, for cache locality
- * 4) do not run the "skip" process, if something else is available
+ * 选择下一个要运行的进程时，按照以下优先顺序考虑:
+ * 1) 在进程/任务组之间保持公平
+ * 2) 选择“下一个”进程，因为有人确实希望它能运行
+ * 3) 选择“上一个”运行的进程，以提高缓存局部性
+ * 4) 如果有其他可用进程，避免运行被“跳过”的进程。
  */
 static struct sched_entity *
 pick_next_entity(struct cfs_rq *cfs_rq, struct sched_entity *curr)
@@ -4789,8 +4801,7 @@ static void
 entity_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr, int queued)
 {
 	/*
-	 * Update run-time statistics of the 'current'.
-	 */
+	 * Update run-time statistics of the 'current'. 更新当前进程的 vruntime ,各种时间信息 */
 	update_curr(cfs_rq);
 
 	/*
@@ -4817,7 +4828,7 @@ entity_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr, int queued)
 #endif
 
 	if (cfs_rq->nr_running > 1)
-		check_preempt_tick(cfs_rq, curr);
+		check_preempt_tick(cfs_rq, curr);//检查是否需要抢占当前任务
 }
 
 
@@ -5801,6 +5812,7 @@ static int sched_idle_cpu(int cpu)
  * The enqueue_task method is called before nr_running is
  * increased. Here we update the fair scheduling stats and
  * then put the task into the rbtree:
+ * 添加任务队列
  */
 static void
 enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
@@ -5830,6 +5842,7 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 		if (se->on_rq)
 			break;
 		cfs_rq = cfs_rq_of(se);
+		//插入红黑树
 		enqueue_entity(cfs_rq, se, flags);
 
 		cfs_rq->h_nr_running++;
@@ -5871,6 +5884,7 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 	}
 
 	/* At this point se is NULL and we are at root level*/
+	//将这个队列上运行的进程数目加一
 	add_nr_running(rq, 1);
 
 	/*
@@ -5917,6 +5931,7 @@ static void set_next_buddy(struct sched_entity *se);
  * The dequeue_task method is called before nr_running is
  * decreased. We remove the task from the rbtree and
  * update the fair scheduling stats:
+ * 删除任务队列
  */
 static void dequeue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 {
@@ -6306,13 +6321,13 @@ static inline int find_idlest_cpu(struct sched_domain *sd, struct task_struct *p
 			sd = sd->child;
 			continue;
 		}
-
+		//首先选出负载最小的组
 		group = find_idlest_group(sd, p, cpu);
 		if (!group) {
 			sd = sd->child;
 			continue;
 		}
-
+		//然后再从该组中选出最空闲的CPU
 		new_cpu = find_idlest_group_cpu(group, p, cpu);
 		if (new_cpu == cpu) {
 			/* Now try balancing at a lower domain level of 'cpu': */
@@ -7155,6 +7170,7 @@ unlock:
  * certain conditions an idle sibling CPU if the domain has SD_WAKE_AFFINE set.
  *
  * Returns the target CPU number.
+ * 通过公平调度器实现的函数来选择CPU核的
  */
 static int
 select_task_rq_fair(struct task_struct *p, int prev_cpu, int wake_flags)
@@ -7185,6 +7201,7 @@ select_task_rq_fair(struct task_struct *p, int prev_cpu, int wake_flags)
 	}
 
 	rcu_read_lock();
+	// wake_affine机制, 尽量优先选择要唤醒的进程上一次使用的CPU逻辑核或者要唤醒它的进程所在的核（当前逻辑核）
 	for_each_domain(cpu, tmp) {
 		/*
 		 * If both 'cpu' and 'prev_cpu' are part of this domain,
@@ -7206,10 +7223,10 @@ select_task_rq_fair(struct task_struct *p, int prev_cpu, int wake_flags)
 	}
 
 	if (unlikely(sd)) {
-		/* Slow path */
+		/* Slow path 快速路径没选到，那就进入慢速路径 */
 		new_cpu = find_idlest_cpu(sd, p, cpu, prev_cpu, sd_flag);
 	} else if (wake_flags & WF_TTWU) { /* XXX always ? */
-		/* Fast path */
+		/* Fast path 考虑共享缓存且idle的CPU，优先选择任务上一次运行使用的CPU，其次是唤醒任务的CPU */
 		new_cpu = select_idle_sibling(p, prev_cpu, new_cpu);
 	}
 	rcu_read_unlock();
@@ -7408,6 +7425,7 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
 	 * enqueue of curr) will have resulted in resched being set.  This
 	 * prevents us from potentially nominating it as a false LAST_BUDDY
 	 * below.
+	 * 前面调用 task_fork_fair 的时候，设置 sysctl_sched_child_runs_first 了，已经将当前父进程的 TIF_NEED_RESCHED 设置了，则直接返回
 	 */
 	if (test_tsk_need_resched(curr))
 		return;
@@ -7438,8 +7456,10 @@ static void check_preempt_wakeup(struct rq *rq, struct task_struct *p, int wake_
 		goto preempt;
 	if (cse_is_idle != pse_is_idle)
 		return;
-
+	//更新一次统计量
 	update_curr(cfs_rq_of(se));
+	//将父进程和子进程 PK 一次，看是不是要抢占，如果要则调用 resched_curr 标记父进程为 TIF_NEED_RESCHED
+	//如果新创建的进程应该抢占父进程，在什么时间抢占呢？别忘了 fork 是一个系统调用，从系统调用返回的时候，是抢占的一个好时机，如果父进程判断自己已经被设置为 TIF_NEED_RESCHED，就让子进程先跑，抢占自己
 	if (wakeup_preempt_entity(se, pse) == 1) {
 		/*
 		 * Bias pick_next to pick the sched entity that is
@@ -7502,10 +7522,11 @@ again:
 	return task_of(se);
 }
 #endif
-
+//选出当前任务队列红黑树节点中最小运行时间节点（最左侧的节点）
 struct task_struct *
 pick_next_task_fair(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 {
+	//获取完全公平调度器，取出相应的队列 cfs_rq，红黑树
 	struct cfs_rq *cfs_rq = &rq->cfs;
 	struct sched_entity *se;
 	struct task_struct *p;
@@ -7528,6 +7549,7 @@ again:
 	 */
 
 	do {
+		//取出当前正在运行的任务 curr
 		struct sched_entity *curr = cfs_rq->curr;
 
 		/*
@@ -7537,7 +7559,9 @@ again:
 		 * forget we've ever seen it.
 		 */
 		if (curr) {
+			//如果依然是可运行的状态，也即处于进程就绪状态
 			if (curr->on_rq)
+				//更新 vruntime，会根据实际运行时间算出 vruntime 
 				update_curr(cfs_rq);
 			else
 				curr = NULL;
@@ -7557,17 +7581,18 @@ again:
 				goto simple;
 			}
 		}
-
+		//从完全公平调度器红黑树里面，取最左边的一个调度实体节点
 		se = pick_next_entity(cfs_rq, curr);
 		cfs_rq = group_cfs_rq(se);
 	} while (cfs_rq);
-
+	//得到下一个调度实体对应的 task_struct
 	p = task_of(se);
 
 	/*
 	 * Since we haven't yet done put_prev_entity and if the selected task
 	 * is a different task than we started out with, try and touch the
 	 * least amount of cfs_rqs.
+	 * uct，如果发现继任和前任不一样，这就说明有一个更需要运行的进程了，就需要更新红黑树
 	 */
 	if (prev != p) {
 		struct sched_entity *pse = &prev->se;
@@ -7577,10 +7602,12 @@ again:
 			int pse_depth = pse->depth;
 
 			if (se_depth <= pse_depth) {
+				//放回红黑树，会找到相应的位置
 				put_prev_entity(cfs_rq_of(pse), pse);
 				pse = parent_entity(pse);
 			}
 			if (se_depth >= pse_depth) {
+				//将继任者设为当前任务
 				set_next_entity(cfs_rq_of(se), se);
 				se = parent_entity(se);
 			}
@@ -8047,7 +8074,7 @@ int can_migrate_task(struct task_struct *p, struct lb_env *env)
 	/* Disregard pcpu kthreads; they are where they need to be. */
 	if (kthread_is_per_cpu(p))
 		return 0;
-
+	//判断进程CPU亲和性
 	if (!cpumask_test_cpu(env->dst_cpu, p->cpus_ptr)) {
 		int cpu;
 
@@ -8194,7 +8221,7 @@ static int detach_tasks(struct lb_env *env)
 		 */
 		if (env->idle != CPU_NOT_IDLE && env->src_rq->nr_running <= 1)
 			break;
-
+		//获取队列中的一个任务
 		p = list_last_entry(tasks, struct task_struct, se.group_node);
 
 		env->loop++;
@@ -8208,7 +8235,7 @@ static int detach_tasks(struct lb_env *env)
 			env->flags |= LBF_NEED_BREAK;
 			break;
 		}
-
+		//判断当前任务是否能迁移到当前CPU上
 		if (!can_migrate_task(p, env))
 			goto next;
 
@@ -10304,17 +10331,18 @@ static int load_balance(int this_cpu, struct rq *this_rq,
 	schedstat_inc(sd->lb_count[idle]);
 
 redo:
+	//判断当前CPU是否可以从其他CPU拉点任务过来
 	if (!should_we_balance(&env)) {
 		*continue_balancing = 0;
 		goto out_balanced;
 	}
-
+	//通过对比各个调度组的负载、利用率来确定哪个调度组最忙
 	group = find_busiest_group(&env);
 	if (!group) {
 		schedstat_inc(sd->lb_nobusyg[idle]);
 		goto out_balanced;
 	}
-
+	//在最忙的调度组中找出最忙的运行队列
 	busiest = find_busiest_queue(&env, group);
 	if (!busiest) {
 		schedstat_inc(sd->lb_nobusyq[idle]);
@@ -10331,6 +10359,7 @@ redo:
 	ld_moved = 0;
 	/* Clear this flag as soon as we find a pullable task */
 	env.flags |= LBF_ALL_PINNED;
+	//迁移
 	if (busiest->nr_running > 1) {
 		/*
 		 * Attempt to move tasks. If find_busiest_group has found
@@ -10348,6 +10377,7 @@ more_balance:
 		 * cur_ld_moved - load moved in current iteration
 		 * ld_moved     - cumulative load moved across iterations
 		 */
+		//从源队列拉取任务
 		cur_ld_moved = detach_tasks(&env);
 
 		/*
@@ -10361,6 +10391,7 @@ more_balance:
 		rq_unlock(busiest, &rf);
 
 		if (cur_ld_moved) {
+			//加入到目标CPU的任务队列
 			attach_tasks(&env);
 			ld_moved += cur_ld_moved;
 		}
@@ -10680,6 +10711,8 @@ void update_max_interval(void)
  * and initiates a balancing operation if so.
  *
  * Balancing parameters are set up in init_sched_domains.
+ * 
+ * 循环：从最底层开始遍历每一层调度域，优先尝试在最底层调度域实现负载均衡，然后依次再往二级调度域、根调度域上开始迁移
  */
 static void rebalance_domains(struct rq *rq, enum cpu_idle_type idle)
 {
@@ -10718,7 +10751,7 @@ static void rebalance_domains(struct rq *rq, enum cpu_idle_type idle)
 				continue;
 			break;
 		}
-
+		//计算当前调度域负载均衡的时间间隔，这里会考虑CPU是否繁忙及调度域的时间间隔区间
 		interval = get_sd_balance_interval(sd, busy);
 
 		need_serialize = sd->flags & SD_SERIALIZE;
@@ -10726,7 +10759,7 @@ static void rebalance_domains(struct rq *rq, enum cpu_idle_type idle)
 			if (!spin_trylock(&balancing))
 				goto out;
 		}
-
+		//如果当前时间已经超过负载均衡的时间间隔，则触发负载均衡操作
 		if (time_after_eq(jiffies, sd->last_balance + interval)) {
 			if (load_balance(cpu, rq, sd, idle, &continue_balancing)) {
 				/*
@@ -11393,12 +11426,9 @@ static __latent_entropy void run_rebalance_domains(struct softirq_action *h)
 						CPU_IDLE : CPU_NOT_IDLE;
 
 	/*
-	 * If this CPU has a pending nohz_balance_kick, then do the
-	 * balancing on behalf of the other idle CPUs whose ticks are
-	 * stopped. Do nohz_idle_balance *before* rebalance_domains to
-	 * give the idle CPUs a chance to load balance. Else we may
-	 * load balance only within the local sched_domain hierarchy
-	 * and abort nohz_idle_balance altogether if we pull some load.
+	 * 如果该 CPU 有一个待处理的 nohz_balance_kick，则代表其他时钟已停止的空闲 CPU 执行负载均衡操作。
+	 * 应在 rebalance_domains 之前执行 nohz_idle_balance，以便让空闲 CPU 有机会进行负载均衡。
+	 * 否则，我们可能只在本地的 sched_domain 层级内进行负载均衡，并且如果我们拉取了一些负载，nohz_idle_balance 可能会被完全取
 	 */
 	if (nohz_idle_balance(this_rq, idle))
 		return;
@@ -11409,14 +11439,11 @@ static __latent_entropy void run_rebalance_domains(struct softirq_action *h)
 }
 
 /*
- * Trigger the SCHED_SOFTIRQ if it is time to do periodic load balancing.
+ * 如果到了进行周期性负载均衡的时间，则触发 SCHED_SOFTIRQ
  */
 void trigger_load_balance(struct rq *rq)
 {
-	/*
-	 * Don't need to rebalance while attached to NULL domain or
-	 * runqueue CPU is not active
-	 */
+	/* 当附加到 NULL 域或运行队列所在的 CPU 不处于活动状态时，不需要进行重新负载均衡*/
 	if (unlikely(on_null_domain(rq) || !cpu_active(cpu_of(rq))))
 		return;
 
@@ -11567,10 +11594,12 @@ static inline void task_tick_core(struct rq *rq, struct task_struct *curr) {}
 static void task_tick_fair(struct rq *rq, struct task_struct *curr, int queued)
 {
 	struct cfs_rq *cfs_rq;
+	//获取调度实体 sched_entity 和 cfs_rq 队列
 	struct sched_entity *se = &curr->se;
 
 	for_each_sched_entity(se) {
 		cfs_rq = cfs_rq_of(se);
+		//
 		entity_tick(cfs_rq, se, queued);
 	}
 
@@ -11602,8 +11631,10 @@ static void task_fork_fair(struct task_struct *p)
 	curr = cfs_rq->curr;
 	if (curr) {
 		update_curr(cfs_rq);
+		//子进程和父进程的 vruntime 设成一样
 		se->vruntime = curr->vruntime;
 	}
+	// 初始化 sched_entity
 	place_entity(cfs_rq, se, 1);
 
 	if (sysctl_sched_child_runs_first && curr && entity_before(curr, se)) {
@@ -11612,6 +11643,7 @@ static void task_fork_fair(struct task_struct *p)
 		 * 'current' within the tree based on its new key value.
 		 */
 		swap(curr->vruntime, se->vruntime);
+		//标记当前运行的进程 TIF_NEED_RESCHED, 也就是说, 把父进程设置为应该被调度, 这样下次调度的时候, 父进程会被子进程抢占
 		resched_curr(rq);
 	}
 
@@ -12148,7 +12180,7 @@ DEFINE_SCHED_CLASS(fair) = {
 	.yield_to_task		= yield_to_task_fair,
 
 	.check_preempt_curr	= check_preempt_wakeup,
-
+	//取下一个任务
 	.pick_next_task		= __pick_next_task_fair,
 	.put_prev_task		= put_prev_task_fair,
 	.set_next_task          = set_next_task_fair,

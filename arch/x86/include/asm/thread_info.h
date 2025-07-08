@@ -76,7 +76,9 @@ struct thread_info {
  *   may need to access
  */
 #define TIF_NOTIFY_RESUME	1	/* callback before returning to user */
+//表示已经有信号等待处理。同样等待系统调用结束，或者中断处理结束，从内核态返回用户态的时候，再进行信号的处理
 #define TIF_SIGPENDING		2	/* signal pending */
+//表示等待调度，然后等待系统调用结束或者中断处理结束，从内核态返回用户态的时候，调用 schedule 函数进行调度
 #define TIF_NEED_RESCHED	3	/* rescheduling necessary */
 #define TIF_SINGLESTEP		4	/* reenable singlestep on user return*/
 #define TIF_SSBD		5	/* Speculative store bypass disable */

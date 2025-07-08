@@ -816,7 +816,7 @@ static ssize_t tap_put_user(struct tap_queue *q,
 done:
 	return ret ? ret : total;
 }
-
+//从 Tap 网络设备等待一个读取
 static ssize_t tap_do_read(struct tap_queue *q,
 			   struct iov_iter *to,
 			   int noblock, struct sk_buff *skb)
@@ -834,6 +834,7 @@ static ssize_t tap_do_read(struct tap_queue *q,
 
 	while (1) {
 		if (!noblock)
+			//将当前进程挂到指定等待队列 queue 上，设置为 TASK_INTERRUPTIBLE 状态，使得它可以在条件满足或收到信号时被唤醒
 			prepare_to_wait(sk_sleep(&q->sk), &wait,
 					TASK_INTERRUPTIBLE);
 
@@ -845,11 +846,14 @@ static ssize_t tap_do_read(struct tap_queue *q,
 			ret = -EAGAIN;
 			break;
 		}
+		//信号唤醒
 		if (signal_pending(current)) {
 			ret = -ERESTARTSYS;
 			break;
 		}
 		/* Nothing to read, let's sleep */
+		//当这个进程或者线程再次运行的时候，从 schedule 函数中返回，然后再次进入 while 循环。由于这个进程或者线程是由信号唤醒的，而不是因为数据来了而唤醒的
+		//因而是读不到数据的，但是在 signal_pending 函数中，检测到 _TIF_SIGPENDING 标识，这说明系统调用没有真的做完，于是返回一个错误 ERESTARTSYS，然后带着这个错误从系统调用返回
 		schedule();
 	}
 	if (!noblock)

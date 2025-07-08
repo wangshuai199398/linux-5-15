@@ -274,6 +274,7 @@ static inline int ipc_idr_alloc(struct ipc_ids *ids, struct kern_ipc_perm *new)
  * The caller must use ipc_rcu_putref() to free the identifier.
  *
  * Called with writer ipc_ids.rwsem held.
+ * 新创建的 shmid_kernel 结构挂到 shm_ids 里面的基数树上，并返回相应的 id
  */
 int ipc_addid(struct ipc_ids *ids, struct kern_ipc_perm *new, int limit)
 {
@@ -406,13 +407,14 @@ static int ipcget_public(struct ipc_namespace *ns, struct ipc_ids *ids,
 	 * a new entry + read locks are not "upgradable"
 	 */
 	down_write(&ids->rwsem);
+	//垦局key查找kern_ipc_perm
 	ipcp = ipc_findkey(ids, params->key);
 	if (ipcp == NULL) {
 		/* key not used */
 		if (!(flg & IPC_CREAT))
 			err = -ENOENT;
 		else
-			err = ops->getnew(ns, params);
+			err = ops->getnew(ns, params);// newseg
 	} else {
 		/* ipc object has been locked by ipc_findkey() */
 
@@ -674,6 +676,7 @@ int ipcget(struct ipc_namespace *ns, struct ipc_ids *ids,
 			const struct ipc_ops *ops, struct ipc_params *params)
 {
 	if (params->key == IPC_PRIVATE)
+		//永远创建新的
 		return ipcget_new(ns, ids, ops, params);
 	else
 		return ipcget_public(ns, ids, ops, params);

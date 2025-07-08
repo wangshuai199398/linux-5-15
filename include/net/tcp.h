@@ -736,10 +736,7 @@ static inline u32 tcp_min_rtt(const struct tcp_sock *tp)
 	return minmax_get(&tp->rtt_min);
 }
 
-/* Compute the actual receive window we are currently advertising.
- * Rcv_nxt can be after the window if our peer push more data
- * than the offered window.
- */
+/* 计算我们当前通告的实际接收窗口。Rcv_nxt 可能会超出窗口范围，如果对端发送的数据超过了我们提供的窗口 */
 static inline u32 tcp_receive_window(const struct tcp_sock *tp)
 {
 	s32 win = tp->rcv_wup + tp->rcv_wnd - tp->rcv_nxt;
@@ -837,6 +834,7 @@ static inline u64 tcp_skb_timestamp_us(const struct sk_buff *skb)
  * If this grows please adjust skbuff.h:skbuff->cb[xxx] size appropriately.
  */
 struct tcp_skb_cb {
+	//当前 skb 的起始序号
 	__u32		seq;		/* Starting sequence number	*/
 	__u32		end_seq;	/* SEQ + FIN + SYN + datalen	*/
 	union {
@@ -1163,12 +1161,11 @@ static inline bool tcp_skb_sent_after(u64 t1, u64 t2, u32 seq1, u32 seq2)
 	return t1 > t2 || (t1 == t2 && after(seq1, seq2));
 }
 
-/* These functions determine how the current flow behaves in respect of SACK
- * handling. SACK is negotiated with the peer, and therefore it can vary
- * between different flows.
+/* 这些函数用于判断当前连接在 SACK（选择性确认）处理方面的行为。
+ * SACK 是与对端协商确定的，因此在不同的连接中可能不同
  *
- * tcp_is_sack - SACK enabled
- * tcp_is_reno - No SACK
+ * tcp_is_sack —— 启用了 SACK
+ * tcp_is_reno - 未启用 SACK（使用 Reno 算法）
  */
 static inline int tcp_is_sack(const struct tcp_sock *tp)
 {
@@ -1185,19 +1182,14 @@ static inline unsigned int tcp_left_out(const struct tcp_sock *tp)
 	return tp->sacked_out + tp->lost_out;
 }
 
-/* This determines how many packets are "in the network" to the best
- * of our knowledge.  In many cases it is conservative, but where
- * detailed information is available from the receiver (via SACK
- * blocks etc.) we can make more aggressive calculations.
+/* 网络中有多少个包正在传输
  *
- * Use this for decisions involving congestion control, use just
- * tp->packets_out to determine if the send queue is empty or not.
+ * 在很多情况下，这个估计是保守的；但如果能从接收端获得更详细的信息（例如通过 SACK 块等），我们就可以进行更积极的估算
  *
- * Read this equation as:
+ * 此值用于与拥塞控制相关的决策，如果只是想判断发送队列是否为空，则只需使用 tp->packets_out
  *
- *	"Packets sent once on transmission queue" MINUS
- *	"Packets left network, but not honestly ACKed yet" PLUS
- *	"Packets fast retransmitted"
+ * 可以将下面这个公式理解为：
+ *	已发送到传输队列的包数 - “已经离开网络但尚未被明确 ACK 的包数” + “快速重传的包数”
  */
 static inline unsigned int tcp_packets_in_flight(const struct tcp_sock *tp)
 {
@@ -1263,7 +1255,7 @@ static inline __u32 tcp_max_tso_deferred_mss(const struct tcp_sock *tp)
 	return 3;
 }
 
-/* Returns end sequence number of the receiver's advertised window */
+/* Returns end sequence number of the receiver's advertised window 发送窗口末尾的序号 */
 static inline u32 tcp_wnd_end(const struct tcp_sock *tp)
 {
 	return tp->snd_una + tp->snd_wnd;

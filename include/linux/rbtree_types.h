@@ -14,17 +14,15 @@ struct rb_root {
 };
 
 /*
- * Leftmost-cached rbtrees.
+ * 最左侧缓存的红黑树（rbtrees）
  *
- * We do not cache the rightmost node based on footprint
- * size vs number of potential users that could benefit
- * from O(1) rb_last(). Just not worth it, users that want
- * this feature can always implement the logic explicitly.
- * Furthermore, users that want to cache both pointers may
- * find it a bit asymmetric, but that's ok.
+ * 我们没有缓存最右侧节点，是基于内存占用与可能受益于 O(1) 时间复杂度的 rb_last() 的用户数量之间的权衡。这样做并不值得，
+ * 那些需要这个功能的用户可以自行实现相关逻辑。此外，想要同时缓存左右指针的用户可能会觉得这种设计有些不对称，但这是可以接受的。
  */
 struct rb_root_cached {
+	//红黑树根节点
 	struct rb_root rb_root;
+	//最左面的节点
 	struct rb_node *rb_leftmost;
 };
 

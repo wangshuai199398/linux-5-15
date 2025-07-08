@@ -273,6 +273,11 @@ static inline void invalidate_user_asid(u16 asid)
 		  (unsigned long *)this_cpu_ptr(&cpu_tlbstate.user_pcid_flush_mask));
 }
 
+//cr3 是 CPU 的一个寄存器，它会指向当前进程的顶级 pgd。
+//cr3 里面需要存放 pgd 在物理内存的地址，不能是虚拟地址
+//因而 load_new_mm_cr3 里面会使用 __pa，将 mm_struct 里面的成员变量 pgd（mm_struct 里面存的都是虚拟地址）变为物理地址，才能加载到 cr3 里面去
+//如果 CPU 的指令要访问进程的虚拟内存，它就会自动从 cr3 里面得到 pgd 在物理内存的地址，
+//然后根据里面的页表解析虚拟内存的地址为物理内存，从而访问真正的物理内存上的数据
 static void load_new_mm_cr3(pgd_t *pgdir, u16 new_asid, bool need_flush)
 {
 	unsigned long new_mm_cr3;

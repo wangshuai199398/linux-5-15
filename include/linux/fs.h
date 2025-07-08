@@ -371,7 +371,7 @@ typedef struct {
 
 typedef int (*read_actor_t)(read_descriptor_t *, struct page *,
 		unsigned long, unsigned long);
-
+// ext4_aops
 struct address_space_operations {
 	int (*writepage)(struct page *page, struct writeback_control *wbc);
 	int (*readpage)(struct file *, struct page *);
@@ -469,6 +469,7 @@ struct address_space {
 	/* number of thp, only for non-shmem files */
 	atomic_t		nr_thps;
 #endif
+	//vm_area_struct 就挂在这里
 	struct rb_root_cached	i_mmap;
 	unsigned long		nrpages;
 	pgoff_t			writeback_index;
@@ -1000,6 +1001,7 @@ struct file {
 	/* Used by fs/eventpoll.c to link all the hooks to this file */
 	struct hlist_head	*f_ep;
 #endif /* #ifdef CONFIG_EPOLL */
+	//在内存映射的时候将文件和内存页产生关联 关联文件和内存
 	struct address_space	*f_mapping;
 	errseq_t		f_wb_err;
 	errseq_t		f_sb_err; /* for syncfs */
@@ -2080,6 +2082,7 @@ struct dir_context {
 
 struct iov_iter;
 
+//文件系统的接口操作，如果想要通过文件系统访问设备，被文件系统的接口操作，需要定义这样一个结构
 struct file_operations {
 	struct module *owner;
 	loff_t (*llseek) (struct file *, loff_t, int);
@@ -2841,7 +2844,7 @@ extern void __unregister_chrdev(unsigned int major, unsigned int baseminor,
 				unsigned int count, const char *name);
 extern void unregister_chrdev_region(dev_t, unsigned);
 extern void chrdev_show(struct seq_file *,off_t);
-
+//注册字符设备，注册完后需要通过 mknod 在 /dev 下面创建一个设备文件，才能通过文件系统的接口，对这个设备文件进行操作
 static inline int register_chrdev(unsigned int major, const char *name,
 				  const struct file_operations *fops)
 {
@@ -3346,6 +3349,7 @@ ssize_t __blockdev_direct_IO(struct kiocb *iocb, struct inode *inode,
 			     dio_iodone_t end_io, dio_submit_t submit_io,
 			     int flags);
 
+// inode->i_sb->s_bdev 通过当前文件的 inode，我们可以得到 super_block
 static inline ssize_t blockdev_direct_IO(struct kiocb *iocb,
 					 struct inode *inode,
 					 struct iov_iter *iter,

@@ -178,6 +178,7 @@ static inline struct task_struct *alloc_task_struct_node(int node)
 	return kmem_cache_alloc_node(task_struct_cachep, GFP_KERNEL, node);
 }
 
+//当一个进程结束，task_struct 也不用直接被销毁，而是放回到缓存中,这样，新进程创建的时候，我们就可以直接用现成的缓存中的 task_struct 了
 static inline void free_task_struct(struct task_struct *tsk)
 {
 	kmem_cache_free(task_struct_cachep, tsk);
@@ -245,10 +246,9 @@ static unsigned long *alloc_thread_stack_node(struct task_struct *tsk, int node)
 	}
 
 	/*
-	 * Allocated stacks are cached and later reused by new threads,
-	 * so memcg accounting is performed manually on assigning/releasing
-	 * stacks to tasks. Drop __GFP_ACCOUNT.
-	 */
+	 * 已分配的栈会被缓存，并在新线程创建时重复使用，因此在为任务分配/释放栈时需要手动进行内存控制组（memcg）记账。
+	 * 去掉 __GFP_ACCOUNT 标志
+	 * 分配一个连续的 THREAD_SIZE 的内存空间，赋值给 task_struct 的 void *stack 成员变量  */
 	stack = __vmalloc_node_range(THREAD_SIZE, THREAD_ALIGN,
 				     VMALLOC_START, VMALLOC_END,
 				     THREADINFO_GFP & ~__GFP_ACCOUNT,
@@ -497,6 +497,7 @@ static void dup_mm_exe_file(struct mm_struct *mm, struct mm_struct *oldmm)
 }
 
 #ifdef CONFIG_MMU
+//复制内存空间中内存映射的部分
 static __latent_entropy int dup_mmap(struct mm_struct *mm,
 					struct mm_struct *oldmm)
 {
@@ -898,11 +899,11 @@ static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
 
 	if (node == NUMA_NO_NODE)
 		node = tsk_fork_get_node(orig);
-	//申请task_struct内核对象
+	//分配一个task_struct内核对象
 	tsk = alloc_task_struct_node(node);
 	if (!tsk)
 		return NULL;
-
+	//创建内核栈
 	stack = alloc_thread_stack_node(tsk, node);
 	if (!stack)
 		goto free_tsk;
@@ -911,13 +912,12 @@ static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
 		goto free_stack;
 
 	stack_vm_area = task_stack_vm_area(tsk);
-	//复制task_struct
+	//复制task_struct, 其实就是调用 memcpy
 	err = arch_dup_task_struct(tsk, orig);
 
 	/*
-	 * arch_dup_task_struct() clobbers the stack-related fields.  Make
-	 * sure they're properly initialized before using any stack-related
-	 * functions again.
+	 * arch_dup_task_struct() 会覆盖与栈相关的字段。
+	 * 在再次使用任何与栈相关的函数之前，务必确保这些字段已被正确初始化
 	 */
 	tsk->stack = stack;
 #ifdef CONFIG_VMAP_STACK
@@ -1091,7 +1091,7 @@ static struct mm_struct *mm_init(struct mm_struct *mm, struct task_struct *p,
 		mm->flags = default_dump_filter;
 		mm->def_flags = 0;
 	}
-
+	//分配全局页目录项
 	if (mm_alloc_pgd(mm))
 		goto fail_nopgd;
 
@@ -1460,7 +1460,7 @@ static struct mm_struct *dup_mm(struct task_struct *tsk,
 {
 	struct mm_struct *mm;
 	int err;
-	//申请新的mm_struct
+	//分配一个新的 mm_struct 结构
 	mm = allocate_mm();
 	if (!mm)
 		goto fail_nomem;
@@ -1491,7 +1491,7 @@ free_pt:
 fail_nomem:
 	return NULL;
 }
-
+//复制进程内存空间
 static int copy_mm(unsigned long clone_flags, struct task_struct *tsk)
 {
 	struct mm_struct *mm, *oldmm;
@@ -1531,7 +1531,7 @@ static int copy_mm(unsigned long clone_flags, struct task_struct *tsk)
 	tsk->active_mm = mm;
 	return 0;
 }
-
+//复制一个进程的目录信息。这些信息用一个结构 fs_struct 来维护。一个进程有自己的根目录和根文件系统 root，也有当前目录 pwd 和当前目录的文件系统，都在 fs_struct 里面维护
 static int copy_fs(unsigned long clone_flags, struct task_struct *tsk)
 {
 	struct fs_struct *fs = current->fs;
@@ -1551,7 +1551,7 @@ static int copy_fs(unsigned long clone_flags, struct task_struct *tsk)
 		return -ENOMEM;
 	return 0;
 }
-
+//复制一个进程打开的文件信息。这些信息用一个结构 files_struct 来维护，每个打开的文件都有一个文件描述符
 static int copy_files(unsigned long clone_flags, struct task_struct *tsk)
 {
 	struct files_struct *oldf, *newf;
@@ -1610,6 +1610,7 @@ static int copy_sighand(unsigned long clone_flags, struct task_struct *tsk)
 		refcount_inc(&current->sighand->count);
 		return 0;
 	}
+	//分配一个新的 sighand_struct, 最主要的是维护信号处理函数
 	sig = kmem_cache_alloc(sighand_cachep, GFP_KERNEL);
 	RCU_INIT_POINTER(tsk->sighand, sig);
 	if (!sig)
@@ -1617,6 +1618,7 @@ static int copy_sighand(unsigned long clone_flags, struct task_struct *tsk)
 
 	refcount_set(&sig->count, 1);
 	spin_lock_irq(&current->sighand->siglock);
+	//将信号处理函数 sighand->action 从父进程复制到子进程
 	memcpy(sig->action, current->sighand->action, sizeof(sig->action));
 	spin_unlock_irq(&current->sighand->siglock);
 
@@ -1650,14 +1652,14 @@ static void posix_cpu_timers_init_group(struct signal_struct *sig)
 	cpu_limit = READ_ONCE(sig->rlim[RLIMIT_CPU].rlim_cur);
 	posix_cputimers_group_init(pct, cpu_limit);
 }
-
+//复制用于维护发给这个进程的信号的数据结构
 static int copy_signal(unsigned long clone_flags, struct task_struct *tsk)
 {
 	struct signal_struct *sig;
-
+	//线程返回
 	if (clone_flags & CLONE_THREAD)
 		return 0;
-
+	//分配一个新的 signal_struct
 	sig = kmem_cache_zalloc(signal_cachep, GFP_KERNEL);
 	tsk->signal = sig;
 	if (!sig)
@@ -1673,6 +1675,7 @@ static int copy_signal(unsigned long clone_flags, struct task_struct *tsk)
 
 	init_waitqueue_head(&sig->wait_chldexit);
 	sig->curr_target = tsk;
+	//整个进程里的所有线程共享一个 shared_pending，这也是一个信号列表，是发给整个进程的，哪个线程处理都一样
 	init_sigpending(&sig->shared_pending);
 	INIT_HLIST_HEAD(&sig->multiprocess);
 	seqlock_init(&sig->stats_lock);
@@ -2181,7 +2184,7 @@ static __latent_entropy struct task_struct *copy_process(
 	p->bpf_ctx = NULL;
 #endif
 
-	/* Perform scheduler related setup. Assign this task to a CPU. */
+	/* 执行与调度器相关的设置。将该任务分配给一个 CPU */
 	retval = sched_fork(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_policy;
@@ -2291,9 +2294,11 @@ static __latent_entropy struct task_struct *copy_process(
 	/* ok, now we should be set up.. */
 	p->pid = pid_nr(pid);
 	if (clone_flags & CLONE_THREAD) {
+		//如果是新线程，group_leader 是当前进程的，group_leader，tgid 是当前进程的 tgid，也就是当前进程的 pid，这个时候还是拜原来进程为老大
 		p->group_leader = current->group_leader;
 		p->tgid = current->tgid;
 	} else {
+		//如果是新进程，那这个进程的 group_leader 就是它自己，tgid 是它自己的 pid，这就完全重打锣鼓另开张了，自己是线程组的头
 		p->group_leader = p;
 		p->tgid = p->pid;
 	}
@@ -2312,33 +2317,23 @@ static __latent_entropy struct task_struct *copy_process(
 #endif
 
 	/*
-	 * Ensure that the cgroup subsystem policies allow the new process to be
-	 * forked. It should be noted that the new process's css_set can be changed
-	 * between here and cgroup_post_fork() if an organisation operation is in
-	 * progress.
+	 * 确保 cgroup 子系统的策略允许新进程被 fork。需要注意的是，如果正在进行组织操作（organisation operation），
+	 * 那么在此处与 cgroup_post_fork() 之间，新进程的 css_set 可能会发生变化。
 	 */
 	retval = cgroup_can_fork(p, args);
 	if (retval)
 		goto bad_fork_put_pidfd;
 
 	/*
-	 * Now that the cgroups are pinned, re-clone the parent cgroup and put
-	 * the new task on the correct runqueue. All this *before* the task
-	 * becomes visible.
-	 *
-	 * This isn't part of ->can_fork() because while the re-cloning is
-	 * cgroup specific, it unconditionally needs to place the task on a
-	 * runqueue.
+	 * 现在 cgroup 已经固定（pinned），重新克隆父进程的 cgroup，并将新任务放入正确的运行队列中。所有这些操作都要在任务对外可见之前完成。
+	 * 这不是 ->can_fork() 的一部分，因为虽然重新克隆是 cgroup 特有的，但无论如何都需要将任务放入运行队列中。
 	 */
 	sched_cgroup_fork(p, args);
 
 	/*
-	 * From this point on we must avoid any synchronous user-space
-	 * communication until we take the tasklist-lock. In particular, we do
-	 * not want user-space to be able to predict the process start-time by
-	 * stalling fork(2) after we recorded the start_time but before it is
-	 * visible to the system.
-	 */
+	 * 从这一点开始，我们必须避免任何与用户空间的同步通信，直到获取 tasklist_lock。
+	 * 尤其是，我们不希望用户空间在我们记录了 start_time 之后、但在该时间对系统可见之前，通过阻塞 fork(2) 来预测进程的启动时间 
+	 * 重新计算进程运行的统计量 */
 
 	p->start_time = ktime_get_ns();
 	p->start_boottime = ktime_get_boottime_ns();
@@ -2351,6 +2346,7 @@ static __latent_entropy struct task_struct *copy_process(
 
 	/* CLONE_PARENT re-uses the old parent */
 	if (clone_flags & (CLONE_PARENT|CLONE_THREAD)) {
+		//如果是新线程，线程的 real_parent 是当前的进程的 real_parent，其实是平辈的
 		p->real_parent = current->real_parent;
 		p->parent_exec_id = current->parent_exec_id;
 		if (clone_flags & CLONE_THREAD)
@@ -2358,6 +2354,7 @@ static __latent_entropy struct task_struct *copy_process(
 		else
 			p->exit_signal = current->group_leader->exit_signal;
 	} else {
+		//如果是新进程，新进程的 real_parent 是当前的进程，在进程树里面又见一辈人
 		p->real_parent = current;
 		p->parent_exec_id = current->self_exec_id;
 		p->exit_signal = args->exit_signal;
@@ -2687,6 +2684,13 @@ SYSCALL_DEFINE0(fork)
 #endif
 
 #ifdef __ARCH_WANT_SYS_VFORK
+// vfork_wangs
+/*
+用于创建子进程，但是不会复制父进程空间中的数据
+创建的子进程直接使用父进程空间（没有完整独立的进程空间）
+创建的子进程对数据（变量）的修改会直接反馈到父进程中
+vfork是为了execve系统调用而设计
+*/
 SYSCALL_DEFINE0(vfork)
 {
 	struct kernel_clone_args args = {
@@ -2698,6 +2702,7 @@ SYSCALL_DEFINE0(vfork)
 }
 #endif
 //clone_wangs
+//clone_flags: CLONE_NEWNS|CLONE_NEWPID|CLONE_NEWNET|SIGCHLD
 #ifdef __ARCH_WANT_SYS_CLONE
 #ifdef CONFIG_CLONE_BACKWARDS
 SYSCALL_DEFINE5(clone, unsigned long, clone_flags, unsigned long, newsp,
@@ -3188,7 +3193,7 @@ bad_unshare_cleanup_fs:
 bad_unshare_out:
 	return err;
 }
-
+//unshare_wangs
 SYSCALL_DEFINE1(unshare, unsigned long, unshare_flags)
 {
 	return ksys_unshare(unshare_flags);

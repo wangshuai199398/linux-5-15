@@ -134,6 +134,8 @@ void __irq_wake_thread(struct irq_desc *desc, struct irqaction *action)
 	wake_up_process(action->thread);
 }
 
+// 调用了 irq_desc 里每个 hander，这些 hander 是我们在所有 action 列表中注册的，这才是我们设置的那个中断处理函数。
+// 如果返回值是 IRQ_HANDLED，就说明处理完毕；如果返回值是 IRQ_WAKE_THREAD 就唤醒线程
 irqreturn_t __handle_irq_event_percpu(struct irq_desc *desc, unsigned int *flags)
 {
 	irqreturn_t retval = IRQ_NONE;
@@ -153,6 +155,7 @@ irqreturn_t __handle_irq_event_percpu(struct irq_desc *desc, unsigned int *flags
 			lockdep_hardirq_threaded();
 
 		trace_irq_handler_entry(irq, action);
+		//
 		res = action->handler(irq, action->dev_id);
 		trace_irq_handler_exit(irq, action, res);
 

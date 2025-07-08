@@ -47,7 +47,7 @@ long vfs_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 	if (!filp->f_op->unlocked_ioctl)
 		goto out;
-
+	//打印机：lp_ioctl
 	error = filp->f_op->unlocked_ioctl(filp, cmd, arg);
 	if (error == -ENOIOCTLCMD)
 		error = -ENOTTY;
@@ -850,13 +850,17 @@ static int do_vfs_ioctl(struct file *filp, unsigned int fd,
 
 	default:
 		if (S_ISREG(inode->i_mode))
-			return file_ioctl(filp, cmd, argp);
+			return file_ioctl(filp, cmd, argp);//普通文件
 		break;
 	}
 
 	return -ENOIOCTLCMD;
 }
-
+//ioctl_wangs
+/*
+cmd   2b      14b      8b     8b
+    DIR方向  参数大小  TYPE  NR命令号
+*/
 SYSCALL_DEFINE3(ioctl, unsigned int, fd, unsigned int, cmd, unsigned long, arg)
 {
 	struct fd f = fdget(fd);
@@ -871,7 +875,7 @@ SYSCALL_DEFINE3(ioctl, unsigned int, fd, unsigned int, cmd, unsigned long, arg)
 
 	error = do_vfs_ioctl(f.file, fd, cmd, arg);
 	if (error == -ENOIOCTLCMD)
-		error = vfs_ioctl(f.file, cmd, arg);
+		error = vfs_ioctl(f.file, cmd, arg);//设备驱动
 
 out:
 	fdput(f);

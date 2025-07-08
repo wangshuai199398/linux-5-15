@@ -761,11 +761,11 @@ void signal_wake_up_state(struct task_struct *t, unsigned int state)
 {
 	set_tsk_thread_flag(t, TIF_SIGPENDING);
 	/*
-	 * TASK_WAKEKILL also means wake it up in the stopped/traced/killable
-	 * case. We don't check t->state here because there is a race with it
-	 * executing another processor and just now entering stopped state.
-	 * By using wake_up_state, we ensure the process will wake up and
-	 * handle its death signal.
+	 * TASK_WAKEKILL 也意味着在进程处于 stopped（停止）、traced（被调试）或 killable（可杀死）状态时也要唤醒它。我们这里不检查 t->state是因为
+	 * 存在竞争条件它可能正在另一个处理器上运行，并且正好此时进入 stopped 状态。通过使用 wake_up_state，我们可以确保该进程会被唤醒，并处理其终止信号
+	 * 
+	 * 如果返回 0，说明进程或者线程已经是 TASK_RUNNING 状态了，如果它在另外一个 CPU 上运行，则调用 kick_process 发送一个处理器间中断
+	 * 强制那个进程或者线程重新调度，重新调度完毕后，会返回用户态运行。这是一个时机会检查 TIF_SIGPENDING 标识位
 	 */
 	if (!wake_up_state(t, state | TASK_INTERRUPTIBLE))
 		kick_process(t);
@@ -986,7 +986,7 @@ static inline bool wants_signal(int sig, struct task_struct *p)
 
 	return task_curr(p) || !task_sigpending(p);
 }
-
+//进程有了一个新的信号，找一个线程处理一下
 static void complete_signal(int sig, struct task_struct *p, enum pid_type type)
 {
 	struct signal_struct *signal = p->signal;
@@ -1062,7 +1062,7 @@ static void complete_signal(int sig, struct task_struct *p, enum pid_type type)
 	signal_wake_up(t, sig == SIGKILL);
 	return;
 }
-
+//当信号小于 SIGRTMIN(不可靠信号)，也即 32 的时候，如果我们发现这个信号已经在集合里面了，就直接退出了
 static inline bool legacy_queue(struct sigpending *signals, int sig)
 {
 	return (sig < SIGRTMIN) && sigismember(&signals->signal, sig);
@@ -1112,10 +1112,11 @@ static int __send_signal(int sig, struct kernel_siginfo *info, struct task_struc
 		override_rlimit = (is_si_special(info) || info->si_code >= 0);
 	else
 		override_rlimit = 0;
-
+	//会分配一个 struct sigqueue 对象
 	q = __sigqueue_alloc(sig, t, GFP_ATOMIC, override_rlimit, 0);
 
 	if (q) {
+		//挂在 struct sigpending 里面的链表上
 		list_add_tail(&q->list, &pending->list);
 		switch ((unsigned long) info) {
 		case (unsigned long) SEND_SIG_NOINFO:
@@ -1283,7 +1284,7 @@ __group_send_sig_info(int sig, struct kernel_siginfo *info, struct task_struct *
 {
 	return send_signal(sig, info, p, PIDTYPE_TGID);
 }
-
+//将信号放在相应的 task_struct 的信号数据结构中
 int do_send_sig_info(int sig, struct kernel_siginfo *info, struct task_struct *p,
 			enum pid_type type)
 {
@@ -1585,7 +1586,7 @@ EXPORT_SYMBOL_GPL(kill_pid_usb_asyncio);
 static int kill_something_info(int sig, struct kernel_siginfo *info, pid_t pid)
 {
 	int ret;
-
+	//向 PID 为 1234 的单个进程(线程组) 发送一个信号
 	if (pid > 0)
 		return kill_proc_info(sig, info, pid);
 
@@ -1595,8 +1596,11 @@ static int kill_something_info(int sig, struct kernel_siginfo *info, pid_t pid)
 
 	read_lock(&tasklist_lock);
 	if (pid != -1) {
+		//pid == 0: 给当前进程组发信号, 使用 task_pgrp(current)
+		//pid < 0: 给 PGID 为 -pid 的进程组发信号 → find_vpid(-pid)
 		ret = __kill_pgrp_info(sig, info,
 				pid ? find_vpid(-pid) : task_pgrp(current));
+	//向所有可杀的进程发送信号
 	} else {
 		int retval = 0, count = 0;
 		struct task_struct * p;
@@ -3807,6 +3811,7 @@ static inline void prepare_kill_siginfo(int sig, struct kernel_siginfo *info)
  *  sys_kill - send a signal to a process
  *  @pid: the PID of the process
  *  @sig: signal to be sent
+ *  kill_wangs
  */
 SYSCALL_DEFINE2(kill, pid_t, pid, int, sig)
 {
@@ -3934,7 +3939,7 @@ err:
 	fdput(f);
 	return ret;
 }
-
+//发送给单个线程
 static int
 do_send_specific(pid_t tgid, pid_t pid, int sig, struct kernel_siginfo *info)
 {
@@ -4004,6 +4009,7 @@ SYSCALL_DEFINE3(tgkill, pid_t, tgid, pid_t, pid, int, sig)
  *  @sig: signal to be sent
  *
  *  Send a signal to only one task, even if it's a CLONE_THREAD task.
+ *  发送信号给某个线程
  */
 SYSCALL_DEFINE2(tkill, pid_t, pid, int, sig)
 {
@@ -4028,10 +4034,10 @@ static int do_rt_sigqueueinfo(pid_t pid, int sig, kernel_siginfo_t *info)
 }
 
 /**
- *  sys_rt_sigqueueinfo - send signal information to a signal
- *  @pid: the PID of the thread
- *  @sig: signal to be sent
- *  @uinfo: signal info to be sent
+ *  向指定信号发送信号信息
+ *  @pid: 线程pid
+ *  @sig: 要发送的信号编号
+ *  @uinfo: 要随信号一起发送的信号信息（siginfo_t 类型）
  */
 SYSCALL_DEFINE3(rt_sigqueueinfo, pid_t, pid, int, sig,
 		siginfo_t __user *, uinfo)
@@ -4123,7 +4129,8 @@ void __weak sigaction_compat_abi(struct k_sigaction *act,
 		struct k_sigaction *oact)
 {
 }
-
+//设置 sighand 里的信号处理函数
+//每一个进程的 task_struct 里面，都有一个 sighand 指向 struct sighand_struct，里面是一个数组，下标是信号，里面的内容是信号处理函数
 int do_sigaction(int sig, struct k_sigaction *act, struct k_sigaction *oact)
 {
 	struct task_struct *p = current, *t;

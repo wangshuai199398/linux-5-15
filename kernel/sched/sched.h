@@ -253,6 +253,7 @@ dl_entity_preempt(struct sched_dl_entity *a, struct sched_dl_entity *b)
  */
 struct rt_prio_array {
 	DECLARE_BITMAP(bitmap, MAX_RT_PRIO+1); /* include 1 bit for delimiter */
+	//有100个对应不同优先级的队列
 	struct list_head queue[MAX_RT_PRIO];
 };
 
@@ -533,6 +534,7 @@ struct cfs_rq {
 	unsigned int		idle_h_nr_running; /* SCHED_IDLE */
 
 	u64			exec_clock;
+	//当前队列中所有进程vruntime中的最小值，当新进程加入队列时，会将p->se->vruntime设置为此值从而保证新老进程的公平性
 	u64			min_vruntime;
 #ifdef CONFIG_SCHED_CORE
 	unsigned int		forceidle_seq;
@@ -542,7 +544,7 @@ struct cfs_rq {
 #ifndef CONFIG_64BIT
 	u64			min_vruntime_copy;
 #endif
-
+	//保存就绪任务的红黑树
 	struct rb_root_cached	tasks_timeline;
 
 	/*
@@ -636,6 +638,7 @@ static inline int rt_bandwidth_enabled(void)
 
 /* Real-Time classes' related field in a runqueue: */
 struct rt_rq {
+	//多优先级队列的实现
 	struct rt_prio_array	active;
 	unsigned int		rt_nr_running;
 	unsigned int		rr_nr_running;
@@ -914,11 +917,9 @@ DECLARE_STATIC_KEY_FALSE(sched_uclamp_used);
 #endif /* CONFIG_UCLAMP_TASK */
 
 /*
- * This is the main, per-CPU runqueue data structure.
- *
- * Locking rule: those places that want to lock multiple runqueues
- * (such as the load balancing or the thread migration code), lock
- * acquire operations must be ordered by ascending &runqueue.
+ * 这是每个 CPU 的主运行队列数据结构
+ * 在此 CPU 上所运行的所有进程
+ * 加锁规则：对于那些需要同时锁定多个运行队列的代码（例如负载均衡或线程迁移代码），加锁操作必须按照 &runqueue 地址升序的顺序进行。
  */
 struct rq {
 	/* runqueue lock: */
@@ -955,8 +956,9 @@ struct rq {
 	unsigned int		uclamp_flags;
 #define UCLAMP_FLAG_IDLE 0x01
 #endif
-
+	// CFS 完全公平调度器, 树的每一个节点都是一个 sched_entity, 每个 sched_entity 都属于一个 task_struct
 	struct cfs_rq		cfs;
+	// 实时任务调度器, 调度器首先会先去实时进程队列找是否有实时进程需要运行，如果没有才会去 CFS 运行队列找是否有进程需要运行
 	struct rt_rq		rt;
 	struct dl_rq		dl;
 
@@ -1908,6 +1910,7 @@ static inline void set_task_rq(struct task_struct *p, unsigned int cpu)
 #endif
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
+	//为新进程的调度实体se设置好正确的运行队列
 	set_task_rq_fair(&p->se, p->se.cfs_rq, tg->cfs_rq[cpu]);
 	p->se.cfs_rq = tg->cfs_rq[cpu];
 	p->se.parent = tg->se[cpu];
@@ -1928,7 +1931,7 @@ static inline struct task_group *task_group(struct task_struct *p)
 }
 
 #endif /* CONFIG_CGROUP_SCHED */
-
+//使用选择好的CPU
 static inline void __set_task_cpu(struct task_struct *p, unsigned int cpu)
 {
 	set_task_rq(p, cpu);
@@ -2126,17 +2129,19 @@ struct sched_class {
 #ifdef CONFIG_UCLAMP_TASK
 	int uclamp_enabled;
 #endif
-
+	//向就绪队列中添加一个进程，当某个进程进入可运行状态时，调用这个函数
 	void (*enqueue_task) (struct rq *rq, struct task_struct *p, int flags);
+	//将一个进程从就绪队列中删除
 	void (*dequeue_task) (struct rq *rq, struct task_struct *p, int flags);
 	void (*yield_task)   (struct rq *rq);
 	bool (*yield_to_task)(struct rq *rq, struct task_struct *p);
 
 	void (*check_preempt_curr)(struct rq *rq, struct task_struct *p, int flags);
-
+	//选择接下来要运行的进程
 	struct task_struct *(*pick_next_task)(struct rq *rq);
-
+	//用另一个进程代替当前运行的进程
 	void (*put_prev_task)(struct rq *rq, struct task_struct *p);
+	//
 	void (*set_next_task)(struct rq *rq, struct task_struct *p, bool first);
 
 #ifdef CONFIG_SMP
@@ -2158,7 +2163,7 @@ struct sched_class {
 
 	struct rq *(*find_lock_rq)(struct task_struct *p, struct rq *rq);
 #endif
-
+	//每次周期性时钟到的时候，这个函数被调用，可能触发调度
 	void (*task_tick)(struct rq *rq, struct task_struct *p, int queued);
 	void (*task_fork)(struct task_struct *p);
 	void (*task_dead)(struct task_struct *p);

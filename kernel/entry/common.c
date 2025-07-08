@@ -153,7 +153,7 @@ static void handle_signal_work(struct pt_regs *regs, unsigned long ti_work)
 
 	arch_do_signal_or_restart(regs, ti_work & _TIF_SIGPENDING);
 }
-
+//从系统调用返回还是从中断返回，都会调用 exit_to_usermode_loop
 static unsigned long exit_to_user_mode_loop(struct pt_regs *regs,
 					    unsigned long ti_work)
 {
@@ -164,7 +164,7 @@ static unsigned long exit_to_user_mode_loop(struct pt_regs *regs,
 	while (ti_work & EXIT_TO_USER_MODE_WORK) {
 
 		local_irq_enable_exit_to_user(ti_work);
-
+		//如果被打了 _TIF_NEED_RESCHED, 调用 schedule 进行调度, 会选择一个进程让出 CPU, 做上下文切换
 		if (ti_work & _TIF_NEED_RESCHED)
 			schedule();
 
@@ -173,7 +173,7 @@ static unsigned long exit_to_user_mode_loop(struct pt_regs *regs,
 
 		if (ti_work & _TIF_PATCH_PENDING)
 			klp_update_patch_state(current);
-
+		//设置了信号，处理信号
 		if (ti_work & (_TIF_SIGPENDING | _TIF_NOTIFY_SIGNAL))
 			handle_signal_work(regs, ti_work);
 

@@ -21,6 +21,7 @@ typedef unsigned long sigset_t;
 
 
 #define SIGHUP		 1
+//Ctrl+C
 #define SIGINT		 2
 #define SIGQUIT		 3
 #define SIGILL		 4
@@ -28,11 +29,14 @@ typedef unsigned long sigset_t;
 #define SIGABRT		 6
 #define SIGIOT		 6
 #define SIGBUS		 7
+//除以 0 的指令，CPU 就会产生异常
 #define SIGFPE		 8
 #define SIGKILL		 9
 #define SIGUSR1		10
+//进程访问了非法内存，内存管理模块就会产生异常
 #define SIGSEGV		11
 #define SIGUSR2		12
+//向读端已关闭的管道写数据
 #define SIGPIPE		13
 #define SIGALRM		14
 #define SIGTERM		15
@@ -40,6 +44,7 @@ typedef unsigned long sigset_t;
 #define SIGCHLD		17
 #define SIGCONT		18
 #define SIGSTOP		19
+//Ctrl+Z
 #define SIGTSTP		20
 #define SIGTTIN		21
 #define SIGTTOU		22
@@ -58,7 +63,7 @@ typedef unsigned long sigset_t;
 #define SIGSYS		31
 #define	SIGUNUSED	31
 
-/* These should not be considered constants from userland.  */
+/* These should not be considered constants from userland. 大于 32 的信号称为可靠信号 */
 #define SIGRTMIN	32
 #define SIGRTMAX	_NSIG
 

@@ -378,6 +378,7 @@ void ext4_io_submit(struct ext4_io_submit *io)
 				  REQ_SYNC : 0;
 		io->io_bio->bi_write_hint = io->io_end->inode->i_write_hint;
 		bio_set_op_attrs(io->io_bio, REQ_OP_WRITE, io_op_flags);
+		//向块设备层传输数据
 		submit_bio(io->io_bio);
 	}
 	io->io_bio = NULL;
@@ -410,7 +411,7 @@ static void io_submit_init_bio(struct ext4_io_submit *io,
 	io->io_next_block = bh->b_blocknr;
 	wbc_init_bio(io->io_wbc, bio);
 }
-
+//此时的 bio 还是空的
 static void io_submit_add_bh(struct ext4_io_submit *io,
 			     struct inode *inode,
 			     struct page *pagecache_page,
@@ -425,6 +426,7 @@ submit_and_retry:
 		ext4_io_submit(io);
 	}
 	if (io->io_bio == NULL) {
+		//初始化 bio
 		io_submit_init_bio(io, bh);
 		io->io_bio->bi_write_hint = inode->i_write_hint;
 	}
@@ -561,6 +563,7 @@ int ext4_bio_write_page(struct ext4_io_submit *io,
 	do {
 		if (!buffer_async_write(bh))
 			continue;
+		//
 		io_submit_add_bh(io, inode, page, bounce_page, bh);
 		nr_submitted++;
 	} while ((bh = bh->b_this_page) != head);

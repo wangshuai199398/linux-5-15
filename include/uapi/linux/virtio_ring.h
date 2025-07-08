@@ -94,6 +94,7 @@
 #define VRING_DESC_ALIGN_SIZE 16
 
 /* Virtio ring descriptors: 16 bytes.  These can chain together via "next". */
+//指向分配的内存块，用于存放客户机和 qemu 之间传输的数据
 struct vring_desc {
 	/* Address (guest-physical). */
 	__virtio64 addr;
@@ -104,7 +105,7 @@ struct vring_desc {
 	/* We chain unused descriptors via this, too */
 	__virtio16 next;
 };
-
+//发送端维护的环形队列，指向需要接收端处理的 vring_desc
 struct vring_avail {
 	__virtio16 flags;
 	__virtio16 idx;
@@ -121,7 +122,7 @@ struct vring_used_elem {
 
 typedef struct vring_used_elem __attribute__((aligned(VRING_USED_ALIGN_SIZE)))
 	vring_used_elem_t;
-
+//接收端维护的环形队列，指向自己已经处理过了的 vring_desc
 struct vring_used {
 	__virtio16 flags;
 	__virtio16 idx;

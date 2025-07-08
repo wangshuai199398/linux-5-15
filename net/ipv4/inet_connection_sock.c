@@ -446,11 +446,14 @@ static int inet_csk_wait_for_connect(struct sock *sk, long timeo)
 	 * having to remove and re-insert us on the wait queue.
 	 */
 	for (;;) {
+		//将进程状态设置为 TASK_INTERRUPTIBLE
 		prepare_to_wait_exclusive(sk_sleep(sk), &wait,
 					  TASK_INTERRUPTIBLE);
 		release_sock(sk);
 		if (reqsk_queue_empty(&icsk->icsk_accept_queue))
-			timeo = schedule_timeout(timeo);
+			timeo = schedule_timeout(timeo);//等待的时候让出 CPU
+		//如果再次 CPU 醒来，我们会接着判断 icsk_accept_queue 是否为空，同时也会调用 signal_pending 看有没有信号可以处理。
+		//一旦 icsk_accept_queue 不为空，就从 inet_csk_wait_for_connect 中返回，在队列中取出一个 struct sock 对象赋值给 newsk
 		sched_annotate_sleep();
 		lock_sock(sk);
 		err = 0;
@@ -460,6 +463,7 @@ static int inet_csk_wait_for_connect(struct sock *sk, long timeo)
 		if (sk->sk_state != TCP_LISTEN)
 			break;
 		err = sock_intr_errno(timeo);
+		//
 		if (signal_pending(current))
 			break;
 		err = -EAGAIN;
@@ -492,6 +496,7 @@ struct sock *inet_csk_accept(struct sock *sk, int flags, int *err, bool kern)
 		goto out_err;
 
 	/* Find already established connection */
+	//如果 icsk_accept_queue 为空，则调用 inet_csk_wait_for_connect 进行等待
 	if (reqsk_queue_empty(queue)) {
 		long timeo = sock_rcvtimeo(sk, flags & O_NONBLOCK);
 
@@ -1100,7 +1105,7 @@ int inet_csk_listen_start(struct sock *sk, int backlog)
 	err = inet_ulp_can_listen(sk);
 	if (unlikely(err))
 		return err;
-	//接收队列内核对象的申请和初始化
+	//全连接队列初始化
 	reqsk_queue_alloc(&icsk->icsk_accept_queue);
 
 	sk->sk_ack_backlog = 0;
@@ -1115,6 +1120,7 @@ int inet_csk_listen_start(struct sock *sk, int backlog)
 	inet_sk_state_store(sk, TCP_LISTEN);
 	/* get_port does not return an error code, yet */
 	err = -EADDRINUSE;
+	//再次调用 get_port 判断端口是否冲突
 	if (!sk->sk_prot->get_port(sk, inet->inet_num)) {
 		inet->inet_sport = htons(inet->inet_num);
 

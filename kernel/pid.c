@@ -314,7 +314,7 @@ struct pid *find_pid_ns(int nr, struct pid_namespace *ns)
 	return idr_find(&ns->idr, nr);
 }
 EXPORT_SYMBOL_GPL(find_pid_ns);
-
+//查找内核中 struct pid * 对象
 struct pid *find_vpid(int nr)
 {
 	return find_pid_ns(nr, task_active_pid_ns(current));
@@ -395,7 +395,7 @@ void transfer_pid(struct task_struct *old, struct task_struct *new,
 		new->thread_pid = old->thread_pid;
 	hlist_replace_rcu(&old->pid_links[type], &new->pid_links[type]);
 }
-
+//获取该 PID 对应的 task_struct *（线程）
 struct task_struct *pid_task(struct pid *pid, enum pid_type type)
 {
 	struct task_struct *result = NULL;

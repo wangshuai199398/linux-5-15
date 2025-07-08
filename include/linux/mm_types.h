@@ -77,16 +77,19 @@ struct page {
 	 * avoid collision and false-positive PageTail().
 	 */
 	union {
+		//第一种模式，要用就用一整页。这一整页的内存，或者直接和虚拟地址空间建立映射关系，我们把这种称为匿名页（Anonymous Page）。
+		//或者用于关联一个文件，然后再和虚拟地址空间建立映射关系，这样的文件，我们称为内存映射文件（Memory-mapped File）
 		struct {	/* Page cache and anonymous pages */
 			/**
 			 * @lru: Pageout list, eg. active_list protected by
 			 * lruvec->lru_lock.  Sometimes used as a generic list
-			 * by the page owner.
-			 */
+			 * by the page owner. 
+			 * 这一页应该在一个链表上，例如这个页面被换出，就在换出页的链表中 */
 			struct list_head lru;
 			/* See page-flags.h for PAGE_MAPPING_FLAGS */
+			//用于内存映射，如果是匿名页，最低位为 1；如果是映射文件，最低位为 0
 			struct address_space *mapping;
-			pgoff_t index;		/* Our offset within mapping. */
+			pgoff_t index;		/* 在映射区的偏移量 */
 			/**
 			 * @private: Mapping-private opaque data.
 			 * Usually used for buffer_heads if PagePrivate.
@@ -117,6 +120,10 @@ struct page {
 				atomic_long_t pp_frag_count;
 			};
 		};
+		//第二种模式，仅需分配小块内存
+		//分配称为 slab 的一小块内存,从内存管理模块申请一整块页，然后划分成多个小块的存储池，用复杂的队列来维护这些小块的状态（状态包括：被分配了 / 被放回池子 / 应该被回收）
+		//由于slab allocator 对于队列的维护过于复杂,后来就有了一种不使用队列的分配器 slub allocator
+		//还有一种小块内存的分配器称为 slob，非常简单，主要使用在小型的嵌入式系统
 		struct {	/* slab, slob and slub */
 			union {
 				struct list_head slab_list;
@@ -133,9 +140,11 @@ struct page {
 			};
 			struct kmem_cache *slab_cache; /* not slob */
 			/* Double-word boundary */
+			//池子中的空闲对象
 			void *freelist;		/* first free object */
 			union {
-				void *s_mem;	/* slab: first object */
+				/* 已经分配了正在使用的 slab 的第一个对象 */
+				void *s_mem;
 				unsigned long counters;		/* SLUB */
 				struct {			/* SLUB */
 					unsigned inuse:16;
@@ -144,6 +153,7 @@ struct page {
 				};
 			};
 		};
+		//compound 相关的变量用于复合页（Compound Page），就是将物理上连续的两个或多个页看成一个独立的大页
 		struct {	/* Tail pages of compound page */
 			unsigned long compound_head;	/* Bit zero is set, head 页时，值为 0（或未设置）tail 页时，值为指向 head 页的地址 + 1 */
 
@@ -189,7 +199,7 @@ struct page {
 			 */
 		};
 
-		/** @rcu_head: You can use this to free a page by RCU. */
+		/** @rcu_head: You can use this to free a page by RCU. 需要释放的列表 */
 		struct rcu_head rcu_head;
 	};
 
@@ -197,7 +207,7 @@ struct page {
 		/*
 		 * If the page can be mapped to userspace, encodes the number
 		 * of times this page is referenced by a page table.
-		 */
+		 * 每个进程都有自己的页表，这里指有多少个页表项指向了这个页  */
 		atomic_t _mapcount;
 
 		/*
@@ -320,13 +330,14 @@ struct vm_userfaultfd_ctx {};
  */
 struct vm_area_struct {
 	/* The first cache line has the info for VMA tree walking. */
-
+	//vm_start 和 vm_end 指定了该区域在用户空间中的起始和结束地址
 	unsigned long vm_start;		/* 开始地址 within vm_mm. */
 	unsigned long vm_end;		/* The first byte after our end address within vm_mm. */
 
 	/* linked list of VM areas per task, sorted by address */
+	//vm_next 和 vm_prev 将这个区域串在链表上
 	struct vm_area_struct *vm_next, *vm_prev;
-
+	//vm_rb 将这个区域放在红黑树上
 	struct rb_node vm_rb;
 
 	/*
@@ -363,16 +374,17 @@ struct vm_area_struct {
 	 * can only be in the i_mmap tree.  An anonymous MAP_PRIVATE, stack
 	 * or brk vma (with NULL file) can only be in an anon_vma list.
 	 */
-	struct list_head anon_vma_chain; /* Serialized by mmap_lock &
-					  * page_table_lock */
+	struct list_head anon_vma_chain; /* Serialized by mmap_lock & * page_table_lock */
+	//虚拟内存区域可以映射到物理内存，也可以映射到文件，映射到物理内存的时候称为匿名映射，anon_vma 中，anoy 就是 anonymous
 	struct anon_vma *anon_vma;	/* Serialized by page_table_lock */
 
 	/* Function pointers to deal with this struct. */
+	//对这个内存区域可以做的操作的定义
 	const struct vm_operations_struct *vm_ops;
 
 	/* Information about our backing store: */
-	unsigned long vm_pgoff;		/* Offset (within vm_file) in PAGE_SIZE
-					   units */
+	unsigned long vm_pgoff;		/* Offset (within vm_file) in PAGE_SIZE units */
+	//映射到文件就需要有 vm_file 指定被映射的文件
 	struct file * vm_file;		/* File we map to (can be NULL). */
 	struct file *vm_prfile;		/* shadow of vm_file */
 	void * vm_private_data;		/* was vm_pte (shared mem) */
@@ -403,6 +415,7 @@ struct core_state {
 struct kioctx_table;
 struct mm_struct {
 	struct {
+		//已经被分配出去的地址范围列表 双向链表+红黑树来管理vma
 		struct vm_area_struct *mmap;		/* list of VMAs */
 		struct rb_root mm_rb;
 		u64 vmacache_seqnum;                   /* per-thread vmacache */
@@ -411,6 +424,8 @@ struct mm_struct {
 				unsigned long addr, unsigned long len,
 				unsigned long pgoff, unsigned long flags);
 #endif
+		/* 虚拟地址空间中用于内存映射的起始地址, 一般情况下，这个空间是从高地址到低地址增长的。前面咱们讲 malloc 申请一大块内存的时候，
+		   就是通过 mmap 在这里映射一块区域到物理内存。咱们加载动态链接库 so 文件，也是在这个区域里面，映射一块区域到 so 文件 */
 		unsigned long mmap_base;	/* base of mmap area */
 		unsigned long mmap_legacy_base;	/* base of mmap area in bottom-up allocations */
 #ifdef CONFIG_HAVE_ARCH_COMPAT_MMAP_BASES
@@ -418,8 +433,10 @@ struct mm_struct {
 		unsigned long mmap_compat_base;
 		unsigned long mmap_compat_legacy_base;
 #endif
+		//用户态地址空间和内核态地址空间的分界线
 		unsigned long task_size;	/* size of task vm space */
 		unsigned long highest_vm_end;	/* highest vma end address */
+		//用于全局页目录项
 		pgd_t * pgd;
 
 #ifdef CONFIG_MEMBARRIER
@@ -483,12 +500,17 @@ struct mm_struct {
 
 		unsigned long hiwater_rss; /* High-watermark of RSS usage */
 		unsigned long hiwater_vm;  /* High-water virtual memory usage */
-
+		//总共映射的页的数目
 		unsigned long total_vm;	   /* Total pages mapped */
+		//被锁定不能换出
 		unsigned long locked_vm;   /* Pages that have PG_mlocked set */
+		//不能换出，也不能移动
 		atomic64_t    pinned_vm;   /* Refcount permanently increased */
+		//存放数据的页的数目
 		unsigned long data_vm;	   /* VM_WRITE & ~VM_SHARED & ~VM_STACK */
+		//存放可执行文件的页的数目
 		unsigned long exec_vm;	   /* VM_EXEC & ~VM_WRITE & ~VM_STACK */
+		//栈所占的页的数目
 		unsigned long stack_vm;	   /* VM_STACK */
 		unsigned long def_flags;
 
@@ -500,10 +522,11 @@ struct mm_struct {
 		seqcount_t write_protect_seq;
 
 		spinlock_t arg_lock; /* protect the below fields */
-		//代码段的开始与结尾、数据段的区域
+		//start_code 和 end_code 表示可执行代码的开始和结束位置，start_data 和 end_data 表示已初始化数据的开始位置和结束位置
 		unsigned long start_code, end_code, start_data, end_data;
-		//start_brk到brk中间是堆内存的位置，start_stack是用户态栈的起始位置
+		//start_brk 是堆的起始位置，brk 是堆当前的结束位置，start_stack是用户态栈的起始位置,栈的结束位置在寄存器的栈顶指针中
 		unsigned long start_brk, brk, start_stack;
+		//arg_start 和 arg_end 是参数列表的位置, env_start 和 env_end 是环境变量的位置
 		unsigned long arg_start, arg_end, env_start, env_end;
 
 		unsigned long saved_auxv[AT_VECTOR_SIZE]; /* for /proc/PID/auxv */

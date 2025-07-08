@@ -1810,8 +1810,10 @@ unlock:
  *
  * vma, vmf, and fault_type are only supplied by shmem_fault:
  * otherwise they are NULL.
+ * 在 page cache 和 swap 中找一个空闲页，如果找不到就通过 shmem_alloc_and_acct_page 分配一个新的页，他最终会调用内存管理系统的 alloc_page_vma 在物理内存中分配一个页
+ * 至此，共享内存才真的映射到了虚拟地址空间中，进程可以像访问本地内存一样访问共享内存
  */
-static int shmem_getpage_gfp(struct inode *inode, pgoff_t index,
+static int 	shmem_getpage_gfp(struct inode *inode, pgoff_t index,
 	struct page **pagep, enum sgp_type sgp, gfp_t gfp,
 	struct vm_area_struct *vma, struct vm_fault *vmf,
 			vm_fault_t *fault_type)
@@ -1837,7 +1839,7 @@ repeat:
 
 	sbinfo = SHMEM_SB(inode->i_sb);
 	charge_mm = vma ? vma->vm_mm : NULL;
-
+	//
 	page = pagecache_get_page(mapping, index,
 					FGP_ENTRY | FGP_HEAD | FGP_LOCK, 0);
 
@@ -2114,7 +2116,7 @@ static vm_fault_t shmem_fault(struct vm_fault *vmf)
 		}
 		spin_unlock(&inode->i_lock);
 	}
-
+	//
 	err = shmem_getpage_gfp(inode, vmf->pgoff, &vmf->page, SGP_CACHE,
 				  gfp, vma, vmf, &ret);
 	if (err)
@@ -2267,6 +2269,7 @@ static int shmem_mmap(struct file *file, struct vm_area_struct *vma)
 		return ret;
 
 	file_accessed(file);
+	//vma 的 vm_ops 指向 shmem_vm_ops
 	vma->vm_ops = &shmem_vm_ops;
 	if (IS_ENABLED(CONFIG_TRANSPARENT_HUGEPAGE) &&
 			((vma->vm_start + ~HPAGE_PMD_MASK) & HPAGE_PMD_MASK) <
@@ -3941,7 +3944,7 @@ int shmem_init_fs_context(struct fs_context *fc)
 	fc->ops = &shmem_fs_context_ops;
 	return 0;
 }
-
+//共享内存文件系统
 static struct file_system_type shmem_fs_type = {
 	.owner		= THIS_MODULE,
 	.name		= "tmpfs",
@@ -4113,7 +4116,7 @@ EXPORT_SYMBOL_GPL(shmem_truncate_range);
 #endif /* CONFIG_SHMEM */
 
 /* common code */
-
+//建新的shmem文件对应的dentry和inode，并将它们两个关联起来，然后分配一个struct file结构，来表示新的shmem文件，并且指向独特的shmem_file_operations
 static struct file *__shmem_file_setup(struct vfsmount *mnt, const char *name, loff_t size,
 				       unsigned long flags, unsigned int i_flags)
 {

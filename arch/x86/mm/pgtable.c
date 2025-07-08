@@ -120,6 +120,7 @@ struct mm_struct *pgd_page_get_mm(struct page *page)
 	return page->pt_mm;
 }
 
+//拷贝了对于 swapper_pg_dir 的引用。swapper_pg_dir 是内核页表的最顶级的全局页目录
 static void pgd_ctor(struct mm_struct *mm, pgd_t *pgd)
 {
 	/* If the pgd points to a shared pagetable level (either the

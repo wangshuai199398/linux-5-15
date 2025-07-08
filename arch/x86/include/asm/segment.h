@@ -203,6 +203,7 @@
  *
  * Note, selectors also need to have a correct RPL,
  * expressed with the +3 value for user-space selectors:
+ * 段选择子，指向段描述符表项 GDT_ENTRY_INIT
  */
 #define __KERNEL32_CS			(GDT_ENTRY_KERNEL32_CS*8)
 #define __KERNEL_CS			(GDT_ENTRY_KERNEL_CS*8)

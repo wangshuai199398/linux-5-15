@@ -1206,6 +1206,7 @@ retry_grab:
 	unlock_page(page);
 
 retry_journal:
+	//日志相关的工作
 	handle = ext4_journal_start(inode, EXT4_HT_WRITE_PAGE, needed_blocks);
 	if (IS_ERR(handle)) {
 		put_page(page);
@@ -1302,6 +1303,7 @@ static int write_end_fn(handle_t *handle, struct inode *inode,
  *
  * ext4 never places buffers on inode->i_mapping->private_list.  metadata
  * buffers are managed internally.
+ * 其实所谓的完成写入，并没有真正写入硬盘，仅仅是写入缓存后，标记为脏页
  */
 static int ext4_write_end(struct file *file,
 			  struct address_space *mapping,
@@ -1320,7 +1322,7 @@ static int ext4_write_end(struct file *file,
 	if (ext4_has_inline_data(inode) &&
 	    ext4_test_inode_state(inode, EXT4_STATE_MAY_INLINE_DATA))
 		return ext4_write_inline_data_end(inode, pos, len, copied, page);
-
+	//将修改过的缓存标记为脏页
 	copied = block_write_end(file, mapping, pos, len, copied, page, fsdata);
 	/*
 	 * it's important to update i_size while still holding page lock:
@@ -1351,7 +1353,7 @@ static int ext4_write_end(struct file *file,
 		 * inode->i_size. So truncate them
 		 */
 		ext4_orphan_add(handle, inode);
-
+	//完成日志的写入
 	ret2 = ext4_journal_stop(handle);
 	if (!ret)
 		ret = ret2;
@@ -2109,7 +2111,7 @@ static int mpage_submit_page(struct mpage_da_data *mpd, struct page *page)
 		len = size & ~PAGE_MASK;
 	else
 		len = PAGE_SIZE;
-	err = ext4_bio_write_page(&mpd->io_submit, page, len, false);
+	err = ext4_bio_write_page(&mpd->io_submit, page, len, false);//
 	if (!err)
 		mpd->wbc->nr_to_write--;
 	mpd->first_page++;
@@ -2223,7 +2225,7 @@ static int mpage_process_page_bufs(struct mpage_da_data *mpd,
 	} while (lblk++, (bh = bh->b_this_page) != head);
 	/* So far everything mapped? Submit the page for IO. */
 	if (mpd->map.m_len == 0) {
-		err = mpage_submit_page(mpd, head->b_page);
+		err = mpage_submit_page(mpd, head->b_page);//
 		if (err < 0)
 			return err;
 	}
@@ -2651,7 +2653,7 @@ static int mpage_prepare_extent_to_map(struct mpage_da_data *mpd)
 			lblk = ((ext4_lblk_t)page->index) <<
 				(PAGE_SHIFT - blkbits);
 			head = page_buffers(page);
-			err = mpage_process_page_bufs(mpd, head, head, lblk);
+			err = mpage_process_page_bufs(mpd, head, head, lblk);//
 			if (err <= 0)
 				goto out;
 			err = 0;
@@ -2779,10 +2781,11 @@ retry:
 		ret = -ENOMEM;
 		goto unplug;
 	}
+	//初始化这个 struct mpage_da_data 结构
 	ret = mpage_prepare_extent_to_map(&mpd);
 	/* Unlock pages we didn't use */
 	mpage_release_unused_pages(&mpd, false);
-	/* Submit prepared bio */
+	/* Submit prepared bio 提交 I/O */
 	ext4_io_submit(&mpd.io_submit);
 	ext4_put_io_end_defer(mpd.io_submit.io_end);
 	mpd.io_submit.io_end = NULL;
@@ -2988,6 +2991,7 @@ static int ext4_da_write_begin(struct file *file, struct address_space *mapping,
 	}
 
 retry:
+	//得到应该写入的缓存页
 	page = grab_cache_page_write_begin(mapping, index, flags);
 	if (!page)
 		return -ENOMEM;

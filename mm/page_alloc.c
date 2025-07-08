@@ -970,6 +970,7 @@ static inline void add_to_free_list(struct page *page, struct zone *zone,
 	struct free_area *area = &zone->free_area[order];
 
 	list_add(&page->lru, &area->free_list[migratetype]);
+	//计数加 1
 	area->nr_free++;
 }
 
@@ -1056,7 +1057,7 @@ buddy_merge_likely(unsigned long pfn, unsigned long buddy_pfn,
  * If a block is freed, and its buddy is also free, then this
  * triggers coalescing into a block of larger size.
  *
- * -- nyc
+ * 将页面放到zone的free_area数组中的对应位置上
  */
 
 static inline void __free_one_page(struct page *page,
@@ -2296,6 +2297,7 @@ static inline void expand(struct zone *zone, struct page *page,
 	unsigned long size = 1 << high;
 
 	while (high > low) {
+		//high--会获取伙伴系统那个表里面的前一项, 前一项里面的页块大小是当前项的页块大小除以 2,size 右移一位也就是除以 2
 		high--;
 		size >>= 1;
 		VM_BUG_ON_PAGE(bad_range(zone, &page[size]), &page[size]);
@@ -2308,7 +2310,7 @@ static inline void expand(struct zone *zone, struct page *page,
 		 */
 		if (set_page_guard(zone, &page[size], high, migratetype))
 			continue;
-
+		//加到链表上
 		add_to_free_list(&page[size], zone, high, migratetype);
 		set_buddy_order(&page[size], high);
 	}
@@ -2447,6 +2449,9 @@ static void prep_new_page(struct page *page, unsigned int order, gfp_t gfp_flags
 /*
  * Go through the free lists for the given migratetype and remove
  * the smallest available page from the freelists
+ * 从当前的 order，也即指数开始，在伙伴系统的 free_area 找 2^order 大小的页块。如果链表的第一个不为空，就找到了；如果为空，就到更大的 order 的页块链表里面去找
+ * 找到以后，除了将页块从链表中取下来，我们还要把多余部分放到其他页块链表里面。expand 就是干这个事情的
+ * 
  */
 static __always_inline
 struct page *__rmqueue_smallest(struct zone *zone, unsigned int order,
@@ -4073,8 +4078,8 @@ static inline unsigned int gfp_to_alloc_flags_cma(gfp_t gfp_mask,
 }
 
 /*
- * get_page_from_freelist goes through the zonelist trying to allocate
- * a page.
+ * get_page_from_freelist goes through the zonelist trying to allocate a page.
+ * 每一个 zone，都有伙伴系统维护的各种大小的队列
  */
 static struct page *
 get_page_from_freelist(gfp_t gfp_mask, unsigned int order, int alloc_flags,
@@ -4170,7 +4175,7 @@ retry:
 			if (!node_reclaim_enabled() ||
 			    !zone_allows_reclaim(ac->preferred_zoneref->zone, zone))
 				continue;
-
+			//尝试回收当前节点上的内存页，如果回收匿名页，并且允许换出，就会触发 swap out，将页面写入交换空间
 			ret = node_reclaim(zone->zone_pgdat, gfp_mask, order);
 			switch (ret) {
 			case NODE_RECLAIM_NOSCAN:
@@ -4190,6 +4195,7 @@ retry:
 		}
 
 try_this_zone:
+		//找到合适大小的那个队列，把页面取下来
 		page = rmqueue(ac->preferred_zoneref->zone, zone, order,
 				gfp_mask, alloc_flags, ac->migratetype);
 		if (page) {
@@ -5426,7 +5432,7 @@ failed:
 EXPORT_SYMBOL_GPL(__alloc_pages_bulk);
 
 /*
- * This is the 'heart' of the zoned buddy allocator.
+ * 这是zone伙伴分配器的核心部分
  */
 struct page *__alloc_pages(gfp_t gfp, unsigned int order, int preferred_nid,
 							nodemask_t *nodemask)
@@ -5465,7 +5471,7 @@ struct page *__alloc_pages(gfp_t gfp, unsigned int order, int preferred_nid,
 	 */
 	alloc_flags |= alloc_flags_nofragment(ac.preferred_zoneref->zone, gfp);
 
-	/* First allocation attempt */
+	/* 在一个循环中先看当前节点的 zone。如果找不到空闲页，则再看备用节点的 zone */
 	page = get_page_from_freelist(alloc_gfp, order, alloc_flags, &ac);
 	if (likely(page))
 		goto out;

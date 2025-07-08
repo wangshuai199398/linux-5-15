@@ -122,6 +122,9 @@
 
 /* The inetsw table contains everything that inet_create needs to
  * build a new socket.
+ * 协议类型链表, 每个类型会包含多个 protocol
+ * 所有类型定义inetsw_array
+ * inet_register_protosw将协议注册到每个类型, 协议类型是inet_protosw
  */
 static struct list_head inetsw[SOCK_MAX];
 static DEFINE_SPINLOCK(inetsw_lock);
@@ -266,6 +269,7 @@ static int inet_create(struct net *net, struct socket *sock, int protocol,
 lookup_protocol:
 	err = -ESOCKTNOSUPPORT;
 	rcu_read_lock();
+	//根据用户指定的 family-type-protocol 在 inetsw 数组中，遍历对应type的链表找到protocol协议的inet_protosw对象
 	list_for_each_entry_rcu(answer, &inetsw[sock->type], list) {
 
 		err = 0;
@@ -311,7 +315,7 @@ lookup_protocol:
 	if (sock->type == SOCK_RAW && !kern &&
 	    !ns_capable(net->user_ns, CAP_NET_RAW))
 		goto out_rcu_unlock;
-	// inet_stream_ops
+	// IPPROTO_TCP -> inet_stream_ops
 	sock->ops = answer->ops;
 	// tcp_prot
 	answer_prot = answer->prot;
@@ -532,6 +536,8 @@ int __inet_bind(struct sock *sk, struct sockaddr *uaddr, int addr_len,
 	/* Make sure we are allowed to bind here. */
 	if (snum || !(inet->bind_address_no_port ||
 		      (flags & BIND_FORCE_ADDRESS_NO_PORT))) {
+		// inet_csk_get_port 检查端口是否冲突，是否可以绑定
+		// 如果允许，则会设置 struct inet_sock 的本方的地址 inet_saddr 和本方的端口 inet_sport
 		if (sk->sk_prot->get_port(sk, snum)) {
 			inet->inet_saddr = inet->inet_rcv_saddr = 0;
 			err = -EADDRINUSE;
@@ -551,6 +557,7 @@ int __inet_bind(struct sock *sk, struct sockaddr *uaddr, int addr_len,
 	if (snum)
 		sk->sk_userlocks |= SOCK_BINDPORT_LOCK;
 	inet->inet_sport = htons(inet->inet_num);
+	//对方的地址 inet_daddr 和对方的端口 inet_dport 都初始化为 0
 	inet->inet_daddr = 0;
 	inet->inet_dport = 0;
 	sk_dst_reset(sk);
@@ -698,6 +705,7 @@ int __inet_stream_connect(struct socket *sock, struct sockaddr *uaddr,
 				tcp_sk(sk)->fastopen_req->data ? 1 : 0;
 
 		/* Error code is set above */
+		//这里会一直等待客户端收到服务端的 ACK。而我们知道，服务端在 accept 之后，也是在等待中
 		if (!timeo || !inet_wait_for_connect(sk, timeo, writebias))
 			goto out;
 
@@ -753,7 +761,7 @@ int inet_accept(struct socket *sock, struct socket *newsock, int flags,
 	struct sock *sk1 = sock->sk, *sk2;
 	int err = -EINVAL;
 
-	/* IPV6_ADDRFORM can change sk->sk_prot under us. */
+	/* IPV6_ADDRFORM can change sk->sk_prot under us. inet_csk_accept */
 	sk2 = READ_ONCE(sk1->sk_prot)->accept(sk1, flags, &err, kern);
 	if (!sk2)
 		goto do_err;
@@ -1945,13 +1953,13 @@ static int __init ipv4_offload_init(void)
 }
 
 fs_initcall(ipv4_offload_init);
-
+//ip_wangs
 static struct packet_type ip_packet_type __read_mostly = {
 	.type = cpu_to_be16(ETH_P_IP),
 	.func = ip_rcv,
 	.list_func = ip_list_rcv,
 };
-
+//注册协议
 static int __init inet_init(void)
 {
 	struct inet_protosw *q;
@@ -1980,9 +1988,7 @@ static int __init inet_init(void)
 	if (rc)
 		goto out_unregister_raw_proto;
 
-	/*
-	 *	Tell SOCKET that we are alive...
-	 */
+	/* Tell SOCKET that we are alive... */
 
 	(void)sock_register(&inet_family_ops);
 
@@ -1990,10 +1996,7 @@ static int __init inet_init(void)
 	ip_static_sysctl_init();
 #endif
 
-	/*
-	 *	Add all the base protocols.
-	 */
-
+	/* Add all the base protocols */
 	if (inet_add_protocol(&icmp_protocol, IPPROTO_ICMP) < 0)
 		pr_crit("%s: Cannot add ICMP protocol\n", __func__);
 	pr_err("%s: inet_add_protocol icmp_protocol to inet_protos\n", __func__);
@@ -2015,16 +2018,10 @@ static int __init inet_init(void)
 	for (q = inetsw_array; q < &inetsw_array[INETSW_ARRAY_LEN]; ++q)
 		inet_register_protosw(q);
 
-	/*
-	 *	Set the ARP module up
-	 */
-
+	/* Set the ARP module up */
 	arp_init();
 
-	/*
-	 *	Set the IP module up
-	 */
-
+	/* Set the IP module up */
 	ip_init();
 
 	/* Initialise per-cpu ipv4 mibs */
@@ -2044,16 +2041,12 @@ static int __init inet_init(void)
 
 	ping_init();
 
-	/*
-	 *	Set the ICMP layer up
-	 */
+	/*	Set the ICMP layer up */
 
 	if (icmp_init() < 0)
 		panic("Failed to create the ICMP control socket.\n");
 
-	/*
-	 *	Initialise the multicast router
-	 */
+	/*	Initialise the multicast router */
 #if defined(CONFIG_IP_MROUTE)
 	if (ip_mr_init())
 		pr_crit("%s: Cannot init ipv4 mroute\n", __func__);

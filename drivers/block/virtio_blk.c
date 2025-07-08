@@ -328,6 +328,7 @@ static blk_status_t virtio_queue_rq(struct blk_mq_hw_ctx *hctx,
 	}
 
 	spin_lock_irqsave(&vblk->vqs[qid].lock, flags);
+	//将请求写入的数据放入 struct virtqueue
 	err = virtblk_add_req(vblk->vqs[qid].vq, vbr, vbr->sg_table.sgl, num);
 	if (err) {
 		virtqueue_kick(vblk->vqs[qid].vq);
@@ -535,7 +536,8 @@ static void virtblk_config_changed(struct virtio_device *vdev)
 
 	queue_work(virtblk_wq, &vblk->config_work);
 }
-
+//virtqueue 是一个介于客户机前端和 qemu 后端的一个结构，用于在这两端之间传递数据。
+//这里建立的 struct virtqueue 是客户机前端对于队列的管理的数据结构，在客户机的 linux 内核中通过 kmalloc_array 进行分配
 static int init_vq(struct virtio_blk *vblk)
 {
 	int err;
@@ -573,7 +575,8 @@ static int init_vq(struct virtio_blk *vblk)
 		names[i] = vblk->vqs[i].name;
 	}
 
-	/* Discover virtqueues and write information to configuration.  */
+	/* Discover virtqueues and write information to configuration. */
+	//callback 函数指定为 virtblk_done。当 buffer 使用发生变化的时候，我们需要调用这个 callback 函数进行通知
 	err = virtio_find_vqs(vdev, num_vqs, vqs, callbacks, names, &desc);
 	if (err)
 		goto out;
@@ -785,7 +788,7 @@ static int virtblk_probe(struct virtio_device *vdev)
 	vblk->sg_elems = sg_elems;
 
 	INIT_WORK(&vblk->config_work, virtblk_config_changed_work);
-
+	//初始化 virtqueue
 	err = init_vq(vblk);
 	if (err)
 		goto out_free_vblk;
@@ -1058,21 +1061,21 @@ static struct virtio_driver virtio_blk = {
 	.restore			= virtblk_restore,
 #endif
 };
-
+//virtio_wangs
 static int __init init(void)
 {
 	int error;
-
+	//创建工作队列
 	virtblk_wq = alloc_workqueue("virtio-blk", 0, 0);
 	if (!virtblk_wq)
 		return -ENOMEM;
-
+	//注册块设备, 得到主设备号
 	major = register_blkdev(0, "virtblk");
 	if (major < 0) {
 		error = major;
 		goto out_destroy_workqueue;
 	}
-
+	//注册驱动 -> virtblk_probe
 	error = register_virtio_driver(&virtio_blk);
 	if (error)
 		goto out_unregister_blkdev;

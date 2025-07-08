@@ -1016,6 +1016,7 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 	context_tracking_init();
 	/* init some links before init_ISA_irqs() */
 	early_irq_init();
+	//初始化32之后的设备中断
 	init_IRQ();
 	tick_init();
 	rcu_init_nohz();

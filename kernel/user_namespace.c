@@ -77,12 +77,9 @@ static unsigned long enforced_nproc_rlimit(void)
 }
 
 /*
- * Create a new user namespace, deriving the creator from the user in the
- * passed credentials, and replacing that user with the new root user for the
- * new namespace.
+ * 创建一个新的用户命名空间，从传入凭据中的用户派生出创建者，并用新命名空间中的 root 用户替换原有用户
  *
- * This is called by copy_creds(), which will finish setting the target task's
- * credentials.
+ * 这个函数由 copy_creds 调用，后者将完成目标任务的凭据设置
  */
 int create_user_ns(struct cred *new)
 {

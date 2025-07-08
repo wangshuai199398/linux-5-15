@@ -1282,7 +1282,7 @@ static void wake_up_and_wait_for_irq_thread_ready(struct irq_desc *desc,
 {
 	if (!action || !action->thread)
 		return;
-
+	//唤醒线程
 	wake_up_process(action->thread);
 	wait_event(desc->wait_for_threads,
 		   test_bit(IRQTF_READY, &action->thread_flags));
@@ -1551,8 +1551,8 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 
 	/*
 	 * Create a handler thread when a thread function is supplied
-	 * and the interrupt does not nest into another interrupt
-	 * thread.
+	 * and the interrupt does not nest into another interrupt thread.
+	 * 如果设定了以单独的线程运行中断处理函数就创建这个内核线程
 	 */
 	if (new->thread_fn && !nested) {
 		ret = setup_irq_thread(new, irq, false);
@@ -1608,6 +1608,7 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 	 * protected against a concurrent interrupt and any of the other
 	 * management calls which are not serialized via
 	 * desc->request_mutex or the optional bus lock.
+	 * 如果 struct irq_desc 里面已经有 struct irqaction 了，就将新的 struct irqaction 挂在链表的末端
 	 */
 	raw_spin_lock_irqsave(&desc->lock, flags);
 	old_ptr = &desc->action;
@@ -2102,46 +2103,33 @@ const void *free_nmi(unsigned int irq, void *dev_id)
 }
 
 /**
- *	request_threaded_irq - allocate an interrupt line
- *	@irq: Interrupt line to allocate
- *	@handler: Function to be called when the IRQ occurs.
- *		  Primary handler for threaded interrupts.
- *		  If handler is NULL and thread_fn != NULL
- *		  the default primary handler is installed.
- *	@thread_fn: Function called from the irq handler thread
- *		    If NULL, no irq thread is created
- *	@irqflags: Interrupt type flags
- *	@devname: An ascii name for the claiming device
- *	@dev_id: A cookie passed back to the handler function
+ *	分配一个中断
+ *	@irq:       要分配的中断编号
+ *	@handler:   中断发生时被调用的函数。用于线程化中断的主处理函数。如果 handler 为 NULL 且 thread_fn 不为 NULL，则会安装默认的主处理函数。
+ *	@thread_fn: 从中断处理线程中调用的函数。如果为 NULL，则不会创建中断线程。
+ *	@irqflags:  中断类型标志
+ *	@devname:   声明设备用的 ASCII 名称
+ *	@dev_id:    传递给处理函数的私有数据指针（cookie）
  *
- *	This call allocates interrupt resources and enables the
- *	interrupt line and IRQ handling. From the point this
- *	call is made your handler function may be invoked. Since
- *	your handler function must clear any interrupt the board
- *	raises, you must take care both to initialise your hardware
- *	and to set up the interrupt handler in the right order.
+ *	此函数用于分配中断资源并启用中断与中断处理。从调用该函数开始，你的中断处理函数可能会被调用。
+ *  由于处理函数必须清除设备产生的中断，你必须确保先初始化好硬件，再设置中断处理函数，两者的顺序非常重要。
  *
- *	If you want to set up a threaded irq handler for your device
- *	then you need to supply @handler and @thread_fn. @handler is
- *	still called in hard interrupt context and has to check
- *	whether the interrupt originates from the device. If yes it
- *	needs to disable the interrupt on the device and return
- *	IRQ_WAKE_THREAD which will wake up the handler thread and run
- *	@thread_fn. This split handler design is necessary to support
- *	shared interrupts.
+ *	如果你希望为设备设置线程化的中断处理程序，需要同时提供 @handler 和 @thread_fn。
+ *	  @handler 仍然在硬中断上下文中被调用，必须检查中断是否来自该设备
+ *	  如果是，必须关闭设备上的中断，并返回 IRQ_WAKE_THREAD，这会唤醒中断线程并执行 @thread_fn。
+ *  这种主处理器和线程函数分离的设计是为了支持共享中断
+ *	
+ *  dev_id 必须是全局唯一的。通常使用设备数据结构的地址作为这个 cookie。因为这个值会传递给处理函数，所以这样做是合理的。
  *
- *	Dev_id must be globally unique. Normally the address of the
- *	device data structure is used as the cookie. Since the handler
- *	receives this value it makes sense to use it.
+ *	如果你的中断是共享的，必须传入非 NULL 的 dev_id，这是在释放中断时所必需的
  *
- *	If your interrupt is shared you must pass a non NULL dev_id
- *	as this is required when freeing the interrupt.
+ *	标志说明（Flags）：
  *
- *	Flags:
- *
- *	IRQF_SHARED		Interrupt is shared
- *	IRQF_TRIGGER_*		Specify active edge(s) or level
- *	IRQF_ONESHOT		Run thread_fn with interrupt line masked
+ *	IRQF_SHARED		中断是共享的
+ *	IRQF_TRIGGER_*	指定中断的触发边沿或电平（上升沿、下降沿、低电平、高电平等）
+ *	IRQF_ONESHOT	在 thread_fn 执行期间屏蔽中断线
+
+ * 根据中断信号 irq，找到基数树上对应的 irq_desc，然后将新的 irqaction 挂在链表上
  */
 int request_threaded_irq(unsigned int irq, irq_handler_t handler,
 			 irq_handler_t thread_fn, unsigned long irqflags,
@@ -2172,7 +2160,7 @@ int request_threaded_irq(unsigned int irq, irq_handler_t handler,
 	    (!(irqflags & IRQF_SHARED) && (irqflags & IRQF_COND_SUSPEND)) ||
 	    ((irqflags & IRQF_NO_SUSPEND) && (irqflags & IRQF_COND_SUSPEND)))
 		return -EINVAL;
-
+	//根据中断信号查找中断描述结构
 	desc = irq_to_desc(irq);
 	if (!desc)
 		return -EINVAL;
@@ -2186,7 +2174,7 @@ int request_threaded_irq(unsigned int irq, irq_handler_t handler,
 			return -EINVAL;
 		handler = irq_default_primary_handler;
 	}
-
+	//分配irqaction并初始化
 	action = kzalloc(sizeof(struct irqaction), GFP_KERNEL);
 	if (!action)
 		return -ENOMEM;
@@ -2202,7 +2190,7 @@ int request_threaded_irq(unsigned int irq, irq_handler_t handler,
 		kfree(action);
 		return retval;
 	}
-
+	//设置中断
 	retval = __setup_irq(irq, desc, action);
 
 	if (retval) {

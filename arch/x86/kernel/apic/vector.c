@@ -254,7 +254,9 @@ assign_vector_locked(struct irq_data *irqd, const struct cpumask *dest)
 
 	return 0;
 }
-
+//将虚拟中断信号 irq 分配到某个 CPU 上的中断向量
+//一旦找到某个向量，就将 CPU 的此向量对应的中断向量描述结构 irq_desc，设置为虚拟中断信号 irq 对应的向量描述结构 irq_to_desc(irq)
+//这样 do_IRQ 会根据中断向量 vector 得到对应的 irq_desc，然后调用 handle_irq。handle_irq 会调用 generic_handle_irq_desc，里面调用 irq_desc 的 handle_irq
 static int assign_irq_vector(struct irq_data *irqd, const struct cpumask *dest)
 {
 	unsigned long flags;

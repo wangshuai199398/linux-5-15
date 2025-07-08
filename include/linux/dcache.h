@@ -87,7 +87,7 @@ extern struct dentry_stat_t dentry_stat;
 #endif
 
 #define d_lock	d_lockref.lock
-//对一个目录项的描述
+//对一个目录项的描述，并和目录的 inode 关联
 struct dentry {
 	/* RCU lookup touched fields */
 	unsigned int d_flags;		/* protected by d_lock */

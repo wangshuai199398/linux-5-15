@@ -21,6 +21,7 @@ struct sighand_struct {
 	spinlock_t		siglock;
 	refcount_t		count;
 	wait_queue_head_t	signalfd_wqh;
+	//信号处理函数
 	struct k_sigaction	action[_NSIG];
 };
 
@@ -358,7 +359,7 @@ static inline int restart_syscall(void)
 	set_tsk_thread_flag(current, TIF_SIGPENDING);
 	return -ERESTARTNOINTR;
 }
-//如果当前任务有挂起信号（task_sigpending() 为真）
+//如果当前任务有挂起信号 (task_sigpending() 为真)
 static inline int task_sigpending(struct task_struct *p)
 {
 	return unlikely(test_tsk_thread_flag(p,TIF_SIGPENDING));
@@ -421,7 +422,7 @@ extern void recalc_sigpending(void);
 extern void calculate_sigpending(void);
 
 extern void signal_wake_up_state(struct task_struct *t, unsigned int state);
-
+//唤醒
 static inline void signal_wake_up(struct task_struct *t, bool resume)
 {
 	signal_wake_up_state(t, resume ? TASK_WAKEKILL : 0);

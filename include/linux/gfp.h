@@ -70,6 +70,7 @@ struct vm_area_struct;
  * be used in bit comparisons.
  */
 #define __GFP_DMA	((__force gfp_t)___GFP_DMA)
+//分配高端区域的内存
 #define __GFP_HIGHMEM	((__force gfp_t)___GFP_HIGHMEM)
 #define __GFP_DMA32	((__force gfp_t)___GFP_DMA32)
 #define __GFP_MOVABLE	((__force gfp_t)___GFP_MOVABLE)  /* ZONE_MOVABLE allowed */
@@ -253,82 +254,54 @@ struct vm_area_struct;
 #define __GFP_BITS_MASK ((__force gfp_t)((1 << __GFP_BITS_SHIFT) - 1))
 
 /**
- * DOC: Useful GFP flag combinations
+ * DOC: GFP（Get Free Pages）是内核中内存分配的行为控制标志
  *
- * Useful GFP flag combinations
- * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * 常用的 GFP 标志组合。建议各个子系统以这些组合之一作为起点，然后根据需要设置或清除 __GFP_FOO 类的标志
  *
- * Useful GFP flag combinations that are commonly used. It is recommended
- * that subsystems start with one of these combinations and then set/clear
- * %__GFP_FOO flags as necessary.
+ * %GFP_ATOMIC 用户不能睡眠，并且需要分配立即成功。此时会应用较低的水位线（low watermark），以允许访问“原子保留内存”（atomic reserves）。
+ *             当前实现不支持 NMI（不可屏蔽中断）和某些严格的非抢占上下文（例如 raw_spin_lock 内部）。%GFP_NOWAIT 也适用于同样的场景。
  *
- * %GFP_ATOMIC users can not sleep and need the allocation to succeed. A lower
- * watermark is applied to allow access to "atomic reserves".
- * The current implementation doesn't support NMI and few other strict
- * non-preemptive contexts (e.g. raw_spin_lock). The same applies to %GFP_NOWAIT.
+ * %GFP_KERNEL 是最常见的内核内部内存分配标志。调用者需要能直接访问 ZONE_NORMAL 或更低的内存区域，并允许直接回收内存（direct reclaim）。
  *
- * %GFP_KERNEL is typical for kernel-internal allocations. The caller requires
- * %ZONE_NORMAL or a lower zone for direct access but can direct reclaim.
+ * %GFP_KERNEL_ACCOUNT 与 GFP_KERNEL 相同，只是这类分配会被 kmemcg（内核内存控制组）计入内存账本
  *
- * %GFP_KERNEL_ACCOUNT is the same as GFP_KERNEL, except the allocation is
- * accounted to kmemcg.
+ * %GFP_NOWAIT 用于不应阻塞的内核分配：不能触发直接回收、不能启动物理 I/O，也不能调用任何文件系统回调。
  *
- * %GFP_NOWAIT is for kernel allocations that should not stall for direct
- * reclaim, start physical IO or use any filesystem callback.
+ * %GFP_NOIO 会使用直接回收来回收干净页面或 slab 页面，但不会触发任何物理 I/O 操作。
+ *      建议不要直接使用该标志，而是使用 memalloc_noio_save/restore 来标记整个作用域，并简要说明为何该作用域不能执行 I/O。所有分配请求将隐式继承 GFP_NOIO 标志。
  *
- * %GFP_NOIO will use direct reclaim to discard clean pages or slab pages
- * that do not require the starting of any physical IO.
- * Please try to avoid using this flag directly and instead use
- * memalloc_noio_{save,restore} to mark the whole scope which cannot
- * perform any IO with a short explanation why. All allocation requests
- * will inherit GFP_NOIO implicitly.
+ * %GFP_NOFS 会进行直接回收，但不会调用任何文件系统接口。
+ *      同样建议不要直接使用此标志，而是使用 memalloc_nofs_save/restore 来标记该作用域，并说明为何该区域不能或不应进入文件系统层。所有分配请求将隐式继承 GFP_NOFS。
  *
- * %GFP_NOFS will use direct reclaim but will not use any filesystem interfaces.
- * Please try to avoid using this flag directly and instead use
- * memalloc_nofs_{save,restore} to mark the whole scope which cannot/shouldn't
- * recurse into the FS layer with a short explanation why. All allocation
- * requests will inherit GFP_NOFS implicitly.
+ * %GFP_USER 用于分配用户空间内存，同时要求内核或硬件能直接访问。
+ *           通常用于硬件缓冲区映射到用户空间（如图形显卡），但硬件仍需对其进行 DMA 操作。此类分配会受到 cpuset 限制。
  *
- * %GFP_USER is for userspace allocations that also need to be directly
- * accessibly by the kernel or hardware. It is typically used by hardware
- * for buffers that are mapped to userspace (e.g. graphics) that hardware
- * still must DMA to. cpuset limits are enforced for these allocations.
+ * %GFP_DMA 出于历史原因存在，应尽量避免使用。该标志表示调用者要求使用最低内存区域（在 x86-64 上为 ZONE_DMA 或低于 16MB）。
+ *          理想情况下这个标志应被移除，但由于一些用户确实需要它（而另一些用户只是用它来避免使用 ZONE_DMA 的低内存保留区），所以仍需谨慎处理
  *
- * %GFP_DMA exists for historical reasons and should be avoided where possible.
- * The flags indicates that the caller requires that the lowest zone be
- * used (%ZONE_DMA or 16M on x86-64). Ideally, this would be removed but
- * it would require careful auditing as some users really require it and
- * others use the flag to avoid lowmem reserves in %ZONE_DMA and treat the
- * lowest zone as a type of emergency reserve.
+ * %GFP_DMA32 与 GFP_DMA 类似，只是调用者要求内存地址低于 32 位（4GB）。
  *
- * %GFP_DMA32 is similar to %GFP_DMA except that the caller requires a 32-bit
- * address.
+ * %GFP_HIGHUSER 用于用户空间分配，可以映射到用户空间，不需要被内核直接访问，但这些页面一旦使用后不能移动。
+ *               例如某些硬件直接把数据映射到用户空间，但地址上没有限制。
  *
- * %GFP_HIGHUSER is for userspace allocations that may be mapped to userspace,
- * do not need to be directly accessible by the kernel but that cannot
- * move once in use. An example may be a hardware allocation that maps
- * data directly into userspace but has no addressing limitations.
+ * %GFP_HIGHUSER_MOVABLE 用于用户空间分配，内核通常不需要直接访问，但可以在需要时通过 kmap() 访问。
+ * 这类页面可以被页面回收或迁移机制移动。通常，LRU（最近最少使用）链表上的页面也使用此标志分配。
  *
- * %GFP_HIGHUSER_MOVABLE is for userspace allocations that the kernel does not
- * need direct access to but can use kmap() when access is required. They
- * are expected to be movable via page reclaim or page migration. Typically,
- * pages on the LRU would also be allocated with %GFP_HIGHUSER_MOVABLE.
- *
- * %GFP_TRANSHUGE and %GFP_TRANSHUGE_LIGHT are used for THP allocations. They
- * are compound allocations that will generally fail quickly if memory is not
- * available and will not wake kswapd/kcompactd on failure. The _LIGHT
- * version does not attempt reclaim/compaction at all and is by default used
- * in page fault path, while the non-light is used by khugepaged.
+ * %GFP_TRANSHUGE 和 %GFP_TRANSHUGE_LIGHT 用于透明大页（THP，Transparent Huge Pages）分配。
+ *                     它们是复合页面分配操作，在内存不足时会很快失败，不会唤醒 kswapd 或 kcompactd。
+ *                     _LIGHT 版本根本不会尝试回收或压缩，默认用于缺页异常（page fault）路径；非 _LIGHT 版本则由 khugepaged 使用
+ * 
  */
 //Get Free Page 高优先级、不可睡眠（non-blocking）的内存分配请求,用于 中断处理上下文、软中断上下文 或 spinlock 等锁保护的临界区中，这些地方 不能睡眠（不能调用调度器），所以必须立即返回
 //如果你马上有空闲内存，就给我；如果没有，也不要等，直接失败返回 NULL
 #define GFP_ATOMIC	(__GFP_HIGH|__GFP_ATOMIC|__GFP_KSWAPD_RECLAIM)
-//普通内核上下文内存分配,允许睡眠，系统调用、线程上下文
+//普通内核中分配页,允许睡眠,系统调用、线程上下文,主要分配 ZONE_NORMAL 区域，也即直接映射区
 #define GFP_KERNEL	(__GFP_RECLAIM | __GFP_IO | __GFP_FS)
 #define GFP_KERNEL_ACCOUNT (GFP_KERNEL | __GFP_ACCOUNT)
 #define GFP_NOWAIT	(__GFP_KSWAPD_RECLAIM)
 #define GFP_NOIO	(__GFP_RECLAIM)
 #define GFP_NOFS	(__GFP_RECLAIM | __GFP_IO)
+//分配一个页映射到用户进程的虚拟地址空间，并且希望直接被内核或者硬件访问，主要用于一个用户进程希望通过内存映射的方式，访问某些硬件的缓存，例如显卡缓存
 #define GFP_USER	(__GFP_RECLAIM | __GFP_IO | __GFP_FS | __GFP_HARDWALL)
 #define GFP_DMA		__GFP_DMA
 #define GFP_DMA32	__GFP_DMA32

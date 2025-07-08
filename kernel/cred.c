@@ -329,13 +329,11 @@ struct cred *prepare_exec_creds(void)
 }
 
 /*
- * Copy credentials for the new process created by fork()
+ * 为通过 fork 创建的新进程复制凭据
  *
- * We share if we can, but under some circumstances we have to generate a new
- * set.
+ * 如果可以共享，我们就共享，但在某些情况下必须生成一套新的凭据
  *
- * The new process gets the current process's subjective credentials as its
- * objective and subjective credentials
+ * 新进程获取当前进程的 subjective credentials 作为它的 objective and subjective credentials
  */
 int copy_creds(struct task_struct *p, unsigned long clone_flags)
 {
@@ -361,7 +359,7 @@ int copy_creds(struct task_struct *p, unsigned long clone_flags)
 		inc_rlimit_ucounts(task_ucounts(p), UCOUNT_RLIMIT_NPROC, 1);
 		return 0;
 	}
-
+	//准备一个新的cred new, 从内存中分配一个新的cred, 然后调用 memcpy 复制一份父进程的 cred
 	new = prepare_creds();
 	if (!new)
 		return -ENOMEM;
@@ -393,7 +391,7 @@ int copy_creds(struct task_struct *p, unsigned long clone_flags)
 		new->process_keyring = NULL;
 	}
 #endif
-
+	//将新进程的"我能操作谁"和“谁能操作我”两个权限都指向新的cred
 	p->cred = p->real_cred = get_cred(new);
 	inc_rlimit_ucounts(task_ucounts(p), UCOUNT_RLIMIT_NPROC, 1);
 	alter_cred_subscribers(new, 2);

@@ -2643,6 +2643,8 @@ static int do_set_proto_down(struct net_device *dev,
 #define DO_SETLINK_MODIFIED	0x01
 /* notify flag means notify + modified. */
 #define DO_SETLINK_NOTIFY	0x03
+//是对 RTM_SETLINK 消息（即 ip link 修改命令）作出响应的核心处理函数
+//ip link、ip addr、ip route
 static int do_setlink(const struct sk_buff *skb,
 		      struct net_device *dev, struct ifinfomsg *ifm,
 		      struct netlink_ext_ack *extack,
@@ -2651,7 +2653,7 @@ static int do_setlink(const struct sk_buff *skb,
 	const struct net_device_ops *ops = dev->netdev_ops;
 	char ifname[IFNAMSIZ];
 	int err;
-
+	pr_info("%s: ->validate_linkmsg\n", __func__);
 	err = validate_linkmsg(dev, tb, extack);
 	if (err < 0)
 		return err;

@@ -45,7 +45,7 @@
 #include <linux/uaccess.h>
 #include "util.h"
 
-/* one msq_queue structure for each present queue on the system */
+/* one msq_queue structure for each present queue on the system 消息队列 */
 struct msg_queue {
 	struct kern_ipc_perm q_perm;
 	time64_t q_stime;		/* last msgsnd time */
@@ -96,12 +96,12 @@ struct msg_sender {
 #define SEARCH_NOTEQUAL		3
 #define SEARCH_LESSEQUAL	4
 #define SEARCH_NUMBER		5
-
+//ipc_wangs
 #define msg_ids(ns)	((ns)->ids[IPC_MSG_IDS])
 
 static inline struct msg_queue *msq_obtain_object(struct ipc_namespace *ns, int id)
 {
-	struct kern_ipc_perm *ipcp = ipc_obtain_object_idr(&msg_ids(ns), id);
+	struct kern_ipc_pe	rm *ipcp = ipc_obtain_object_idr(&msg_ids(ns), id);
 
 	if (IS_ERR(ipcp))
 		return ERR_CAST(ipcp);

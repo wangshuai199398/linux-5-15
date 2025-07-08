@@ -965,6 +965,7 @@ EXPORT_SYMBOL(iov_iter_zero);
 size_t copy_page_from_iter_atomic(struct page *page, unsigned offset, size_t bytes,
 				  struct iov_iter *i)
 {
+	//将分配好的页面调用 kmap_atomic 映射到内核里面的一个虚拟地址
 	char *kaddr = kmap_atomic(page), *p = kaddr + offset;
 	if (unlikely(!page_copy_sane(page, offset, bytes))) {
 		kunmap_atomic(kaddr);
@@ -975,10 +976,12 @@ size_t copy_page_from_iter_atomic(struct page *page, unsigned offset, size_t byt
 		WARN_ON(1);
 		return 0;
 	}
+	//将用户态的数据拷贝到内核态的页面的虚拟地址中
 	iterate_and_advance(i, bytes, base, len, off,
 		copyin(p + off, base, len),
 		memcpy(p + off, base, len)
 	)
+	//把内核里面的映射删除
 	kunmap_atomic(kaddr);
 	return bytes;
 }

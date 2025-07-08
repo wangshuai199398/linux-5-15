@@ -25,6 +25,7 @@
  *
  * Since there is only one init_mm in the entire system, keep it simple
  * and size this cpu_bitmask to NR_CPUS.
+ * 内核页表 
  */
 struct mm_struct init_mm = {
 	.mm_rb		= RB_ROOT,

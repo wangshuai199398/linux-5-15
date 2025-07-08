@@ -38,7 +38,9 @@ struct mountpoint {
 
 struct mount {
 	struct hlist_node mnt_hash;
+	//装载点所在的父文件系统
 	struct mount *mnt_parent;
+	//装载点在父文件系统中的 dentry
 	struct dentry *mnt_mountpoint;
 	struct vfsmount mnt;
 	union {

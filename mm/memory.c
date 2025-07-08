@@ -3586,6 +3586,7 @@ vm_fault_t do_swap_page(struct vm_fault *vmf)
 		goto out;
 
 	delayacct_set_flag(current, DELAYACCT_PF_SWAPIN);
+	//查找 swap 文件有没有缓存页
 	page = lookup_swap_cache(entry, vma, vmf->address);
 	swapcache = page;
 
@@ -3618,6 +3619,7 @@ vm_fault_t do_swap_page(struct vm_fault *vmf)
 				set_page_private(page, 0);
 			}
 		} else {
+			//没有缓冲页，将 swap 文件读到内存中来，形成内存页
 			page = swapin_readahead(entry, GFP_HIGHUSER_MOVABLE,
 						vmf);
 			swapcache = page;
@@ -3702,6 +3704,7 @@ vm_fault_t do_swap_page(struct vm_fault *vmf)
 
 	inc_mm_counter_fast(vma->vm_mm, MM_ANONPAGES);
 	dec_mm_counter_fast(vma->vm_mm, MM_SWAPENTS);
+	//生成页表项
 	pte = mk_pte(page, vma->vm_page_prot);
 	if ((vmf->flags & FAULT_FLAG_WRITE) && reuse_swap_page(page, NULL)) {
 		pte = maybe_mkwrite(pte_mkdirty(pte), vma);
@@ -3716,6 +3719,7 @@ vm_fault_t do_swap_page(struct vm_fault *vmf)
 		pte = pte_mkuffd_wp(pte);
 		pte = pte_wrprotect(pte);
 	}
+	//将页表项插入页表
 	set_pte_at(vma->vm_mm, vmf->address, vmf->pte, pte);
 	arch_do_swap_page(vma->vm_mm, vma, vmf->address, pte, vmf->orig_pte);
 	vmf->orig_pte = pte;
@@ -3727,7 +3731,7 @@ vm_fault_t do_swap_page(struct vm_fault *vmf)
 	} else {
 		do_page_add_anon_rmap(page, vma, vmf->address, exclusive);
 	}
-
+	//将 swap 文件清理, 因为重新加载回内存了，不再需要 swap 文件了
 	swap_free(entry);
 	if (mem_cgroup_swap_full(page) ||
 	    (vma->vm_flags & VM_LOCKED) || PageMlocked(page))
@@ -3780,6 +3784,7 @@ out_release:
  * We enter with non-exclusive mmap_lock (to exclude vma changes,
  * but allow concurrent faults), and pte mapped but not yet locked.
  * We return with mmap_lock still held, but pte unmapped and unlocked.
+ * 匿名页的映射
  */
 static vm_fault_t do_anonymous_page(struct vm_fault *vmf)
 {
@@ -3801,6 +3806,7 @@ static vm_fault_t do_anonymous_page(struct vm_fault *vmf)
 	 * parallel threads are excluded by other means.
 	 *
 	 * Here we only have mmap_read_lock(mm).
+	 * 分配一个页表项
 	 */
 	if (pte_alloc(vma->vm_mm, vmf->pmd))
 		return VM_FAULT_OOM;
@@ -3834,6 +3840,7 @@ static vm_fault_t do_anonymous_page(struct vm_fault *vmf)
 	/* Allocate our own private page. */
 	if (unlikely(anon_vma_prepare(vma)))
 		goto oom;
+	//分配可移动的匿名物理页面，底层通过alloc_page支持
 	page = alloc_zeroed_user_highpage_movable(vma, vmf->address);
 	if (!page)
 		goto oom;
@@ -3848,7 +3855,7 @@ static vm_fault_t do_anonymous_page(struct vm_fault *vmf)
 	 * the set_pte_at() write.
 	 */
 	__SetPageUptodate(page);
-
+	//将页表项指向新分配的物理页
 	entry = mk_pte(page, vma->vm_page_prot);
 	entry = pte_sw_mkyoung(entry);
 	if (vma->vm_flags & VM_WRITE)
@@ -3876,6 +3883,7 @@ static vm_fault_t do_anonymous_page(struct vm_fault *vmf)
 	page_add_new_anon_rmap(page, vma, vmf->address, false);
 	lru_cache_add_inactive_or_unevictable(page, vma);
 setpte:
+	//将页表项塞到页表里面
 	set_pte_at(vma->vm_mm, vmf->address, vmf->pte, entry);
 
 	/* No need to invalidate - it was non-present before */
@@ -3923,7 +3931,7 @@ static vm_fault_t __do_fault(struct vm_fault *vmf)
 			return VM_FAULT_OOM;
 		smp_wmb(); /* See comment in __pte_alloc() */
 	}
-
+	//用 mmap 映射文件的时候，对于 ext4 文件系统，vm_ops 指向了 ext4_file_vm_ops, 也就是 filemap_fault
 	ret = vma->vm_ops->fault(vmf);
 	if (unlikely(ret & (VM_FAULT_ERROR | VM_FAULT_NOPAGE | VM_FAULT_RETRY |
 			    VM_FAULT_DONE_COW)))
@@ -4590,6 +4598,7 @@ split:
  *
  * The mmap_lock may have been released depending on flags and our return value.
  * See filemap_fault() and __lock_page_or_retry().
+ * 执行完这个后用户态缺页异常处理完毕了。物理内存中有了页面，页表也建立好了映射。接下来，用户程序在虚拟内存空间里面，可以通过虚拟地址顺利经过页表映射的访问物理页面上的数据了
  */
 static vm_fault_t handle_pte_fault(struct vm_fault *vmf)
 {
@@ -4641,14 +4650,16 @@ static vm_fault_t handle_pte_fault(struct vm_fault *vmf)
 			vmf->pte = NULL;
 		}
 	}
-
+	//如果页表项从来没有出现过, 那就是新映射的页
 	if (!vmf->pte) {
 		if (vma_is_anonymous(vmf->vma))
+			//第一种情况, 匿名页，应该映射到一个物理内存页
 			return do_anonymous_page(vmf);
 		else
+			//第二种情况, 映射到文件
 			return do_fault(vmf);
 	}
-
+	//第三种情况, 如果 PTE 原来出现过，说明原来页面在物理内存中，后来换出到硬盘了，现在应该换回来，调用的是 do_swap_page
 	if (!pte_present(vmf->orig_pte))
 		return do_swap_page(vmf);
 
@@ -4694,13 +4705,15 @@ unlock:
  *
  * The mmap_lock may have been released depending on flags and our
  * return value.  See filemap_fault() and __lock_page_or_retry().
+ * pgd_t 用于全局页目录项，pud_t 用于上层页目录项，pmd_t 用于中间页目录项，pte_t 用于直接页表项
+ *   pgd  一级页表项      pud 二级页表项         pmd  三级页表项       pte  四级页表项
  */
 static vm_fault_t __handle_mm_fault(struct vm_area_struct *vma,
 		unsigned long address, unsigned int flags)
 {
 	struct vm_fault vmf = {
-		.vma = vma,
-		.address = address & PAGE_MASK,
+		.vma = vma,//缺页VMA
+		.address = address & PAGE_MASK,//缺页地址
 		.flags = flags,
 		.pgoff = linear_page_index(vma, address),
 		.gfp_mask = __get_fault_gfp_mask(vma),
@@ -4710,12 +4723,12 @@ static vm_fault_t __handle_mm_fault(struct vm_area_struct *vma,
 	pgd_t *pgd;
 	p4d_t *p4d;
 	vm_fault_t ret;
-
+	//依次查看或申请每一级页表项
 	pgd = pgd_offset(mm, address);
 	p4d = p4d_alloc(mm, pgd, address);
 	if (!p4d)
 		return VM_FAULT_OOM;
-
+	//创建相应的页目录项
 	vmf.pud = pud_alloc(mm, p4d, address);
 	if (!vmf.pud)
 		return VM_FAULT_OOM;
@@ -4742,7 +4755,7 @@ retry_pud:
 			}
 		}
 	}
-
+	//创建相应的页目录项
 	vmf.pmd = pmd_alloc(mm, vmf.pud, address);
 	if (!vmf.pmd)
 		return VM_FAULT_OOM;
@@ -4780,7 +4793,7 @@ retry_pud:
 			}
 		}
 	}
-
+	//创建页表项
 	return handle_pte_fault(&vmf);
 }
 

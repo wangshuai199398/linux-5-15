@@ -120,7 +120,7 @@ struct pid_namespace *ipc_seq_pid_ns(struct seq_file *);
 #else
 #define ipc_init_proc_interface(path, header, ids, show) do {} while (0)
 #endif
-
+//ipc_wangs
 #define IPC_SEM_IDS	0
 #define IPC_MSG_IDS	1
 #define IPC_SHM_IDS	2

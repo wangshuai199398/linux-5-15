@@ -28,7 +28,7 @@
 #include <linux/uaccess.h>
 #include "../fs/internal.h"
 #include "blk.h"
-
+//Linux 将块设备的 block_device 和 bdev 文件系统的块设备的 inode，通过 struct bdev_inode 进行关联
 struct bdev_inode {
 	struct block_device bdev;
 	struct inode vfs_inode;
@@ -446,7 +446,7 @@ static int bd_init_fs_context(struct fs_context *fc)
 	ctx->ops = &bdev_sops;
 	return 0;
 }
-
+//bdev_wangs
 static struct file_system_type bd_type = {
 	.name		= "bdev",
 	.init_fs_context = bd_init_fs_context,
@@ -455,7 +455,10 @@ static struct file_system_type bd_type = {
 
 struct super_block *blockdev_superblock __read_mostly;
 EXPORT_SYMBOL_GPL(blockdev_superblock);
-
+/*
+所有表示块设备的 inode 都保存在伪文件系统 bdev 中，这些对用户层不可见，主要为了方便块设备的管理
+Linux 将块设备的 block_device 和 bdev 文件系统的块设备的 inode，通过 struct bdev_inode 进行关联
+*/
 void __init bdev_cache_init(void)
 {
 	int err;
@@ -665,6 +668,7 @@ static int blkdev_get_whole(struct block_device *bdev, fmode_t mode)
 	int ret = 0;
 
 	if (disk->fops->open) {
+		// sd_open
 		ret = disk->fops->open(bdev, mode);
 		if (ret) {
 			/* avoid ghost partitions on a removed medium */
@@ -733,7 +737,7 @@ struct block_device *blkdev_get_no_open(dev_t dev)
 {
 	struct block_device *bdev;
 	struct inode *inode;
-
+	//根据传进来的 dev_t，在 blockdev_superblock 这个文件系统里面找到 inode, 这里注意，这个 inode 已经不是 devtmpfs 文件系统的 inode 了
 	inode = ilookup(blockdev_superblock, dev);
 	if (!inode) {
 		blk_request_module(dev);
@@ -743,6 +747,7 @@ struct block_device *blkdev_get_no_open(dev_t dev)
 	}
 
 	/* switch from the inode reference to a device mode one: */
+	//通过 bdev 文件系统的 inode，获得整个 struct bdev_inode 结构的地址，然后取成员 bdev，得到 block_device
 	bdev = &BDEV_I(inode)->bdev;
 	if (!kobject_get_unless_zero(&bdev->bd_device.kobj))
 		bdev = NULL;
@@ -872,6 +877,9 @@ EXPORT_SYMBOL(blkdev_get_by_dev);
  *
  * RETURNS:
  * Reference to the block_device on success, ERR_PTR(-errno) on failure.
+ * 
+ * 设备文件 /dev/xxx 在 devtmpfs 文件系统中，找到 devtmpfs 文件系统中的 inode，里面有 dev_t。
+ * 我们可以通过 dev_t，在伪文件系统 bdev 中找到对应的 inode，然后根据 struct bdev_inode 找到关联的 block_device
  */
 struct block_device *blkdev_get_by_path(const char *path, fmode_t mode,
 					void *holder)
@@ -879,11 +887,11 @@ struct block_device *blkdev_get_by_path(const char *path, fmode_t mode,
 	struct block_device *bdev;
 	dev_t dev;
 	int error;
-
+	//根据设备路径 /dev/xxx 得到 dev_t
 	error = lookup_bdev(path, &dev);
 	if (error)
 		return ERR_PTR(error);
-
+	//得到 block_device
 	bdev = blkdev_get_by_dev(dev, mode, holder);
 	if (!IS_ERR(bdev) && (mode & FMODE_WRITE) && bdev_read_only(bdev)) {
 		blkdev_put(bdev, mode);
@@ -965,6 +973,7 @@ EXPORT_SYMBOL(blkdev_put);
  * Get a reference to the blockdevice at @pathname in the current
  * namespace if possible and return it.  Return ERR_PTR(error)
  * otherwise.
+ * pathname 是设备的文件名，例如 /dev/xxx。这个文件是在 devtmpfs 文件系统中的
  */
 int lookup_bdev(const char *pathname, dev_t *dev)
 {
@@ -978,7 +987,7 @@ int lookup_bdev(const char *pathname, dev_t *dev)
 	error = kern_path(pathname, LOOKUP_FOLLOW, &path);
 	if (error)
 		return error;
-
+	//获得 inode。这个 inode 就是那个 init_special_inode 生成的特殊 inode
 	inode = d_backing_inode(path.dentry);
 	error = -ENOTBLK;
 	if (!S_ISBLK(inode->i_mode))
