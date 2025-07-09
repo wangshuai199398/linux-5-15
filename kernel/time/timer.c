@@ -2005,8 +2005,10 @@ static void run_local_timers(void)
 }
 
 /*
- * Called from the timer interrupt handler to charge one tick to the current
- * process.  user_tick is 1 if the tick is user time, 0 for system.
+ * 从定时器中断处理程序中调用，用于将一个时钟滴答（tick）计入当前进程。
+ * 如果 user_tick 为 1，表示该滴答是用户态时间；如果为 0，表示是内核态（系统）时间
+ * 时间中断到来后，调用该函数更新系统时间，更新后的时间存储PerCPU变量kernel_cpuset中
+ * time_wangs
  */
 void update_process_times(int user_tick)
 {
@@ -2015,6 +2017,7 @@ void update_process_times(int user_tick)
 	PRANDOM_ADD_NOISE(jiffies, user_tick, p, 0);
 
 	/* Note: this timer irq context must be accounted for as well. */
+	//进行时间累计处理
 	account_process_tick(p, user_tick);
 	run_local_timers();
 	rcu_sched_clock_irq(user_tick);

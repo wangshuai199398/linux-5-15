@@ -117,15 +117,17 @@ static inline void task_group_account_field(struct task_struct *p, int index,
  */
 void account_user_time(struct task_struct *p, u64 cputime)
 {
+	//分两种情况统计用户态CPU的使用情况
 	int index;
 
 	/* Add user time to process. */
 	p->utime += cputime;
 	account_group_user_time(p, cputime);
-
+	//如果nice值大于0，增加到CPU统计结构的nice字段中，如果nice值小于等于0，增加到CPU统计结构的user字段中，所以nice的统计也是用户态消耗的时间
 	index = (task_nice(p) > 0) ? CPUTIME_NICE : CPUTIME_USER;
 
 	/* Add user time to cpustat. */
+	//将时间累计到kernel_cpustat内核变量中
 	task_group_account_field(p, index, cputime);
 
 	/* Account for user time used */
@@ -194,10 +196,13 @@ void account_system_time(struct task_struct *p, int hardirq_offset, u64 cputime)
 	}
 
 	if (hardirq_count() - hardirq_offset)
+		//如果当前处于硬中断上下文，统计到irq字段
 		index = CPUTIME_IRQ;
 	else if (in_serving_softirq())
+		//如果当前处于软中断上下文，统计到softirq字段
 		index = CPUTIME_SOFTIRQ;
 	else
+		//统计到system字段
 		index = CPUTIME_SYSTEM;
 
 	account_system_index_time(p, cputime, index);
@@ -217,15 +222,18 @@ void account_steal_time(u64 cputime)
 /*
  * Account for idle time.
  * @cputime: the CPU time spent in idle wait
+ * iowait是CPU的空闲时间，是CPU在空闲状态的一项统计，只不过这种状态和idle的区别是，CPU是因为等待IO而空闲的
  */
 void account_idle_time(u64 cputime)
 {
 	u64 *cpustat = kcpustat_this_cpu->cpustat;
 	struct rq *rq = this_rq();
-
+	//是不是等待IO(例如磁盘IO)
 	if (atomic_read(&rq->nr_iowait) > 0)
+		//这段空闲时间会加到iowait中
 		cpustat[CPUTIME_IOWAIT] += cputime;
 	else
+		//加到idle中
 		cpustat[CPUTIME_IDLE] += cputime;
 }
 
@@ -466,7 +474,7 @@ void thread_group_cputime_adjusted(struct task_struct *p, u64 *ut, u64 *st)
 /*
  * Account a single tick of CPU time.
  * @p: the process that the CPU time gets accounted to
- * @user_tick: indicates if the tick is a user or a system tick
+ * @user_tick: 采样的瞬间处于内核态还是用户态
  */
 void account_process_tick(struct task_struct *p, int user_tick)
 {
@@ -479,7 +487,7 @@ void account_process_tick(struct task_struct *p, int user_tick)
 		irqtime_account_process_tick(p, user_tick, 1);
 		return;
 	}
-
+	//一个TICK_NSEC的定义是一个节拍所占的纳秒数
 	cputime = TICK_NSEC;
 	steal = steal_account_process_time(ULONG_MAX);
 
@@ -489,10 +497,13 @@ void account_process_tick(struct task_struct *p, int user_tick)
 	cputime -= steal;
 
 	if (user_tick)
+		//统计用户态时间
 		account_user_time(p, cputime);
 	else if ((p != this_rq()->idle) || (irq_count() != HARDIRQ_OFFSET))
+		//统计内核态时间
 		account_system_time(p, HARDIRQ_OFFSET, cputime);
 	else
+		//统计空闲时间
 		account_idle_time(cputime);
 }
 
