@@ -46,7 +46,7 @@
                 "CONFIG_MEMCG_SWAP",
                 "CONFIG_HIGH_RES_TIMERS",
                 "CONFIG_IRQ_WORK",
-                "",
+                "CONFIG_SOCK_RX_QUEUE_MAPPING",
                 "",
                 "",
                 "",
