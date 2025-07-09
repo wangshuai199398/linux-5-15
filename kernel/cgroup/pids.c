@@ -339,7 +339,7 @@ static struct cftype pids_files[] = {
 	},
 	{ }	/* terminate */
 };
-
+//cgroup_wangs
 struct cgroup_subsys pids_cgrp_subsys = {
 	.css_alloc	= pids_css_alloc,
 	.css_free	= pids_css_free,

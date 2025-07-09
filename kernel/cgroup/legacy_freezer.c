@@ -469,7 +469,7 @@ static struct cftype files[] = {
 	},
 	{ }	/* terminate */
 };
-
+//cgroup_wangs
 struct cgroup_subsys freezer_cgrp_subsys = {
 	.css_alloc	= freezer_css_alloc,
 	.css_online	= freezer_css_online,

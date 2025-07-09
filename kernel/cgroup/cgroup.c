@@ -1697,6 +1697,8 @@ static void css_clear_dir(struct cgroup_subsys_state *css)
  * @css: target css
  *
  * On failure, no file is added.
+ * 调用 cgroup_addrm_files->cgroup_add_file->cgroup_add_file，来创建整棵文件树，
+ * 并且为树中的每个文件创建对应的 kernfs_node 结构，并将这个文件的操作函数设置为 kf_ops，也即指向 cgroup_kf_ops
  */
 static int css_populate_dir(struct cgroup_subsys_state *css)
 {
@@ -2032,7 +2034,7 @@ int cgroup_setup_root(struct cgroup_root *root, u16 ss_mask)
 
 	kf_sops = root == &cgrp_dfl_root ?
 		&cgroup_kf_syscall_ops : &cgroup1_kf_syscall_ops;
-
+	//创建 kernfs_root 结构
 	root->kf_root = kernfs_create_root(kf_sops,
 					   KERNFS_ROOT_CREATE_DEACTIVATED |
 					   KERNFS_ROOT_SUPPORT_EXPORTOP |
@@ -2571,6 +2573,7 @@ static int cgroup_migrate_execute(struct cgroup_mgctx *mgctx)
 		do_each_subsys_mask(ss, ssid, mgctx->ss_mask) {
 			if (ss->attach) {
 				tset->ssid = ssid;
+				//每一个 cgroup 子系统会调用相应的 attach 函数。而 CPU 调用的是 cpu_cgroup_attach-> sched_move_task-> sched_change_group
 				ss->attach(tset);
 			}
 		} while_each_subsys_mask();
@@ -5807,7 +5810,7 @@ static void __init cgroup_init_subsys(struct cgroup_subsys *ss, bool early)
 {
 	struct cgroup_subsys_state *css;
 
-	pr_debug("Initializing cgroup subsys %s\n", ss->name);
+	pr_info("Initializing cgroup subsys %s\n", ss->name);
 
 	mutex_lock(&cgroup_mutex);
 
@@ -5816,6 +5819,7 @@ static void __init cgroup_init_subsys(struct cgroup_subsys *ss, bool early)
 
 	/* Create the root cgroup state for this subsystem */
 	ss->root = &cgrp_dfl_root;
+	//创建 cgroup_subsys_state
 	css = ss->css_alloc(cgroup_css(&cgrp_dfl_root.cgrp, ss));
 	/* We don't handle early failures gracefully */
 	BUG_ON(IS_ERR(css));
@@ -5850,7 +5854,7 @@ static void __init cgroup_init_subsys(struct cgroup_subsys *ss, bool early)
 	 * registered, no tasks have been forked, so we don't
 	 * need to invoke fork callbacks here. */
 	BUG_ON(!list_empty(&init_task.tasks));
-
+	//激活这个 cgroup
 	BUG_ON(online_css(css));
 
 	mutex_unlock(&cgroup_mutex);
@@ -5992,6 +5996,7 @@ int __init cgroup_init(void)
 		 css_set_hash(init_css_set.subsys));
 
 	WARN_ON(sysfs_create_mount_point(fs_kobj, "cgroup"));
+	//cgroup 文件系统
 	WARN_ON(register_filesystem(&cgroup_fs_type));
 	WARN_ON(register_filesystem(&cgroup2_fs_type));
 	WARN_ON(!proc_create_single("cgroups", 0, NULL, proc_cgroupstats_show));

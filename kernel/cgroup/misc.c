@@ -398,7 +398,7 @@ static void misc_cg_free(struct cgroup_subsys_state *css)
 	kfree(css_misc(css));
 }
 
-/* Cgroup controller callbacks */
+/* Cgroup controller callbacks cgroup_wangs */
 struct cgroup_subsys misc_cgrp_subsys = {
 	.css_alloc = misc_cg_alloc,
 	.css_free = misc_cg_free,

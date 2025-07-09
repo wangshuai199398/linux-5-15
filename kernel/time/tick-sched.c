@@ -1501,10 +1501,11 @@ void tick_setup_sched_timer(void)
 	struct tick_sched *ts = this_cpu_ptr(&tick_cpu_sched);
 	ktime_t now = ktime_get();
 
-	/*
-	 * Emulate tick processing via per-CPU hrtimers:
-	 */
+	/* Emulate tick processing via per-CPU hrtimers:
+	   初始化高分辨率定时器 sched_timer 
+	*/
 	hrtimer_init(&ts->sched_timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS_HARD);
+	// 将定时器的到期函数设置成 tick_sched_timer
 	ts->sched_timer.function = tick_sched_timer;
 
 	/* Get the next period (per-CPU) */

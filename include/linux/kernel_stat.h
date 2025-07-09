@@ -87,7 +87,7 @@ static inline u64 kcpustat_field(struct kernel_cpustat *kcpustat,
 {
 	return kcpustat->cpustat[usage];
 }
-
+//kernel_cpustat 是PerCPU变量，里面存储着当前核所对应的各种事件，包括 user、nice、system、idel、iowait、irq、softirq 等
 static inline void kcpustat_cpu_fetch(struct kernel_cpustat *dst, int cpu)
 {
 	*dst = kcpustat_cpu(cpu);

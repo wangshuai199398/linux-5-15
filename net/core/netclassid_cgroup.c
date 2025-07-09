@@ -136,7 +136,7 @@ static struct cftype ss_files[] = {
 	},
 	{ }	/* terminate */
 };
-
+//cgroup_wangs
 struct cgroup_subsys net_cls_cgrp_subsys = {
 	.css_alloc		= cgrp_css_alloc,
 	.css_online		= cgrp_css_online,

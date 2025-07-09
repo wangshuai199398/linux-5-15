@@ -810,7 +810,7 @@ static struct cftype dev_cgroup_files[] = {
 	},
 	{ }	/* terminate */
 };
-
+//cgroup_wangs
 struct cgroup_subsys devices_cgrp_subsys = {
 	.css_alloc = devcgroup_css_alloc,
 	.css_free = devcgroup_css_free,

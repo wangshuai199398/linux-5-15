@@ -539,7 +539,10 @@ static ssize_t cgroup1_procs_write(struct kernfs_open_file *of,
 {
 	return __cgroup1_procs_write(of, buf, nbytes, off, true);
 }
-
+/*
+接下来的调用链为：cgroup_tasks_write->__cgroup_procs_write->cgroup_attach_task-> cgroup_migrate->cgroup_migrate_execute。
+将这个进程和一个 cgroup 关联起来，也即将这个进程迁移到这个 cgroup 下面
+*/
 static ssize_t cgroup1_tasks_write(struct kernfs_open_file *of,
 				   char *buf, size_t nbytes, loff_t off)
 {

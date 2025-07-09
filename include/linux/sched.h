@@ -79,9 +79,11 @@ struct task_group;
  * mistake.
  */
 
-/* 就绪、可中断的睡眠状态、不可中断的睡眠状态、 */
+/*R 就绪、可中断的睡眠状态、不可中断的睡眠状态 */
 #define TASK_RUNNING			0x0000
+//S
 #define TASK_INTERRUPTIBLE		0x0001
+//D
 #define TASK_UNINTERRUPTIBLE	0x0002
 //接收到 SIGSTOP、SIGTTIN、SIGTSTP 或者 SIGTTOU 信号之后进入该状态
 #define __TASK_STOPPED			0x0004
@@ -94,7 +96,7 @@ struct task_group;
 #define EXIT_TRACE			(EXIT_ZOMBIE | EXIT_DEAD)
 /* Used in tsk->state again: */
 #define TASK_PARKED			0x0040
-//进程的最终状态
+//Z 进程的最终状态
 #define TASK_DEAD			0x0080
 //接收到致命信号时唤醒进程
 #define TASK_WAKEKILL		0x0100
@@ -108,6 +110,7 @@ struct task_group;
 /* Convenience macros for the sake of set_current_state: */
 //可以终止的新睡眠状态
 #define TASK_KILLABLE			(TASK_WAKEKILL | TASK_UNINTERRUPTIBLE)
+//T
 #define TASK_STOPPED			(TASK_WAKEKILL | __TASK_STOPPED)
 #define TASK_TRACED			(TASK_WAKEKILL | __TASK_TRACED)
 
@@ -819,7 +822,7 @@ struct task_struct {
 	unsigned int			policy;
 	//可以使用哪些CPU
 	int				nr_cpus_allowed;
-	//调度亲和性相关
+	//调度亲和性相关, 默认指向p->cpus_mask, 完全公平调度器通过判断该变量, 就不会胡乱迁移进程了
 	const cpumask_t			*cpus_ptr;
 	cpumask_t			*user_cpus_ptr;
 	cpumask_t			cpus_mask;

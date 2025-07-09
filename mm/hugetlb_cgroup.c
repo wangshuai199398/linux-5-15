@@ -801,7 +801,7 @@ void hugetlb_cgroup_migrate(struct page *oldhpage, struct page *newhpage)
 static struct cftype hugetlb_files[] = {
 	{} /* terminate */
 };
-
+//cgroup_wangs
 struct cgroup_subsys hugetlb_cgrp_subsys = {
 	.css_alloc	= hugetlb_cgroup_css_alloc,
 	.css_offline	= hugetlb_cgroup_css_offline,

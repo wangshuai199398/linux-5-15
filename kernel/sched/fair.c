@@ -11944,7 +11944,7 @@ err_free_rq:
 err:
 	return 0;
 }
-
+//对于每一个 CPU，取出每个 CPU 的运行队列 rq，也取出 task_group 的 sched_entity，然后通过 attach_entity_cfs_rq 将 sched_entity 添加到运行队列中
 void online_fair_sched_group(struct task_group *tg)
 {
 	struct sched_entity *se;
@@ -12058,7 +12058,11 @@ static int __sched_group_set_shares(struct task_group *tg, unsigned long shares)
 
 	return 0;
 }
+/*
+但是这个时候别忘了，我们还没有将 CPU 的文件夹下面的 tasks 文件写入进程号呢。
+写入一个进程号到 tasks 文件里面，按照 cgroup1_base_files 里面的定义，我们应该调用 cgroup1_tasks_write
 
+*/
 int sched_group_set_shares(struct task_group *tg, unsigned long shares)
 {
 	int ret;

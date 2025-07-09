@@ -362,7 +362,7 @@ static struct cftype debug_files[] =  {
 
 	{ }	/* terminate */
 };
-
+//cgroup_wangs
 struct cgroup_subsys debug_cgrp_subsys = {
 	.css_alloc	= debug_css_alloc,
 	.css_free	= debug_css_free,

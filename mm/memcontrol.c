@@ -3786,6 +3786,9 @@ out:
 /*
  * The user of this function is...
  * RES_LIMIT.
+ * 对于内存来讲，写入内存的限制使用函数 mem_cgroup_write->mem_cgroup_resize_limit 来设置 struct mem_cgroup 的 memory.limit 成员
+ * 在进程执行过程中，申请内存的时候，我们会调用 handle_pte_fault->do_anonymous_page()->mem_cgroup_try_charge()
+ * 然后调用 get_mem_cgroup_from_mm 获得这个进程对应的 mem_cgroup 结构，然后在 try_charge 中，根据 mem_cgroup 的限制，看是否可以申请分配内存
  */
 static ssize_t mem_cgroup_write(struct kernfs_open_file *of,
 				char *buf, size_t nbytes, loff_t off)
@@ -5284,6 +5287,7 @@ mem_cgroup_css_alloc(struct cgroup_subsys_state *parent_css)
 	long error = -ENOMEM;
 
 	old_memcg = set_active_memcg(parent);
+	//创建 mem_cgroup
 	memcg = mem_cgroup_alloc();
 	set_active_memcg(old_memcg);
 	if (IS_ERR(memcg))
@@ -6570,7 +6574,7 @@ static struct cftype memory_files[] = {
 	},
 	{ }	/* terminate */
 };
-
+//cgroup_wangs
 struct cgroup_subsys memory_cgrp_subsys = {
 	.css_alloc = mem_cgroup_css_alloc,
 	.css_online = mem_cgroup_css_online,

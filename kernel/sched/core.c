@@ -2450,7 +2450,7 @@ void set_cpus_allowed_common(struct task_struct *p, const struct cpumask *new_ma
 		p->cpus_ptr = new_mask;
 		return;
 	}
-
+	// CPU亲和性被写在了 p->cpus_mask
 	cpumask_copy(&p->cpus_mask, new_mask);
 	p->nr_cpus_allowed = cpumask_weight(new_mask);
 }
@@ -2491,7 +2491,7 @@ __do_set_cpus_allowed(struct task_struct *p, const struct cpumask *new_mask, u32
 	}
 	if (running)
 		put_prev_task(rq, p);
-
+	// set_cpus_allowed_common
 	p->sched_class->set_cpus_allowed(p, new_mask, flags);
 
 	if (queued)
@@ -5309,7 +5309,9 @@ static inline u64 cpu_resched_latency(struct rq *rq) { return 0; }
  */
 void scheduler_tick(void)
 {
+	//获取当前cpu
 	int cpu = smp_processor_id();
+	//获取当前cpu运行队列
 	struct rq *rq = cpu_rq(cpu);
 	//得到这个队列上当前正在运行中的进程的 task_struct
 	struct task_struct *curr = rq->curr;
@@ -5329,6 +5331,7 @@ void scheduler_tick(void)
 	curr->sched_class->task_tick(rq, curr, 0);
 	if (sched_feat(LATENCY_WARN))
 		resched_latency = cpu_resched_latency(rq);
+	//将当前CPU的负载数据刷新到全局数组中
 	calc_global_load_tick(rq);
 
 	rq_unlock(rq, &rf);
@@ -8159,6 +8162,7 @@ static int get_user_cpu_mask(unsigned long __user *user_mask_ptr, unsigned len,
  * @user_mask_ptr: user-space pointer to the new CPU mask
  *
  * Return: 0 on success. An error code otherwise.
+ * sched_setaffinity_wangs
  */
 SYSCALL_DEFINE3(sched_setaffinity, pid_t, pid, unsigned int, len,
 		unsigned long __user *, user_mask_ptr)
@@ -9935,7 +9939,9 @@ void sched_release_group(struct task_group *tg)
 	list_del_rcu(&tg->siblings);
 	spin_unlock_irqrestore(&task_group_lock, flags);
 }
-
+/*
+设置这个进程以这个 task_group 的方式参与调度，从而使得上面的 cpu.shares 起作用
+*/
 static void sched_change_group(struct task_struct *tsk, int type)
 {
 	struct task_group *tg;
@@ -10015,7 +10021,7 @@ cpu_cgroup_css_alloc(struct cgroup_subsys_state *parent_css)
 		/* This is early initialization for the top cgroup */
 		return &root_task_group.css;
 	}
-
+	//创建 task_group
 	tg = sched_create_group(parent);
 	if (IS_ERR(tg))
 		return ERR_PTR(-ENOMEM);
@@ -10929,7 +10935,7 @@ static struct cftype cpu_files[] = {
 #endif
 	{ }	/* terminate */
 };
-
+//cgroup_wangs
 struct cgroup_subsys cpu_cgrp_subsys = {
 	.css_alloc	= cpu_cgroup_css_alloc,
 	.css_online	= cpu_cgroup_css_online,

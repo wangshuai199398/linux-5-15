@@ -24,6 +24,7 @@ extern void get_avenrun(unsigned long *loads, unsigned long offset, int shift);
 
 /*
  * a1 = a0 * e + a * (1 - e)
+ * 指数加权移动平均法
  */
 static inline unsigned long
 calc_load(unsigned long load, unsigned long exp, unsigned long active)

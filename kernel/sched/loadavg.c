@@ -79,10 +79,10 @@ void get_avenrun(unsigned long *loads, unsigned long offset, int shift)
 long calc_load_fold_active(struct rq *this_rq, long adjust)
 {
 	long nr_active, delta = 0;
-
+	//R nr_running和D nr_uninterruptible状态的用户task
 	nr_active = this_rq->nr_running - adjust;
 	nr_active += (int)this_rq->nr_uninterruptible;
-
+	//只返回变化的量
 	if (nr_active != this_rq->calc_load_active) {
 		delta = nr_active - this_rq->calc_load_active;
 		this_rq->calc_load_active = nr_active;
@@ -346,6 +346,7 @@ static inline void calc_global_nohz(void) { }
  * CPUs have updated calc_load_tasks.
  *
  * Called from the global timer code.
+ * 计算平均负载
  */
 void calc_global_load(void)
 {
@@ -362,10 +363,10 @@ void calc_global_load(void)
 	delta = calc_load_nohz_read();
 	if (delta)
 		atomic_long_add(delta, &calc_load_tasks);
-
+	//获取当前瞬时负载值
 	active = atomic_long_read(&calc_load_tasks);
 	active = active > 0 ? active * FIXED_1 : 0;
-
+	//计算过去1分钟、过去5分钟、过去15分钟的平均负载
 	avenrun[0] = calc_load(avenrun[0], EXP_1, active);
 	avenrun[1] = calc_load(avenrun[1], EXP_5, active);
 	avenrun[2] = calc_load(avenrun[2], EXP_15, active);
@@ -389,8 +390,9 @@ void calc_global_load_tick(struct rq *this_rq)
 
 	if (time_before(jiffies, this_rq->calc_load_update))
 		return;
-
+	//获取当前运行队列的负载相对值
 	delta  = calc_load_fold_active(this_rq, 0);
+	//添加到全局瞬时负载值calc_load_tasks上，至此，calc_load_tasks上就有了当前系统当前时间的整体瞬时负载总数
 	if (delta)
 		atomic_long_add(delta, &calc_load_tasks);
 

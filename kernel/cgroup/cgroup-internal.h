@@ -45,6 +45,7 @@ extern void __init enable_debug_cgroup(void);
  */
 struct cgroup_fs_context {
 	struct kernfs_fs_context kfc;
+	//cgroup_root 是 cgroup 的根
 	struct cgroup_root	*root;
 	struct cgroup_namespace	*ns;
 	unsigned int	flags;			/* CGRP_ROOT_* flags */

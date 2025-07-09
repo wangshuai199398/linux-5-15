@@ -121,11 +121,11 @@ static int show_stat(struct seq_file *p, void *v)
 	getboottime64(&boottime);
 	/* shift boot timestamp according to the timens offset */
 	timens_sub_boottime(&boottime);
-
+	//在循环中将每一个核的各种利用率都加起来，最后通过 seq_put_decimal_ull 将这些数据输出
 	for_each_possible_cpu(i) {
 		struct kernel_cpustat kcpustat;
 		u64 *cpustat = kcpustat.cpustat;
-
+		//读取 kernel_cpustat 全局变量中的值
 		kcpustat_cpu_fetch(&kcpustat, i);
 
 		user		+= cpustat[CPUTIME_USER];
@@ -149,7 +149,7 @@ static int show_stat(struct seq_file *p, void *v)
 		}
 	}
 	sum += arch_irq_stat();
-
+	//转换成节拍数并打印出来
 	seq_put_decimal_ull(p, "cpu  ", nsec_to_clock_t(user));
 	seq_put_decimal_ull(p, " ", nsec_to_clock_t(nice));
 	seq_put_decimal_ull(p, " ", nsec_to_clock_t(system));
@@ -223,6 +223,7 @@ static int stat_open(struct inode *inode, struct file *file)
 
 	/* minimum size to display an interrupt count : 2 bytes */
 	size += 2 * nr_irqs;
+	//show_stat 用来输出数据内容
 	return single_open_size(file, show_stat, NULL, size);
 }
 
@@ -233,7 +234,7 @@ static const struct proc_ops stat_proc_ops = {
 	.proc_lseek	= seq_lseek,
 	.proc_release	= single_release,
 };
-
+//proc_wangs
 static int __init proc_stat_init(void)
 {
 	proc_create("stat", 0, NULL, &stat_proc_ops);

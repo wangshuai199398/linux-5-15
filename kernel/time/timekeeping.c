@@ -2268,6 +2268,7 @@ EXPORT_SYMBOL(ktime_get_coarse_ts64);
 
 /*
  * Must hold jiffies_lock
+ * 每当时钟节拍到来时会调用这个函数
  */
 void do_timer(unsigned long ticks)
 {

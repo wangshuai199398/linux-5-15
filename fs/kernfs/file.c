@@ -251,6 +251,7 @@ static ssize_t kernfs_fop_read_iter(struct kiocb *iocb, struct iov_iter *iter)
  * the first write.  Hint: if you're writing a value, first read the file,
  * modify only the the value you're changing, then write entire buffer
  * back.
+ * 如果设置的是 cpu.shares，则调用 cpu_shares_write_u64。在这里面，task_group 的 shares 变量更新了，并且更新了 CPU 队列上的调度实体
  */
 static ssize_t kernfs_fop_write_iter(struct kiocb *iocb, struct iov_iter *iter)
 {
@@ -292,6 +293,7 @@ static ssize_t kernfs_fop_write_iter(struct kiocb *iocb, struct iov_iter *iter)
 	}
 
 	ops = kernfs_ops(of->kn);
+	// cpu_shares_write_u64 cpu_cfs_quota_write_s64 cpu_cfs_period_write_u64 mem_cgroup_write
 	if (ops->write)
 		len = ops->write(of, buf, len, iocb->ki_pos);
 	else
@@ -939,7 +941,11 @@ void kernfs_notify(struct kernfs_node *kn)
 	spin_unlock_irqrestore(&kernfs_notify_lock, flags);
 }
 EXPORT_SYMBOL_GPL(kernfs_notify);
-
+/*
+cgroup_wangs
+当我们要写入一个 CGroup 文件来设置参数的时候，根据文件系统的操作，kernfs_fop_write 会被调用，在这里面会调用 kernfs_ops 的 write 函数，
+根据上面的定义为 cgroup_file_write，在这里会调用 cftype 的 write 函数。对于 CPU 和内存的 write 函数，有以下不同的定义
+*/
 const struct file_operations kernfs_file_fops = {
 	.read_iter	= kernfs_fop_read_iter,
 	.write_iter	= kernfs_fop_write_iter,
