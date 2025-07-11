@@ -4947,7 +4947,7 @@ int __init dev_proc_init(void);
 #else
 #define dev_proc_init() 0
 #endif
-
+//ndo_start_xmit_wangs
 static inline netdev_tx_t __netdev_start_xmit(const struct net_device_ops *ops,
 					      struct sk_buff *skb, struct net_device *dev,
 					      bool more)
