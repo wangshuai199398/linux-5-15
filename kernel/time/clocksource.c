@@ -1117,15 +1117,19 @@ void __clocksource_update_freq_scale(struct clocksource *cs, u32 scale, u32 freq
 		 * amount. That results in a shift value of 24 for a
 		 * clocksource with mask >= 40-bit and f >= 4GHz. That maps to
 		 * ~ 0.06ppm granularity for NTP.
+		 * 首先，我们用时钟源的掩码（mask）值初始化 sec 变量。请记住，时钟源的 mask 表示该时钟源有效的最大比特位数量（也就是该计数器的最大值）
 		 */
 		sec = cs->mask;
+		// 将 sec 除以时钟源的频率 freq 参数表示每秒会发生多少次定时器中断。因此，当我们用代表计数器最大值的 mask 除以定时器频率时，就可以得到该时钟源在计数器溢出前能运行的最大秒数
 		do_div(sec, freq);
+		// 将上一步的结果再除以缩放因子（scale）。这个因子可以是 1（表示以 Hz 为单位）或 1000（表示以 kHz 为单位，即 10³ Hz）。通过这个操作，我们可以得到在考虑缩放因子的情况下，该时钟源的最大运行秒数
 		do_div(sec, scale);
+		// 得到了最大秒数之后，我们会检查这个值，并根据结果将其设为 1 或 600（单位为秒）。这两个值表示该时钟源的最大休眠时间
 		if (!sec)
 			sec = 1;
 		else if (sec > 600 && cs->mask > UINT_MAX)
 			sec = 600;
-
+		// 为给定的时钟源计算 mult 和 shift 参数
 		clocks_calc_mult_shift(&cs->mult, &cs->shift, freq,
 				       NSEC_PER_SEC / scale, sec * scale);
 	}
@@ -1150,8 +1154,8 @@ void __clocksource_update_freq_scale(struct clocksource *cs, u32 scale, u32 freq
 	WARN_ON_ONCE(cs->uncertainty_margin < 2 * WATCHDOG_MAX_SKEW);
 
 	/*
-	 * Ensure clocksources that have large 'mult' values don't overflow
-	 * when adjusted.
+	 * Ensure clocksources that have large 'mult' values don't overflow when adjusted.
+	 * 检查刚才计算出的 mult 值是否会在调整后导致溢出
 	 */
 	cs->maxadj = clocksource_max_adjustment(cs);
 	while (freq && ((cs->mult + cs->maxadj < cs->mult)
@@ -1168,7 +1172,7 @@ void __clocksource_update_freq_scale(struct clocksource *cs, u32 scale, u32 freq
 	WARN_ONCE(cs->mult + cs->maxadj < cs->mult,
 		"timekeeping: Clocksource %s might overflow on 11%% adjustment\n",
 		cs->name);
-
+	// 用可以转换为时钟源计数器的最大纳秒数来更新该时钟源的 max_idle_ns 和 max_cycles 值，并将最终结果输出到内核缓冲区中
 	clocksource_update_max_deferment(cs);
 
 	pr_info("%s: mask: 0x%llx max_cycles: 0x%llx, max_idle_ns: %lld ns\n",
@@ -1202,17 +1206,20 @@ int __clocksource_register_scale(struct clocksource *cs, u32 scale, u32 freq)
 		cs->vdso_clock_mode = VDSO_CLOCKMODE_NONE;
 	}
 
-	/* Initialize mult/shift and max_idle_ns */
+	/* Initialize mult/shift and max_idle_ns 使用新的频率信息更新指定的时钟源 */
 	__clocksource_update_freq_scale(cs, scale, freq);
 
 	/* Add clocksource to the clocksource list */
+	// 保护 curr_clocksource 变量（表示当前被选中的时钟源）以及 clocksource_list 变量（表示已注册时钟源的列表）
 	mutex_lock(&clocksource_mutex);
 
 	clocksource_watchdog_lock(&flags);
+	// 遍历所有已经注册的时钟源，换句话说，就是遍历 clocksource_list 中的所有元素，并尝试为当前要注册的时钟源找到一个最佳插入位置
 	clocksource_enqueue(cs);
+	// 与前一个函数几乎相同，不同之处在于它会根据时钟源的标志位（flags）将新的时钟源插入到 wd_list 中
 	clocksource_enqueue_watchdog(cs);
 	clocksource_watchdog_unlock(&flags);
-
+	// 从已注册的时钟源中选择最优的一个。这个函数本身只是调用了一个辅助函数（helper function）
 	clocksource_select();
 	clocksource_select_watchdog(false);
 	__clocksource_suspend_select(cs);
@@ -1460,6 +1467,14 @@ static struct device device_clocksource = {
 	.groups	= clocksource_groups,
 };
 
+/*
+clocksource_wangs
+
+接着会创建三个文件：
+  dev_attr_current_clocksource    显示当前系统中正在使用的时钟源信息
+  dev_attr_unbind_clocksource     显示系统中可用的时钟源列表
+  dev_attr_available_clocksource  提供一个接口，用于解除某个时钟源的绑定
+*/
 static int __init init_clocksource_sysfs(void)
 {
 	int error = subsys_system_register(&clocksource_subsys, NULL);

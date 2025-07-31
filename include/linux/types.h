@@ -7,12 +7,14 @@
 
 #ifndef __ASSEMBLY__
 
+// bitmap_wangs name - 位图名称, bits - 位图中位数
 #define DECLARE_BITMAP(name,bits) \
 	unsigned long name[BITS_TO_LONGS(bits)]
 
 typedef u32 __kernel_dev_t;
 
 typedef __kernel_fd_set		fd_set;
+//dev_t 是用来表示主/次设备号对的一个内核数据类型
 typedef __kernel_dev_t		dev_t;
 typedef __kernel_ulong_t	ino_t;
 typedef __kernel_mode_t		mode_t;
@@ -175,6 +177,10 @@ typedef struct {
 } atomic64_t;
 #endif
 
+/*
+侵入式链表，并不在节点内保存数据-节点仅仅包含指向前后节点的指针，然后把数据附加到链表的
+这就使得这个数据结构是通用的，使用起来就不需要考虑节点数据的类型了
+*/
 struct list_head {
 	struct list_head *next, *prev;
 };

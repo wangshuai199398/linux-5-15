@@ -725,6 +725,13 @@ static struct notifier_block tracepoint_module_nb = {
 	.priority = 0,
 };
 
+/* notifier_wangs
+当 MODULE_STATE_LIVE、MODULE_STATE_COMING 或 MODULE_STATE_GOING 这些事件中的某一个发生时，会触发通知。
+
+例如，MODULE_STATE_LIVE 和 MODULE_STATE_COMING 的通知会在执行 init_module 系统调用期间发送；
+又如，MODULE_STATE_GOING 的通知会在执行 delete_module 系统调用期间发送
+因此，当用户空间调用上述某个系统调用时，Linux 内核会根据具体的系统调用发送相应的通知，并触发调用 tracepoint_module_notify 回调函数
+*/
 static __init int init_tracepoints(void)
 {
 	int ret;

@@ -3395,7 +3395,7 @@ void __init buffer_init(void)
 {
 	unsigned long nrpages;
 	int ret;
-
+	//为 struct buffer_head 分配缓存
 	bh_cachep = kmem_cache_create("buffer_head",
 			sizeof(struct buffer_head), 0,
 				(SLAB_RECLAIM_ACCOUNT|SLAB_PANIC|
@@ -3404,6 +3404,8 @@ void __init buffer_init(void)
 
 	/*
 	 * Limit the bh occupancy to 10% of ZONE_NORMAL
+	 * 计算系统中缓冲区的最大内存大小
+	 * 它的值将等于 ZONE_NORMAL 区域（在 x86_64 架构中指 4GB 以上的所有 RAM）容量的 10%
 	 */
 	nrpages = (nr_free_buffer_pages() * 10) / 100;
 	max_buffer_heads = nrpages * (PAGE_SIZE / sizeof(struct buffer_head));

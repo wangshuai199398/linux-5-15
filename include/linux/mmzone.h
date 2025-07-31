@@ -774,7 +774,7 @@ struct deferred_split {
  * 而在 UMA（统一内存访问）架构的机器上，则只会有一个 pglist_data 结构，用来描述整个系统的内存
  * 
  * 内存统计信息以及页面置换（page replacement）所需的数据结构是以“zone”为单位来维护的
- * node 描述
+ * node 内存通过 pglist_data 来呈现
  */
 typedef struct pglist_data {
 	/* node_zones 只包含当前节点（THIS node）上的所有 zone。

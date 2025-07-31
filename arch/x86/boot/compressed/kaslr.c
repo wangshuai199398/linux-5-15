@@ -826,6 +826,10 @@ static unsigned long find_random_virt_addr(unsigned long minimum,
 /*
  * Since this function examines addresses much more numerically,
  * it takes the input and output pointers as 'unsigned long'.
+ * 第一个参数是指向嵌入在piggy.o目标文件的压缩的内核镜像的指针
+ * 第三和第四个参数分别是解压后的内核镜像的位置和长度。放置解压后内核的地址来自 arch/x86/boot/compressed/head_64.S，
+ * 并且它是startup_32对齐到 2MB 边界的地址。解压后的内核的大小来自同样的piggy.S，并且它是z_output_len
+ * 最后一个参数是内核加载地址的虚拟地址。我们可以看到，它和默认的物理加载地址相同
  */
 void choose_random_location(unsigned long input,
 			    unsigned long input_size,
@@ -834,7 +838,7 @@ void choose_random_location(unsigned long input,
 			    unsigned long *virt_addr)
 {
 	unsigned long random_addr, min_addr;
-
+	//如果有这个选项，那么我们就退出choose_random_location函数，并且内核的加载地址不会随机化
 	if (cmdline_find_option_bool("nokaslr")) {
 		warn("KASLR disabled: 'nokaslr' on cmdline.");
 		return;
@@ -847,7 +851,7 @@ void choose_random_location(unsigned long input,
 	else
 		mem_limit = MAXMEM;
 
-	/* Record the various known unsafe memory ranges. */
+	/* Record the various known unsafe memory ranges. 排除保留的地址 */
 	mem_avoid_init(input, input_size, *output);
 
 	/*

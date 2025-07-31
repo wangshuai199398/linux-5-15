@@ -27,4 +27,5 @@ mknod filename type major minor
 4. irq_desc 是一个用于描述用户注册的中断处理函数的结构，为了能够根据中断向量得到 irq_desc 结构，会把这些结构放在一个基数树里面，方便查找
 5. irq_desc 里面有一个成员是 irqaction，指向设备驱动程序里面注册的中断处理函数，调用中断信号 irq 对应的中断描述结构里面的 irq_handler_t
 
+每个 softirq 都有如下的阶段：通过 open_softirq 函数注册一个软中断，通过 raise_softirq 函数标记一个软中断来激活它，然后所有被标记的软中断将会在 Linux 内核下一次执行周期性软中断检测时得以调度，对应此类型软中断的处理函数也就得以执行
 ```

@@ -258,7 +258,8 @@ struct vm_area_struct;
  *
  * 常用的 GFP 标志组合。建议各个子系统以这些组合之一作为起点，然后根据需要设置或清除 __GFP_FOO 类的标志
  *
- * %GFP_ATOMIC 用户不能睡眠，并且需要分配立即成功。此时会应用较低的水位线（low watermark），以允许访问“原子保留内存”（atomic reserves）。
+ * %GFP_ATOMIC 高优先级申请内存且操作不允许被睡眠
+ *             用户不能睡眠，并且需要分配立即成功。此时会应用较低的水位线（low watermark），以允许访问“原子保留内存”（atomic reserves）。
  *             当前实现不支持 NMI（不可屏蔽中断）和某些严格的非抢占上下文（例如 raw_spin_lock 内部）。%GFP_NOWAIT 也适用于同样的场景。
  *
  * %GFP_KERNEL 是最常见的内核内部内存分配标志。调用者需要能直接访问 ZONE_NORMAL 或更低的内存区域，并允许直接回收内存（direct reclaim）。
@@ -299,6 +300,7 @@ struct vm_area_struct;
 #define GFP_KERNEL	(__GFP_RECLAIM | __GFP_IO | __GFP_FS)
 #define GFP_KERNEL_ACCOUNT (GFP_KERNEL | __GFP_ACCOUNT)
 #define GFP_NOWAIT	(__GFP_KSWAPD_RECLAIM)
+// 禁止所有IO操作但允许睡眠等待内存
 #define GFP_NOIO	(__GFP_RECLAIM)
 #define GFP_NOFS	(__GFP_RECLAIM | __GFP_IO)
 //分配一个页映射到用户进程的虚拟地址空间，并且希望直接被内核或者硬件访问，主要用于一个用户进程希望通过内存映射的方式，访问某些硬件的缓存，例如显卡缓存

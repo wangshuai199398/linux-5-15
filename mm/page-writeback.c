@@ -2118,6 +2118,8 @@ static int page_writeback_cpu_online(unsigned int cpu)
  *
  * But we might still want to scale the dirty_ratio by how
  * much memory the box has..
+ * 初始化脏页（dirty pages）写回的比例控制参数
+ * 每一个底层页表项中都包含一个 dirty 位（dirty bit），用于标识该页自被加载到内存后是否被写入过。
  */
 void __init page_writeback_init(void)
 {

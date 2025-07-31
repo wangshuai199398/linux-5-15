@@ -223,6 +223,7 @@ void __init setup_per_cpu_areas(void)
 		per_cpu_offset(cpu) = delta + pcpu_unit_offsets[cpu];
 		per_cpu(this_cpu_off, cpu) = per_cpu_offset(cpu);
 		per_cpu(cpu_number, cpu) = cpu;
+		// 设置 per-cpu 的偏移和段,并将前面的数据从数组移到 per-cpu 变量
 		setup_percpu_segment(cpu);
 		/*
 		 * Copy data used in early init routines from the

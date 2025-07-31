@@ -200,6 +200,7 @@ struct signal_struct {
 	 * getrlimit/setrlimit use task_lock(current->group_leader) to
 	 * protect this instead of the siglock, because they really
 	 * have no need to disable irqs.
+	 * 资源控制限制
 	 */
 	struct rlimit rlim[RLIM_NLIMITS];
 
@@ -389,11 +390,13 @@ static inline int fatal_signal_pending(struct task_struct *p)
 
 static inline int signal_pending_state(unsigned int state, struct task_struct *p)
 {
+	// 不包含这两个，不是 pending 状态
 	if (!(state & (TASK_INTERRUPTIBLE | TASK_WAKEKILL)))
 		return 0;
+	// 没有挂起信号，不是 pending 状态
 	if (!signal_pending(p))
 		return 0;
-
+	// 如果任务处于可中断睡眠状态 或 收到了致命信号（即将终止），则返回 true（条件成立）
 	return (state & TASK_INTERRUPTIBLE) || __fatal_signal_pending(p);
 }
 

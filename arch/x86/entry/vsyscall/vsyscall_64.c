@@ -50,7 +50,7 @@ static enum { EMULATE, XONLY, NONE } vsyscall_mode __ro_after_init =
 #else
 	EMULATE;
 #endif
-
+// vsyscall_wangs
 static int __init vsyscall_setup(char *str)
 {
 	if (str) {
@@ -361,6 +361,7 @@ void __init map_vsyscall(void)
 	 * page.
 	 */
 	if (vsyscall_mode == EMULATE) {
+		// 为 vsyscall 内存页 检查设置 fix-mapped地址
 		__set_fixmap(VSYSCALL_PAGE, physaddr_vsyscall,
 			     PAGE_KERNEL_VVAR);
 		set_vsyscall_pgtable_user_bits(swapper_pg_dir);
@@ -368,7 +369,7 @@ void __init map_vsyscall(void)
 
 	if (vsyscall_mode == XONLY)
 		gate_vma.vm_flags = VM_EXEC;
-
+	// 检查 vsyscall 内存页的虚拟地址是否等于变量 VSYSCALL_ADDR
 	BUILD_BUG_ON((unsigned long)__fix_to_virt(VSYSCALL_PAGE) !=
 		     (unsigned long)VSYSCALL_ADDR);
 }

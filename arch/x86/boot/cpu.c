@@ -74,9 +74,9 @@ int validate_cpu(void)
 {
 	u32 *err_flags;
 	int cpu_level, req_level;
-
+	//获取当前CPU级别
 	check_cpu(&cpu_level, &req_level, &err_flags);
-
+	//和系统预设的最低CPU级别进行比较
 	if (cpu_level < req_level) {
 		printf("This kernel requires an %s CPU, ",
 		       cpu_name(req_level));

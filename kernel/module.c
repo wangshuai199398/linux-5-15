@@ -296,6 +296,7 @@ core_param(nomodule, modules_disabled, bint, 0);
 /* Waiting for a module to finish initializing? */
 static DECLARE_WAIT_QUEUE_HEAD(module_wq);
 
+// 定义一个用于可加载模块（loadable modules）的阻塞通知链的链表头（head）
 static BLOCKING_NOTIFIER_HEAD(module_notify_list);
 
 int register_module_notifier(struct notifier_block *nb)
@@ -909,6 +910,7 @@ EXPORT_SYMBOL(module_refcount);
 /* This exists whether we can unload or not */
 static void free_module(struct module *mod);
 
+// module_wangs
 SYSCALL_DEFINE2(delete_module, const char __user *, name_user,
 		unsigned int, flags)
 {

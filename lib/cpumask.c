@@ -112,6 +112,7 @@ EXPORT_SYMBOL(cpumask_next_wrap);
  */
 bool alloc_cpumask_var_node(cpumask_var_t *mask, gfp_t flags, int node)
 {
+	// 将根据指定的标志（flags）为给定的 cpumask 分配内存空间
 	*mask = kmalloc_node(cpumask_size(), flags, node);
 
 #ifdef CONFIG_DEBUG_PER_CPU_MAPS

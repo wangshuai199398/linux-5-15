@@ -1616,7 +1616,7 @@ int register_kprobe(struct kprobe *p)
 	struct module *probed_mod;
 	kprobe_opcode_t *addr;
 
-	/* Adjust probe address from symbol */
+	/* Adjust probe address from symbol 根据符号查找探测点的地址 */
 	addr = kprobe_addr(p);
 	if (IS_ERR(addr))
 		return PTR_ERR(addr);
@@ -1647,6 +1647,7 @@ int register_kprobe(struct kprobe *p)
 	cpus_read_lock();
 	/* Prevent text modification */
 	mutex_lock(&text_mutex);
+	// 保存原有的指令
 	ret = prepare_kprobe(p);
 	mutex_unlock(&text_mutex);
 	cpus_read_unlock();
@@ -1658,6 +1659,7 @@ int register_kprobe(struct kprobe *p)
 		       &kprobe_table[hash_ptr(p->addr, KPROBE_HASH_BITS)]);
 
 	if (!kprobes_all_disarmed && !kprobe_disabled(p)) {
+		// 执行指令替换
 		ret = arm_kprobe(p);
 		if (ret) {
 			hlist_del_rcu(&p->hlist);

@@ -104,7 +104,7 @@ static void show_all_irqs(struct seq_file *p)
 	}
 	show_irq_gap(p, nr_irqs - next);
 }
-
+// proc_stat_wangs
 static int show_stat(struct seq_file *p, void *v)
 {
 	int i, j;
@@ -161,7 +161,7 @@ static int show_stat(struct seq_file *p, void *v)
 	seq_put_decimal_ull(p, " ", nsec_to_clock_t(guest));
 	seq_put_decimal_ull(p, " ", nsec_to_clock_t(guest_nice));
 	seq_putc(p, '\n');
-
+	// 输出每个逻辑核的使用信息
 	for_each_online_cpu(i) {
 		struct kernel_cpustat kcpustat;
 		u64 *cpustat = kcpustat.cpustat;

@@ -55,7 +55,7 @@
 DEFINE_PER_CPU_ALIGNED(irq_cpustat_t, irq_stat);
 EXPORT_PER_CPU_SYMBOL(irq_stat);
 #endif
-
+// softirq_vec 数组包含了 10 个不同 softirq 类型的 softirq_action。当前版本的 Linux 内核定义了十种软中断向量
 static struct softirq_action softirq_vec[NR_SOFTIRQS] __cacheline_aligned_in_smp;
 
 DEFINE_PER_CPU(struct task_struct *, ksoftirqd);
@@ -66,16 +66,17 @@ const char * const softirq_to_name[NR_SOFTIRQS] = {
 };
 
 /*
- * we cannot loop indefinitely here to avoid userspace starvation,
- * but we also don't want to introduce a worst case 1/HZ latency
- * to the pending events, so lets the scheduler to balance
- * the softirq load for us.
+ * 我们不能在这里无限循环，以避免饿死用户空间（进程），但我们也不希望对挂起的事件引入 1/HZ 的最坏情况延迟，因此让调度器来帮我们平衡软中断的负载
+ * 无限循环处理软中断 会导致用户进程得不到调度机会（用户空间饿死）
+ * 但强制让出 CPU 又可能导致软中断事件延迟到下一个调度周期（最坏为 1/HZ 秒）
+ * 所以这里采用一种 折中策略：
+   不是在内核中强制完全处理完软中断，而是交给调度器（和 ksoftirqd 线程）来动态平衡软中断和用户进程之间的资源分配
  */
 static void wakeup_softirqd(void)
 {
-	/* Interrupts are disabled: no need to stop preemption */
+	/* 中断已被禁用：不需要再禁止抢占 */
 	struct task_struct *tsk = __this_cpu_read(ksoftirqd);
-
+	// 激活当前处理器上的 ksoftirqd 内核线程
 	if (tsk)
 		wake_up_process(tsk);
 }
@@ -512,6 +513,10 @@ static inline bool lockdep_softirq_start(void) { return false; }
 static inline void lockdep_softirq_end(bool in_hardirq) { }
 #endif
 
+/*
+除周期性检测是否有延后中断需要执行之外，系统还会在一些关键时间点上检测。
+一个主要的检测时间点就是当定义在 arch/x86/kernel/irq.c 的 common_interrupt 函数被调用时，这是 Linux 内核中执行延后中断的主要时机
+*/
 static void handle_softirqs(bool ksirqd)
 {
 	unsigned long end = jiffies + MAX_SOFTIRQ_TIME;
@@ -528,7 +533,7 @@ static void handle_softirqs(bool ksirqd)
 	 * again if the socket is related to swapping.
 	 */
 	current->flags &= ~PF_MEMALLOC;
-
+	// 获取当前 CPU 的软中断标记 __softirq_pending
 	pending = local_softirq_pending();
 
 	softirq_handle_begin();
@@ -573,6 +578,7 @@ restart:
 	local_irq_disable();
 
 	pending = local_softirq_pending();
+	//在执行一个延后函数的同时，可能会发生新的软中断。这会导致用户态代码由于 __do_softirq 要处理很多延后中断而很长时间不能返回。为了解决这个问题，系统限制了延后中断处理的最大耗时
 	if (pending) {
 		if (time_before(jiffies, end) && !need_resched() &&
 		    --max_restart)
@@ -673,25 +679,25 @@ void irq_exit(void)
  */
 inline void raise_softirq_irqoff(unsigned int nr)
 {
+	// 设置当前处理器上和nr参数对应的软中断标志位(__softirq_pending)
 	__raise_softirq_irqoff(nr);
 
 	/*
-	 * If we're in an interrupt or softirq, we're done
-	 * (this also catches softirq-disabled code). We will
-	 * actually run the softirq once we return from
-	 * the irq or softirq.
-	 *
-	 * Otherwise we wake up ksoftirqd to make sure we
-	 * schedule the softirq soon.
+	 * 如果当前正在处理中断或软中断，那我们就结束（处理）了。（这同样也涵盖了软中断被禁止的代码情况。）
+	 * 实际上，我们会在从中断或软中断返回之后再执行该软中断。
+	 * 
+	 * 否则，我们就唤醒 ksoftirqd，以确保尽快调度执行这个软中断。
+	 * 
+	 * 通过 in_interrupt 函数获得 irq_count 值
 	 */
 	if (!in_interrupt() && should_wake_ksoftirqd())
 		wakeup_softirqd();
 }
-
+// softirq_wangs
 void raise_softirq(unsigned int nr)
 {
 	unsigned long flags;
-
+	//这里之所以要禁用中断是因为将要运行的 softirq 中断处理运行于中断上下文中
 	local_irq_save(flags);
 	raise_softirq_irqoff(nr);
 	local_irq_restore(flags);
@@ -714,6 +720,7 @@ void open_softirq(int nr, void (*action)(struct softirq_action *))
 
 /*
  * Tasklets
+ * tasklet_head 结构代表一组 Tasklets
  */
 struct tasklet_head {
 	struct tasklet_struct *head;
@@ -723,18 +730,21 @@ struct tasklet_head {
 static DEFINE_PER_CPU(struct tasklet_head, tasklet_vec);
 static DEFINE_PER_CPU(struct tasklet_head, tasklet_hi_vec);
 
+// tasklet_wangs
 static void __tasklet_schedule_common(struct tasklet_struct *t,
 				      struct tasklet_head __percpu *headp,
 				      unsigned int softirq_nr)
 {
 	struct tasklet_head *head;
 	unsigned long flags;
-
+	// 保存中断标志并禁用中断
 	local_irq_save(flags);
 	head = this_cpu_ptr(headp);
 	t->next = NULL;
+	// 将新的 tasklet 添加到 tasklet_head 的尾部
 	*head->tail = t;
 	head->tail = &(t->next);
+	// 发起软中断 从而调用 tasklet_action
 	raise_softirq_irqoff(softirq_nr);
 	local_irq_restore(flags);
 }
@@ -767,18 +777,21 @@ static bool tasklet_clear_sched(struct tasklet_struct *t)
 	return false;
 }
 
+// tasklet_wangs
 static void tasklet_action_common(struct softirq_action *a,
 				  struct tasklet_head *tl_head,
 				  unsigned int softirq_nr)
 {
 	struct tasklet_struct *list;
-
+	// 禁用当前处理器的中断
 	local_irq_disable();
+	// 获取到当前处理器对应的普通优先级 tasklet 列表并把它设置为 NULL，这是因为所有的 tasklet 都将被执行
 	list = tl_head->head;
 	tl_head->head = NULL;
 	tl_head->tail = &tl_head->head;
+	// 使能当前处理器的中断
 	local_irq_enable();
-
+	// 循环遍历 tasklet 列表，每一次遍历都会对当前 tasklet 调用 tasklet_trylock 函数来更新它的状态为 TASKLET_STATE_RUN
 	while (list) {
 		struct tasklet_struct *t = list;
 
@@ -787,11 +800,13 @@ static void tasklet_action_common(struct softirq_action *a,
 		if (tasklet_trylock(t)) {
 			if (!atomic_read(&t->count)) {
 				if (tasklet_clear_sched(t)) {
+					// 如果tasklet_trylock操作成功了就会执行此 tasklet 的处理函数(我们在 tasklet_init 中所设置的)
 					if (t->use_callback)
 						t->callback(t);
 					else
 						t->func(t->data);
 				}
+				// 清除他的 TASKLET_STATE_RUN 状态
 				tasklet_unlock(t);
 				continue;
 			}
@@ -807,11 +822,13 @@ static void tasklet_action_common(struct softirq_action *a,
 	}
 }
 
+// tasklet_wangs 使用 tasklet_vec
 static __latent_entropy void tasklet_action(struct softirq_action *a)
 {
 	tasklet_action_common(a, this_cpu_ptr(&tasklet_vec), TASKLET_SOFTIRQ);
 }
 
+// tasklet_wangs 使用 tasklet_hi_vec
 static __latent_entropy void tasklet_hi_action(struct softirq_action *a)
 {
 	tasklet_action_common(a, this_cpu_ptr(&tasklet_hi_vec), HI_SOFTIRQ);
@@ -829,6 +846,7 @@ void tasklet_setup(struct tasklet_struct *t,
 }
 EXPORT_SYMBOL(tasklet_setup);
 
+// tasklet_wangs
 void tasklet_init(struct tasklet_struct *t,
 		  void (*func)(unsigned long), unsigned long data)
 {
@@ -897,11 +915,13 @@ void tasklet_unlock_wait(struct tasklet_struct *t)
 EXPORT_SYMBOL_GPL(tasklet_unlock_wait);
 #endif
 
+// softirq_wangs
 void __init softirq_init(void)
 {
 	int cpu;
 
 	for_each_possible_cpu(cpu) {
+		// 初始化了两个 per-cpu 变量, Tasklets 和高优先级 Tasklets 分别存储于这两个数组中
 		per_cpu(tasklet_vec, cpu).tail =
 			&per_cpu(tasklet_vec, cpu).head;
 		per_cpu(tasklet_hi_vec, cpu).tail =
@@ -919,6 +939,9 @@ static int ksoftirqd_should_run(unsigned int cpu)
 	return local_softirq_pending();
 }
 
+/*
+每个 ksoftirqd 内核线程都运行 run_ksoftirqd 函数来检测是否有延后中断需要处理，如果有的话就会调用 handle_softirqs 函数
+*/
 static void run_ksoftirqd(unsigned int cpu)
 {
 	ksoftirqd_run_begin();
@@ -966,6 +989,7 @@ static int takeover_tasklets(unsigned int cpu)
 #define takeover_tasklets	NULL
 #endif /* CONFIG_HOTPLUG_CPU */
 
+// softirq_wangs
 static struct smp_hotplug_thread softirq_threads = {
 	.store			= &ksoftirqd,
 	.thread_should_run	= ksoftirqd_should_run,

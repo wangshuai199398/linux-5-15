@@ -3247,7 +3247,7 @@ static void __init dcache_init(void)
 /* SLAB cache for __getname() consumers */
 struct kmem_cache *names_cachep __read_mostly;
 EXPORT_SYMBOL(names_cachep);
-
+//负责初始化 dcache（目录项缓存）和 inode（索引节点）缓存的早期阶段
 void __init vfs_caches_init_early(void)
 {
 	int i;
@@ -3258,7 +3258,13 @@ void __init vfs_caches_init_early(void)
 	dcache_init_early();
 	inode_init_early();
 }
-//初始化基于内存的文件系统 rootfs
+/*
+初始化基于内存的文件系统 rootfs
+dcache（目录项缓存）和 inode（索引节点）缓存的后期初始化，同时还包括：
+	•	私有数据缓存的初始化；
+	•	挂载点（mount points）的哈希表初始化；
+	•	以及其他与 VFS 相关的结构。
+*/
 void __init vfs_caches_init(void)
 {
 	names_cachep = kmem_cache_create_usercopy("names_cache", PATH_MAX, 0,

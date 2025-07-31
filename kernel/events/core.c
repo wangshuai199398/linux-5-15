@@ -1241,11 +1241,12 @@ void perf_pmu_disable(struct pmu *pmu)
 		pmu->pmu_disable(pmu);
 }
 
+//pmu_wangs
 void perf_pmu_enable(struct pmu *pmu)
 {
 	int *count = this_cpu_ptr(pmu->pmu_disable_count);
 	if (!--(*count))
-		pmu->pmu_enable(pmu);
+		pmu->pmu_enable(pmu);// x86_pmu_enable
 }
 
 static DEFINE_PER_CPU(struct list_head, active_ctx_list);
@@ -4540,7 +4541,7 @@ static void __perf_event_read(void *info)
 	}
 
 	pmu->start_txn(pmu, PERF_PMU_TXN_READ);
-
+	// x86_pmu_read
 	pmu->read(event);
 
 	for_each_sibling_event(sub, event) {
@@ -4659,6 +4660,7 @@ static int perf_event_read(struct perf_event *event, bool group)
 	 * value in the event structure:
 	 */
 again:
+	// 如果 event 正在运行，尝试更新最新的数据
 	if (state == PERF_EVENT_STATE_ACTIVE) {
 		struct perf_read_data data;
 
@@ -4693,6 +4695,7 @@ again:
 		 * Therefore, either way, we'll have an up-to-date event count
 		 * after this.
 		 */
+		// 会在指定的CPU上运行某个函数
 		(void)smp_call_function_single(event_cpu, __perf_event_read, &data, 1);
 		preempt_enable();
 		ret = data.ret;
@@ -5578,7 +5581,7 @@ static int perf_read_one(struct perf_event *event,
 		values[n++] = primary_event_id(event);
 	if (read_format & PERF_FORMAT_LOST)
 		values[n++] = atomic64_read(&event->lost_samples);
-
+	// 将读取出来的值拷贝到用户空间
 	if (copy_to_user(buf, values, n * sizeof(u64)))
 		return -EFAULT;
 
@@ -7602,10 +7605,10 @@ void perf_prepare_sample(struct perf_event_header *header,
 	header->misc |= perf_misc_flags(regs);
 
 	__perf_event_header__init_id(header, data, event);
-
+	// 采集IP寄存器和当前正在执行的函数
 	if (sample_type & (PERF_SAMPLE_IP | PERF_SAMPLE_CODE_PAGE_SIZE))
 		data->ip = perf_instruction_pointer(regs);
-
+	// 采集当前的调用链
 	if (sample_type & PERF_SAMPLE_CALLCHAIN) {
 		int size = 1;
 
@@ -7763,6 +7766,7 @@ void perf_prepare_sample(struct perf_event_header *header,
 	WARN_ON_ONCE(header->size & 7);
 }
 
+// 真正采样处理
 static __always_inline int
 __perf_event_output(struct perf_event *event,
 		    struct perf_sample_data *data,
@@ -7778,13 +7782,13 @@ __perf_event_output(struct perf_event *event,
 
 	/* protect the callchain buffers */
 	rcu_read_lock();
-
+	// 进行采样
 	perf_prepare_sample(&header, data, event, regs);
-
+	// perf_output_begin_forward
 	err = output_begin(&handle, data, event, header.size);
 	if (err)
 		goto exit;
-
+	// 保存到环形缓存区中
 	perf_output_sample(&handle, &header, data, event);
 
 	perf_output_end(&handle);
@@ -9491,7 +9495,7 @@ static int __perf_event_overflow(struct perf_event *event,
 		event->pending_addr = data->addr;
 		irq_work_queue(&event->pending_irq);
 	}
-
+	// 执行回调 perf_event_output_forward
 	READ_ONCE(event->overflow_handler)(event, data, regs);
 
 	if (*perf_event_fasync(event) && event->pending_kill) {
@@ -12340,6 +12344,7 @@ perf_check_permission(struct perf_event_attr *attr, struct task_struct *task)
  * @cpu:		target cpu
  * @group_fd:		group leader event fd
  * @flags:		perf event open flags
+ * perf_event_open_wangs
  */
 SYSCALL_DEFINE5(perf_event_open,
 		struct perf_event_attr __user *, attr_uptr,
@@ -12419,7 +12424,7 @@ SYSCALL_DEFINE5(perf_event_open,
 
 	if (flags & PERF_FLAG_FD_CLOEXEC)
 		f_flags |= O_CLOEXEC;
-
+	// 为调用者申请新文件句柄
 	event_fd = get_unused_fd_flags(f_flags);
 	if (event_fd < 0)
 		return event_fd;
@@ -12451,7 +12456,7 @@ SYSCALL_DEFINE5(perf_event_open,
 
 	if (flags & PERF_FLAG_PID_CGROUP)
 		cgroup_fd = pid;
-
+	// 根据用户参数attr，定位pmu对象，通过pmu初始化event
 	event = perf_event_alloc(&attr, cpu, task, group_leader, NULL,
 				 NULL, NULL, cgroup_fd);
 	if (IS_ERR(event)) {
@@ -12508,6 +12513,7 @@ SYSCALL_DEFINE5(perf_event_open,
 	/*
 	 * Get the target context (task or percpu):
 	 */
+	// 创建 perf_event_context ctx 对象，ctx保存了上下文的各种信息
 	ctx = find_get_context(pmu, task, event);
 	if (IS_ERR(ctx)) {
 		err = PTR_ERR(ctx);
@@ -12569,7 +12575,7 @@ SYSCALL_DEFINE5(perf_event_open,
 		if (err)
 			goto err_context;
 	}
-
+	// 创建一个文件，指定 perf 类型文件的操作函数为 perf_fops
 	event_file = anon_inode_getfile("[perf_event]", &perf_fops, event,
 					f_flags);
 	if (IS_ERR(event_file)) {
@@ -12749,7 +12755,7 @@ not_move_group:
 	perf_event__id_header_size(event);
 
 	event->owner = current;
-
+	// 把 event 安装到 ctx 中
 	perf_install_in_context(ctx, event, event->cpu);
 	perf_unpin_context(ctx);
 

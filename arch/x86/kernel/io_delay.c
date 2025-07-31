@@ -29,7 +29,7 @@
 #endif
 
 int io_delay_type __read_mostly = DEFAULT_IO_DELAY_TYPE;
-
+//若该变量被设置，则覆盖默认的 I/O 延迟端口
 static int __initdata io_delay_override;
 
 /*

@@ -30,15 +30,15 @@ struct fs_struct;
  */
 struct nsproxy {
 	atomic_t count;
-	//主机名
+	//主机名和NIS域名的隔离性
 	struct uts_namespace *uts_ns;
-	//IPC
+	//解决信号量、消息队列和共享内存的隔离性
 	struct ipc_namespace *ipc_ns;
-	//文件系统挂载点
+	//文件系统隔离性
 	struct mnt_namespace *mnt_ns;
-	//进程标号
+	//进程号隔离性
 	struct pid_namespace *pid_ns_for_children;
-	//网络协议栈
+	//解决网络相关的设备、路由表、socket等资源的隔离性
 	struct net 	     *net_ns;
 	struct time_namespace *time_ns;
 	struct time_namespace *time_ns_for_children;

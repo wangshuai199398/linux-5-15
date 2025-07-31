@@ -280,6 +280,7 @@ do { \
  * to be barriers, so that we don't have things like get_user/put_user
  * that can cause faults and scheduling migrate into our preempt-protected
  * region.
+ * 禁用抢占, barrier 防止指令重排
  */
 #define preempt_disable()			barrier()
 #define sched_preempt_enable_no_resched()	barrier()

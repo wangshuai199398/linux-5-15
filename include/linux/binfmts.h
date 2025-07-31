@@ -16,12 +16,14 @@ struct filename;
  */
 struct linux_binprm {
 #ifdef CONFIG_MMU
+	// 在给定地址空间中一段连续的内存区域，也就是我们将要加载程序的区域
 	struct vm_area_struct *vma;
 	unsigned long vma_pages;
 #else
 # define MAX_ARG_PAGES	32
 	struct page *page[MAX_ARG_PAGES];
 #endif
+	// 表示该二进制程序的内存描述符
 	struct mm_struct *mm;
 	unsigned long p; /* current top of mem */
 	unsigned long argmin; /* rlimit marker for copy_strings() */

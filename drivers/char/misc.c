@@ -53,6 +53,7 @@
 
 /*
  * Head entry for the doubly linked miscdevice list
+ * 使用变量的地址来填充结构体的 prev 和 next 两个变量
  */
 static LIST_HEAD(misc_list);
 static DEFINE_MUTEX(misc_mtx);
@@ -213,8 +214,8 @@ int misc_register(struct miscdevice *misc)
 	}
 
 	/*
-	 * Add it to the front, so that later devices can "override"
-	 * earlier defaults
+	 * Add it to the front, so that later devices can "override" earlier defaults
+	 * 将设备添加到设备链表
 	 */
 	list_add(&misc->list, &misc_list);
  out:

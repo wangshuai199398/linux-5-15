@@ -15,7 +15,9 @@
 
 #define SMAP	0x534d4150	/* ASCII "SMAP" */
 
-//发出0x15中断并处理所有结果，把内存地址范围保存到boot_params.e820_table对象中
+/*
+发出0x15中断并处理所有结果，把内存地址范围保存到boot_params.e820_table对象中
+*/
 static void detect_memory_e820(void)
 {
 	int count = 0;
@@ -24,6 +26,13 @@ static void detect_memory_e820(void)
 	static struct boot_e820_entry buf; /* static so it is zeroed */
 
 	initregs(&ireg);
+	/*
+	  ax 固定为 0xe820
+	  cx 包含数据缓冲区的大小，该缓冲区将包含系统内存的信息数据
+	  edx 必须是 SMAP 这个魔术数字，就是 0x534d4150
+	  es:di 包含数据缓冲区的地址
+	  ebx 必须为0
+	*/
 	ireg.ax  = 0xe820;
 	ireg.cx  = sizeof(buf);
 	ireg.edx = SMAP;
@@ -42,7 +51,11 @@ static void detect_memory_e820(void)
 	 * other attribute bits.  Revisit this if we see the extended
 	 * attribute bits deployed in a meaningful way in the future.
 	 */
-
+	/*
+	通过一个循环来收集内存信息了。每个循环都开始于一个 0x15 中断调用，这个中断调用返回地址分配表中的一项，接着程序将返回的 ebx 设置到 biosregs 数据结构中，
+	然后进行下一次的 0x15 中断调用。那么循环什么时候结束呢？直到 0x15 调用返回的eflags包含标志 X86_EFLAGS_CF
+	在循环结束之后，整个内存分配信息将被写入到 e820entry 数组中，这个数组的每个元素包含下面3个信息: 内存段的起始地址 内存段的大小 内存段的类型（类型可以是reserved, usable等等
+	*/
 	do {
 		intcall(0x15, &ireg, &oreg);
 		ireg.ebx = oreg.ebx; /* for next iteration... */
@@ -113,7 +126,10 @@ static void detect_memory_88(void)
 
 	boot_params.screen_info.ext_mem_k = oreg.ax;
 }
-
+/*
+该方法使用多种编程接口，包括 0xe820（获取全部内存分配）
+0xe801 和 0x88（获取临近内存大小），进行内存分布侦测
+*/
 void detect_memory(void)
 {
 	detect_memory_e820();

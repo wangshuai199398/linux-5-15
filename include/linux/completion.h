@@ -48,6 +48,8 @@ static inline void complete_release(struct completion *x) {}
  * This macro declares and initializes a completion structure. Generally used
  * for static declarations. You should use the _ONSTACK variant for automatic
  * variables.
+ * Completions 是一种内核中的同步机制，可以为线程之间的等待提供一种无竞争（race-free）的方法，
+ * 使得某些线程在其他线程达到某个状态之前不会继续执行
  */
 #define DECLARE_COMPLETION(work) \
 	struct completion work = COMPLETION_INITIALIZER(work)

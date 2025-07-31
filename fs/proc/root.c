@@ -276,7 +276,7 @@ static void proc_kill_sb(struct super_block *sb)
 	put_pid_ns(fs_info->pid_ns);
 	kfree(fs_info);
 }
-
+//proc_wangs
 static struct file_system_type proc_fs_type = {
 	.name			= "proc",
 	.init_fs_context	= proc_init_fs_context,
@@ -287,12 +287,16 @@ static struct file_system_type proc_fs_type = {
 
 void __init proc_root_init(void)
 {
+	//为 inode 分配缓存
 	proc_init_kmemcache();
 	set_proc_pid_nlink();
+	//为 /proc/self 分配 inode 编号（该目录表示访问 /proc 文件系统的当前进程本身
 	proc_self_init();
+	//设置 /proc/thread-self 目录，该目录包含当前线程的信息
 	proc_thread_self_init();
+	//创建 /proc/self/mounts 的符号链接，该链接用于展示当前进程所挂载的挂载点
 	proc_symlink("mounts", NULL, "self/mounts");
-
+	//创建一些目录
 	proc_net_init();
 	proc_mkdir("fs", NULL);
 	proc_mkdir("driver", NULL);
@@ -303,6 +307,7 @@ void __init proc_root_init(void)
 #endif
 	proc_tty_init();
 	proc_mkdir("bus", NULL);
+	//创建 /proc/sys 目录，并初始化 Sysctl 子系统
 	proc_sys_init();
 
 	register_filesystem(&proc_fs_type);

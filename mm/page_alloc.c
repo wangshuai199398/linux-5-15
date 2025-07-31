@@ -2232,7 +2232,7 @@ void __init page_alloc_init_late(void)
 	/* Reinit limits that are based on free pages after the kernel is up */
 	files_maxfiles_init();
 #endif
-
+	//为 buffer_head 分配缓存（cache）
 	buffer_init();
 
 	/* Discard memblock private memory */
@@ -6559,6 +6559,9 @@ build_all_zonelists_init(void)
  * 3.	为每个节点建立一个 优先访问的内存 Zone 列表（zonelist），以实现高效的内存分配策略；
  * 4.	根据策略选择：先尝试本地节点,如果本地资源不足，则查找“邻近节点”
  * 5.	最终生成的 zonelist 用于 __alloc_pages()、kmalloc() 等调用内存分配时参考
+ * 
+ * 构建一个有序的 zonelist（区域列表）其中包括不同的 zone（区域），如：DMA、DMA32、NORMAL、HIGH_MEMORY、MOVABLE
+ * 这个列表指定了在某个选定的 zone 或 node 无法满足内存分配请求时，系统应该访问哪些 zone 或 node
  */
 void __ref build_all_zonelists(pg_data_t *pgdat)
 {

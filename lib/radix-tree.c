@@ -695,11 +695,13 @@ static inline int insert_entries(struct radix_tree_node *node,
 
 /**
  *	radix_tree_insert    -    insert into a radix tree
- *	@root:		radix tree root
- *	@index:		index key
- *	@item:		item to insert
+ *	@root:		radix 树 root 节点结构
+ *	@index:		索引关键字
+ *	@item:		需要插入存储的数据
  *
  *	Insert an item into the radix tree at position @index.
+ *  节点插入
+ *  radix_wangs
  */
 int radix_tree_insert(struct radix_tree_root *root, unsigned long index,
 			void *item)
@@ -791,6 +793,7 @@ void *__radix_tree_lookup(const struct radix_tree_root *root,
  *	modified by radix_tree_replace_slot, otherwise it must be called
  *	exclusive from other writers. Any dereference of the slot must be done
  *	using radix_tree_deref_slot.
+ *  返回结点 slot 中所存储的数据
  */
 void __rcu **radix_tree_lookup_slot(const struct radix_tree_root *root,
 				unsigned long index)
@@ -805,8 +808,8 @@ EXPORT_SYMBOL(radix_tree_lookup_slot);
 
 /**
  *	radix_tree_lookup    -    perform lookup operation on a radix tree
- *	@root:		radix tree root
- *	@index:		index key
+ *	@root:		radix 树 root 节点结构
+ *	@index:		索引关键字
  *
  *	Lookup the item at the position @index in the radix tree @root.
  *
@@ -814,6 +817,7 @@ EXPORT_SYMBOL(radix_tree_lookup_slot);
  *	must manage lifetimes of leaf nodes (eg. RCU may also be used to free
  *	them safely). No RCU barriers are required to access or modify the
  *	returned item, however.
+ *  通过给定的关键字查找 radix 树，并返关键字所对应的结点
  */
 void *radix_tree_lookup(const struct radix_tree_root *root, unsigned long index)
 {
@@ -1258,6 +1262,7 @@ EXPORT_SYMBOL(radix_tree_next_chunk);
  *	semantics of an RCU protected gang lookup are as though multiple
  *	radix_tree_lookups have been issued in individual locks, and results
  *	stored in 'results'.
+ *  返回查找到记录的条目数，并根据关键字进行排序，返回的总结点数不超过入参 max_items 的大小
  */
 unsigned int
 radix_tree_gang_lookup(const struct radix_tree_root *root, void **results,
@@ -1442,6 +1447,8 @@ EXPORT_SYMBOL(radix_tree_delete_item);
  * Remove the entry at @index from the radix tree rooted at @root.
  *
  * Return: The deleted entry, or %NULL if it was not present.
+ * 除了不需要存储数据参数外，其他与 radix_tree_insert 一致
+ * 节点删除
  */
 void *radix_tree_delete(struct radix_tree_root *root, unsigned long index)
 {

@@ -51,6 +51,7 @@ extern void text_poke_queue(void *addr, const void *opcode, size_t len, const vo
 extern void text_poke_finish(void);
 
 #define INT3_INSN_SIZE		1
+// kprobe_wangs
 #define INT3_INSN_OPCODE	0xCC
 
 #define RET_INSN_SIZE		1

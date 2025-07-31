@@ -233,6 +233,7 @@ struct obj_cgroup {
  * page cache and RSS per cgroup. We would eventually like to provide
  * statistics based on the statistics developed by Rik Van Riel for clock-pro,
  * to help the administrator determine what knobs to tune.
+ * mem_cgroup_wangs
  */
 struct mem_cgroup {
 	struct cgroup_subsys_state css;
@@ -240,7 +241,7 @@ struct mem_cgroup {
 	/* Private memcg ID. Used to ID objects that outlive the cgroup */
 	struct mem_cgroup_id id;
 
-	/* Accounted resources */
+	/* cgroup 内存计数 */
 	struct page_counter memory;		/* Both v1 & v2 */
 
 	union {
@@ -336,7 +337,7 @@ struct mem_cgroup {
 	 */
 	atomic_t		moving_account;
 	struct task_struct	*move_lock_task;
-
+	//记录更详细的RSS、PageCache内存开销的
 	struct memcg_vmstats_percpu __percpu *vmstats_percpu;
 
 #ifdef CONFIG_CGROUP_WRITEBACK

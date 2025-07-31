@@ -61,6 +61,7 @@ static inline void early_get_smp_config(void)
 
 static inline void find_smp_config(void)
 {
+	// default_find_smp_config 扫描内存中的一些区域来寻找 SMP 的配置信息,并在找到它们的时候返回
 	x86_init.mpparse.find_smp_config();
 }
 

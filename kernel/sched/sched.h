@@ -143,7 +143,7 @@ extern void call_trace_sched_update_nr_running(struct rq *rq, int count);
  * following must be true:
  *
  *  scale_load(sched_prio_to_weight[NICE_TO_PRIO(0)-MAX_RT_PRIO]) == NICE_0_LOAD
- *
+ * 正好等于实际运行时间
  */
 #define NICE_0_LOAD		(1L << NICE_0_LOAD_SHIFT)
 
@@ -362,11 +362,14 @@ struct rt_rq;
 
 extern struct list_head task_groups;
 
+//cfs_bandwidth_wangs
 struct cfs_bandwidth {
 #ifdef CONFIG_CFS_BANDWIDTH
 	raw_spinlock_t		lock;
+	//带宽控制配置
 	ktime_t			period;
 	u64			quota;
+	//当前 task_group 的全局可执行时间
 	u64			runtime;
 	u64			burst;
 	s64			hierarchical_quota;
@@ -374,7 +377,10 @@ struct cfs_bandwidth {
 	u8			idle;
 	u8			period_active;
 	u8			slack_started;
+	//定时分配
+	//向 task_group 充时间的时机，周期长
 	struct hrtimer		period_timer;
+	// 用于有cfs_rq处于 throttle 状态且全局时间池有时间可供分配，但是period_timer还有比较长时间（大于7ms）才能赶来充值的场景
 	struct hrtimer		slack_timer;
 	struct list_head	throttled_cfs_rq;
 
@@ -390,9 +396,9 @@ struct task_group {
 	struct cgroup_subsys_state css;
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
-	/* schedulable entities of this group on each CPU 调度实体 */
+	/* 该组在每个 CPU 上的可调度实体 持有的N个调度实体(N = CPU核数) */
 	struct sched_entity	**se;
-	/* runqueue "owned" by this group on each CPU */
+	/* task_group 自己的N个公平调度队列(N = CPU核数) */
 	struct cfs_rq		**cfs_rq;
 	unsigned long		shares;
 
@@ -418,7 +424,7 @@ struct task_group {
 
 	struct rcu_head		rcu;
 	struct list_head	list;
-
+	// task_group 树结构
 	struct task_group	*parent;
 	struct list_head	siblings;
 	struct list_head	children;
@@ -426,7 +432,7 @@ struct task_group {
 #ifdef CONFIG_SCHED_AUTOGROUP
 	struct autogroup	*autogroup;
 #endif
-
+	// 公平调度带宽限制
 	struct cfs_bandwidth	cfs_bandwidth;
 
 #ifdef CONFIG_UCLAMP_TASK_GROUP
@@ -526,7 +532,7 @@ struct cfs_bandwidth { };
 
 #endif	/* CONFIG_CGROUP_SCHED */
 
-/* CFS-related fields in a runqueue */
+/* CFS-related fields in a runqueue cfs_rq_wansg */
 struct cfs_rq {
 	struct load_weight	load;
 	unsigned int		nr_running;
@@ -544,7 +550,7 @@ struct cfs_rq {
 #ifndef CONFIG_64BIT
 	u64			min_vruntime_copy;
 #endif
-	//保存就绪任务的红黑树
+	//保存就绪任务的红黑树,每个节点是调度实体sched_entity对象,这个对象可能属于普通进程task_struct,也有可能是属于容器进程task_group的
 	struct rb_root_cached	tasks_timeline;
 
 	/*

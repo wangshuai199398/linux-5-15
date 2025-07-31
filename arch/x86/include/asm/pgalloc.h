@@ -60,7 +60,13 @@ static inline void __pte_free_tlb(struct mmu_gather *tlb, struct page *pte,
 {
 	___pte_free_tlb(tlb, pte);
 }
+/*
+init_mm - init 进程的内存描述符 (你可以在前文中看到)；
+pmd - ioremap 固定映射开始处的页中部目录；
+bm_pte - 初期 ioremap 页表入口数组定义为：bm_pte
 
+用给定的页表入口(bm_pte)生成给定页中部目录(pmd)
+*/
 static inline void pmd_populate_kernel(struct mm_struct *mm,
 				       pmd_t *pmd, pte_t *pte)
 {

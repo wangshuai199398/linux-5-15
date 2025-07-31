@@ -88,6 +88,7 @@ u64 clockevent_delta2ns(unsigned long latch, struct clock_event_device *evt)
 }
 EXPORT_SYMBOL_GPL(clockevent_delta2ns);
 
+// 根据传入的目标状态调用对应的回调函数
 static int __clockevents_switch_state(struct clock_event_device *dev,
 				      enum clock_event_state state)
 {
@@ -109,6 +110,7 @@ static int __clockevents_switch_state(struct clock_event_device *dev,
 		if (!(dev->features & CLOCK_EVT_FEAT_PERIODIC))
 			return -ENOSYS;
 		if (dev->set_state_periodic)
+			// pit_clkevt_set_periodic
 			return dev->set_state_periodic(dev);
 		return 0;
 
@@ -143,6 +145,7 @@ static int __clockevents_switch_state(struct clock_event_device *dev,
  * @state:	new state
  *
  * Must be called with interrupts disabled !
+ * 检查时钟事件设备当前是否已经处于指定的状态，如果不是，则调用同一源码文件中的 __clockevents_switch_state 函数
  */
 void clockevents_switch_state(struct clock_event_device *dev,
 			      enum clock_event_state state)
@@ -339,6 +342,8 @@ int clockevents_program_event(struct clock_event_device *dev, ktime_t expires,
 /*
  * Called after a notify add to make devices available which were
  * released from the notifier call.
+ * 检查 clockevents_released 列表，该列表中包含了已释放的时钟事件设备（请记住，这些设备可能是在调用 clockevents_exchange_device 函数后出现的）。
+ * 如果该列表不为空，我们会遍历 clockevents_released 列表中的时钟事件设备，并将它们从 clockevent_devices 中删除
  */
 static void clockevents_notify_released(void)
 {
@@ -438,7 +443,7 @@ EXPORT_SYMBOL_GPL(clockevents_unbind_device);
 
 /**
  * clockevents_register_device - register a clock event device
- * @dev:	device to register
+ * @dev:	device to register 时钟事件设备
  */
 void clockevents_register_device(struct clock_event_device *dev)
 {
@@ -446,7 +451,7 @@ void clockevents_register_device(struct clock_event_device *dev)
 
 	/* Initialize state to DETACHED */
 	clockevent_set_state(dev, CLOCK_EVT_STATE_DETACHED);
-
+	// 检查该设备的 cpumask 是否为零
 	if (!dev->cpumask) {
 		WARN_ON(num_possible_cpus() > 1);
 		dev->cpumask = cpumask_of(smp_processor_id());
@@ -457,10 +462,11 @@ void clockevents_register_device(struct clock_event_device *dev)
 		     dev->name);
 		dev->cpumask = cpu_possible_mask;
 	}
-
+	// 禁用当前处理器上的本地中断，但其他处理器上的中断仍可能发生，为了防止在将新的时钟事件设备添加到 clockevent_devices 列表时，如果另一个时钟事件设备触发中断，可能导致的潜在死锁问题
 	raw_spin_lock_irqsave(&clockevents_lock, flags);
 
 	list_add(&dev->list, &clockevent_devices);
+	// 检查新注册的时钟事件设备是否应该被使用
 	tick_check_new_device(dev);
 	clockevents_notify_released();
 
@@ -564,6 +570,7 @@ void clockevents_handle_noop(struct clock_event_device *dev)
  *
  * Called from various tick functions with clockevents_lock held and
  * interrupts disabled.
+ * 从 clockevent_devices 列表中删除旧的时钟事件设备
  */
 void clockevents_exchange_device(struct clock_event_device *old,
 				 struct clock_event_device *new)

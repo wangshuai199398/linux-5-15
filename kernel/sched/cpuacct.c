@@ -22,9 +22,11 @@ static const char * const cpuacct_stat_desc[] = {
 };
 
 /* track CPU usage of a group of tasks and its child groups */
+//cpuacct
 struct cpuacct {
 	struct cgroup_subsys_state	css;
 	/* cpuusage holds pointer to a u64-type object on every CPU */
+	//保存着当前cgroup在每个核上使用的时间信息
 	u64 __percpu	*cpuusage;
 	struct kernel_cpustat __percpu	*cpustat;
 };
@@ -265,6 +267,7 @@ static int cpuacct_stats_show(struct seq_file *sf, void *v)
 	int stat;
 
 	memset(val, 0, sizeof(val));
+	//汇总每一个CPU变量
 	for_each_possible_cpu(cpu) {
 		u64 *cpustat = per_cpu_ptr(ca->cpustat, cpu)->cpustat;
 
@@ -274,7 +277,7 @@ static int cpuacct_stats_show(struct seq_file *sf, void *v)
 		val[CPUACCT_STAT_SYSTEM] += cpustat[CPUTIME_IRQ];
 		val[CPUACCT_STAT_SYSTEM] += cpustat[CPUTIME_SOFTIRQ];
 	}
-
+	//输出
 	for (stat = 0; stat < CPUACCT_STAT_NSTATS; stat++) {
 		seq_printf(sf, "%s %lld\n",
 			   cpuacct_stat_desc[stat],
@@ -283,7 +286,7 @@ static int cpuacct_stats_show(struct seq_file *sf, void *v)
 
 	return 0;
 }
-
+//cpuacct_wangs
 static struct cftype files[] = {
 	{
 		.name = "usage",
@@ -341,6 +344,7 @@ void cpuacct_charge(struct task_struct *tsk, u64 cputime)
  * Add user/system time to cpuacct.
  *
  * Note: it's the caller that updates the account of the root cgroup.
+ * 遍历任务所归属的所有 cpuacct，然后把每一个 cpuacct 下的 cpustat 都加起来
  */
 void cpuacct_account_field(struct task_struct *tsk, int index, u64 val)
 {

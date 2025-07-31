@@ -61,18 +61,25 @@ struct device;
  * - detects self-recursing locks and prints out all relevant info
  * - detects multi-task circular deadlocks and prints out all affected
  *   locks and tasks (and only those tasks)
+ * mutex_wangs
  */
 struct mutex {
+	// 持有该锁的进程
 	atomic_long_t		owner;
+	// 保护等待队列的自旋锁
 	raw_spinlock_t		wait_lock;
 #ifdef CONFIG_MUTEX_SPIN_ON_OWNER
+	// 用于支持乐观自旋 (optimistic spinning) 功能
 	struct optimistic_spin_queue osq; /* Spinner MCS lock */
 #endif
+	// 由某个锁的等待者们所构成的 等待队列 列表
 	struct list_head	wait_list;
 #ifdef CONFIG_DEBUG_MUTEXES
+	// 用来存储跟互斥锁调试的相关资讯
 	void			*magic;
 #endif
 #ifdef CONFIG_DEBUG_LOCK_ALLOC
+	// 在Linux内核的 锁验证器 (lock validator) 中被使用
 	struct lockdep_map	dep_map;
 #endif
 };
@@ -93,12 +100,12 @@ static inline void mutex_destroy(struct mutex *lock) {}
 #endif
 
 /**
- * mutex_init - initialize the mutex
- * @mutex: the mutex to be initialized
+ * 初始化互斥锁
+ * @mutex: 要初始化的互斥锁
  *
- * Initialize the mutex to unlocked state.
+ * 将该互斥锁初始化为未加锁（解锁）状态
  *
- * It is not allowed to initialize an already locked mutex.
+ * 注意：不允许对已经加锁的互斥锁进行初始化
  */
 #define mutex_init(mutex)						\
 do {									\
@@ -107,6 +114,7 @@ do {									\
 	__mutex_init((mutex), #mutex, &__key);				\
 } while (0)
 
+// wait_lock 自旋锁 被初始化为无锁状态，而最后的栏位 wait_list 被初始化为空的 双向列表
 #define __MUTEX_INITIALIZER(lockname) \
 		{ .owner = ATOMIC_LONG_INIT(0) \
 		, .wait_lock = __RAW_SPIN_LOCK_UNLOCKED(lockname.wait_lock) \
@@ -114,6 +122,7 @@ do {									\
 		__DEBUG_MUTEX_INITIALIZER(lockname) \
 		__DEP_MAP_MUTEX_INITIALIZER(lockname) }
 
+// 接受新定义的互斥锁名称，并将其扩展成一个新的互斥锁结构
 #define DEFINE_MUTEX(mutexname) \
 	struct mutex mutexname = __MUTEX_INITIALIZER(mutexname)
 

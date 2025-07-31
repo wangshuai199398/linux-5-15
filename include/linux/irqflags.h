@@ -165,6 +165,7 @@ extern void warn_bogus_irq_restore(void);
  */
 #define raw_local_irq_disable()		arch_local_irq_disable()
 #define raw_local_irq_enable()		arch_local_irq_enable()
+// 关闭本地 CPU 中断 并保存中断状态
 #define raw_local_irq_save(flags)			\
 	do {						\
 		typecheck(unsigned long, flags);	\
@@ -231,10 +232,12 @@ extern void warn_bogus_irq_restore(void);
 
 
 #else /* !CONFIG_TRACE_IRQFLAGS */
-
+//打开/关闭 当前cpu中断
 #define local_irq_enable()	do { raw_local_irq_enable(); } while (0)
 #define local_irq_disable()	do { raw_local_irq_disable(); } while (0)
+// 保存了 eflags 寄存器中的 IF 标志位并且禁用了当前处理器的中断
 #define local_irq_save(flags)	do { raw_local_irq_save(flags); } while (0)
+// 装回之前保存的中断标志位然后允许中断
 #define local_irq_restore(flags) do { raw_local_irq_restore(flags); } while (0)
 #define safe_halt()		do { raw_safe_halt(); } while (0)
 

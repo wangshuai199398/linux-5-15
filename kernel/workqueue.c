@@ -143,7 +143,11 @@ enum {
  * MD: wq_mayday_lock protected.
  */
 
-/* struct worker is defined in workqueue_internal.h */
+/* struct worker is defined in workqueue_internal.h 
+work_wangs 
+工作队列最基础的用法，是作为创建内核线程的接口来处理提交到队列里的工作任务。所有这些内核线程称之为 worker thread
+工作队列内的任务是由代码 include/linux/workqueue.h 中定义的 work_struct 表示的
+*/
 
 struct worker_pool {
 	raw_spinlock_t		lock;		/* the pool lock */
@@ -252,8 +256,12 @@ struct wq_device;
 /*
  * The externally visible workqueue.  It relays the issued work items to
  * the appropriate worker_pool through its pool_workqueues.
+ * workqueue_wangs
+ * 当我们创建一个 workqueue，他针对每一个处理器都创建了 worker_pool
+ * 每一个和 worker_pool 相关联的 pool_workqueue 都分配在相同的处理器上对应的优先级队列，workqueue 通过他们和 worker_pool 交互
  */
 struct workqueue_struct {
+	// pwqs 是一个 worker_pool 列表
 	struct list_head	pwqs;		/* WR: all pwqs of this wq */
 	struct list_head	list;		/* PR: list of all workqueues */
 
@@ -1356,17 +1364,21 @@ fail:
  *
  * CONTEXT:
  * raw_spin_lock_irq(pool->lock).
+ * 将一个 work_struct（工作项）正式插入到底层 worker_pool 的工作队列中，并根据需要唤醒空闲的 worker 线程来执行它
  */
 static void insert_work(struct pool_workqueue *pwq, struct work_struct *work,
 			struct list_head *head, unsigned int extra_flags)
 {
+	//获取当前 pool_workqueue 所绑定的 worker_pool，即执行任务的实际线程池
 	struct worker_pool *pool = pwq->pool;
 
 	/* record the work call stack in order to print it in KASAN reports */
 	kasan_record_aux_stack(work);
 
 	/* we own @work, set data and link */
+	//将 pwq 的地址编码进 work->data 字段，同时设置额外的状态标志位（比如 WORK_STRUCT_INACTIVE 等）
 	set_work_pwq(work, pwq, extra_flags);
+	//把worke插入到pwq->pool->worklist（活跃任务）或pwq->inactive_works（等待任务）
 	list_add_tail(&work->entry, head);
 	get_pwq(pwq);
 
@@ -1374,6 +1386,7 @@ static void insert_work(struct pool_workqueue *pwq, struct work_struct *work,
 	 * Ensure either wq_worker_sleeping() sees the above
 	 * list_add_tail() or we see zero nr_running to avoid workers lying
 	 * around lazily while there are works to be processed.
+	 * 保证前面写入链表的操作（list_add_tail()）在多核系统中对其他 CPU 可见
 	 */
 	smp_mb();
 
@@ -1430,6 +1443,10 @@ static int wq_select_unbound_cpu(int cpu)
 	return new_cpu;
 }
 
+/*
+将一个工作项（struct work_struct *work）加入到合适的工作队列（struct workqueue_struct *wq）中进行调度和执行。
+这个机制通常用于将一些在中断上下文或软中断中不能完成的任务延迟到进程上下文中执行
+*/
 static void __queue_work(int cpu, struct workqueue_struct *wq,
 			 struct work_struct *work)
 {
@@ -1440,44 +1457,43 @@ static void __queue_work(int cpu, struct workqueue_struct *wq,
 	unsigned int req_cpu = cpu;
 
 	/*
-	 * While a work item is PENDING && off queue, a task trying to
-	 * steal the PENDING will busy-loop waiting for it to either get
-	 * queued or lose PENDING.  Grabbing PENDING and queueing should
-	 * happen with IRQ disabled.
+	 * While a work item is PENDING && off queue, a task trying to steal the PENDING will busy-loop waiting for it to either get
+	 * queued or lose PENDING.  Grabbing PENDING and queueing should happen with IRQ disabled.
+	 * 加锁保护共享数据结构，要求中断已关闭，以防止死锁或竞态条件
 	 */
 	lockdep_assert_irqs_disabled();
 
 
-	/* if draining, only works from the same workqueue are allowed */
+	/* if draining, only works from the same workqueue are allowed 防止正在 drain（清空）时被插入 */
 	if (unlikely(wq->flags & __WQ_DRAINING) &&
 	    WARN_ON_ONCE(!is_chained_work(wq)))
 		return;
 	rcu_read_lock();
 retry:
-	/* pwq which will be used unless @work is executing elsewhere */
+	/* 将要使用的 pwq，除非该 work 当前正在其他地方执行 */
+	// wq是非绑定工作队列可以在任何 CPU 上运行，如果未指定cpu，选择一个 NUMA 友好的 CPU，然后通过所选 CPU 所在的 NUMA node 获取 unbound 类型的 pwq
 	if (wq->flags & WQ_UNBOUND) {
 		if (req_cpu == WORK_CPU_UNBOUND)
 			cpu = wq_select_unbound_cpu(raw_smp_processor_id());
 		pwq = unbound_pwq_by_node(wq, cpu_to_node(cpu));
 	} else {
+		//否则说明这是一个 per-CPU 绑定的工作队列，即每个 CPU 有一个对应的工作队列，如果没有指定目标 CPU，就使用当前 CPU，获取该 CPU 上的 pool_workqueue 实例
 		if (req_cpu == WORK_CPU_UNBOUND)
 			cpu = raw_smp_processor_id();
 		pwq = per_cpu_ptr(wq->cpu_pwqs, cpu);
 	}
 
-	/*
-	 * If @work was previously on a different pool, it might still be
-	 * running there, in which case the work needs to be queued on that
-	 * pool to guarantee non-reentrancy.
-	 */
+	/* 如果 @work 之前曾在另一个线程池（pool）上排队或执行过，那么它可能仍然在那个线程池中运行，此时必须将该任务再次排队到原来的线程池，以确保不会发生重入（non-reentrancy）*/
+	// 所有的 works 都没有放在 workqueue 中，而是放在内核中由 worker_pool 数据结构所定义的 work_poll
+	//获取这个 work_struct（工作项）上一次被调度或执行时所使用的 worker_pool
 	last_pool = get_work_pool(work);
 	if (last_pool && last_pool != pwq->pool) {
 		struct worker *worker;
 
 		raw_spin_lock(&last_pool->lock);
-
+		//查找是否有某个 worker 线程当前正在执行这个 work
 		worker = find_worker_executing_work(last_pool, work);
-
+		//如果确实有线程正在执行这个 work，并且它的 pwq->wq 与当前我们要排队的 wq 是同一个逻辑工作队列，那就直接用该线程正在执行的 current_pwq 来调度这个任务，保证任务重入时仍使用相同的上下文
 		if (worker && worker->current_pwq->wq == wq) {
 			pwq = worker->current_pwq;
 		} else {
@@ -1486,6 +1502,7 @@ retry:
 			raw_spin_lock(&pwq->pool->lock);
 		}
 	} else {
+		//可能发生 pwq 还在使用但已经被释放的极端情况。对于非绑定队列会重试
 		raw_spin_lock(&pwq->pool->lock);
 	}
 
@@ -1516,7 +1533,7 @@ retry:
 
 	pwq->nr_in_flight[pwq->work_color]++;
 	work_flags = work_color_to_flags(pwq->work_color);
-
+	//如果 pool 中活跃的 work 少于最大并发数，则加入主队列，否则加入 “inactive” 队列等待被激活
 	if (likely(pwq->nr_active < pwq->max_active)) {
 		trace_workqueue_activate_work(work);
 		pwq->nr_active++;
@@ -1529,6 +1546,7 @@ retry:
 	}
 
 	debug_work_activate(work);
+	// 将 work 插入到链表中，供 worker 线程后续处理
 	insert_work(pwq, work, worklist, work_flags);
 
 out:
@@ -1546,6 +1564,7 @@ out:
  * can't go away.
  *
  * Return: %false if @work was already on a queue, %true otherwise.
+ * 测试并设置所给任务的 WORK_STRUCT_PENDING_BIT 标志位，然后以所给的工作队列和队列任务为参数执行 __queue_work 函数
  */
 bool queue_work_on(int cpu, struct workqueue_struct *wq,
 		   struct work_struct *work)
@@ -1943,6 +1962,9 @@ static void worker_detach_from_pool(struct worker *worker)
  *
  * Return:
  * Pointer to the newly created worker.
+ * 
+ * 内核提供了称之为 kworker 的特定于每个 cpu 的内核线程来调度执行工作队列的延后函数(就像 ksoftirqd 之于软中断)
+ * work_wangs
  */
 static struct worker *create_worker(struct worker_pool *pool)
 {

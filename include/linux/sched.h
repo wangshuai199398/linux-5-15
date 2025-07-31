@@ -534,6 +534,7 @@ struct sched_statistics {
 #endif
 } ____cacheline_aligned;
 
+//sched_entity_wangs
 struct sched_entity {
 	/* 当前进程的权重信息 */
 	struct load_weight		load;
@@ -732,6 +733,7 @@ struct kmap_ctrl {
 每个进程都有独立的地址空间，为了这个进程独立完成映射，每个进程都有独立的进程页表，这个页表的最顶级的 pgd 存放在 task_struct->mm_struct->pgd 变量里面
 一个进程的虚拟地址空间包含用户态和内核态两部分。为了从虚拟地址空间映射到物理页面，页表也分为用户地址空间的页表和内核页表，这就 vmalloc 有关系了。
 在内核里面，映射靠内核页表，这里内核页表会拷贝一份到进程的页表
+task_struct_wangs
 */
 struct task_struct {
 #ifdef CONFIG_THREAD_INFO_IN_TASK
@@ -775,6 +777,7 @@ struct task_struct {
 	//是否在运行队列上
 	int				on_rq;
 	//进程调度动态优先级, 实时进程优先级范围0-99, 普通进程优先级100-139
+	//在进程生命周期内根据其静态优先级和交互性（interactivity）动态计算出来的，不能被直接修改
 	int				prio;
 	//静态优先级 可以通过nice命令修改 范围：100-139
 	int				static_prio;
@@ -798,6 +801,7 @@ struct task_struct {
 #endif
 
 #ifdef CONFIG_CGROUP_SCHED
+	//表示其归属的 task_group
 	struct task_group		*sched_task_group;
 #endif
 
@@ -983,6 +987,7 @@ struct task_struct {
 
 	/* PID/PID hash table linkage. */
 	struct pid			*thread_pid;
+	//该任务在该 PID 类型下的链表节点
 	struct hlist_node		pid_links[PIDTYPE_MAX];
 	struct list_head		thread_group;
 	struct list_head		thread_node;
@@ -1214,7 +1219,7 @@ struct task_struct {
 	int				cpuset_slab_spread_rotor;
 #endif
 #ifdef CONFIG_CGROUPS
-	/* Control Group info protected by css_set_lock: */
+	/* 由 css_set_lock 保护的控制组信息： */
 	struct css_set __rcu		*cgroups;
 	/* cg_list protected by css_set_lock and tsk->alloc_lock: */
 	struct list_head		cg_list;

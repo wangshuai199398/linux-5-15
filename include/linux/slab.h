@@ -162,6 +162,8 @@ int kmem_cache_shrink(struct kmem_cache *);
  * The alignment of the struct determines object alignment. If you
  * f.e. add ____cacheline_aligned_in_smp to the struct declaration
  * then the objects will be properly aligned in SMP configurations.
+ * KMEM_CACHE 宏与 kmem_cache_create 有一个关键区别。
+ * 请注意 __alignof__ 操作符：KMEM_CACHE 宏会将 SLAB 按给定结构体的对齐方式进行对齐，而 kmem_cache_create 则是使用显式传入的对齐值进行对齐。
  */
 #define KMEM_CACHE(__struct, __flags)					\
 		kmem_cache_create(#__struct, sizeof(struct __struct),	\

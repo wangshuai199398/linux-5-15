@@ -846,11 +846,11 @@ void __init fork_init(void)
 			useroffset, usersize, NULL);
 #endif
 
-	/* do the arch specific task caches init */
+	/* do the arch specific task caches init 初始化与体系结构相关的缓存 */
 	arch_task_cache_init();
-
+	//继续计算默认的最大线程数量（maximum number of threads）
 	set_max_threads(MAX_THREADS);
-
+	//信号处理器（signal handler）的初始化 /proc/self/limits
 	init_task.signal->rlim[RLIMIT_NPROC].rlim_cur = max_threads/2;
 	init_task.signal->rlim[RLIMIT_NPROC].rlim_max = max_threads/2;
 	init_task.signal->rlim[RLIMIT_SIGPENDING] =
@@ -886,7 +886,7 @@ void set_task_stack_end_magic(struct task_struct *tsk)
 {
 	unsigned long *stackend;
 
-	stackend = end_of_stack(tsk);//栈空间的末尾stack，栈的使用范围：stack+THREAD_SIZE - stack(从高到低增长)
+	stackend = end_of_stack(tsk);//栈空间的末尾stack，栈的使用范围：stack+THREAD_SIZE-stack(从高到低增长)
 	*stackend = STACK_END_MAGIC;	/* for overflow detection */
 }
 //复制当前任务的 task_struct 结构到新的进程中
@@ -1071,6 +1071,7 @@ static struct mm_struct *mm_init(struct mm_struct *mm, struct task_struct *p,
 	memset(&mm->rss_stat, 0, sizeof(mm->rss_stat));
 	spin_lock_init(&mm->page_table_lock);
 	spin_lock_init(&mm->arg_lock);
+	//将 cpumask 指针设置到内存描述符的 cpumask 中
 	mm_init_cpumask(mm);
 	mm_init_aio(mm);
 	mm_init_owner(mm, p);
@@ -2427,6 +2428,7 @@ static __latent_entropy struct task_struct *copy_process(
 			list_add_tail_rcu(&p->thread_node,
 					  &p->signal->thread_head);
 		}
+		//把申请到的pid结构挂到自己的pids[PIDTYPE_PID]链表里
 		attach_pid(p, PIDTYPE_PID);
 		nr_threads++;
 	}
@@ -2961,28 +2963,34 @@ void __init mm_cache_init(void)
 			sizeof_field(struct mm_struct, saved_auxv),
 			NULL);
 }
-
+//cache_wangs
 void __init proc_caches_init(void)
 {
+	//管理已安装的信号处理器信息
 	sighand_cachep = kmem_cache_create("sighand_cache",
 			sizeof(struct sighand_struct), 0,
 			SLAB_HWCACHE_ALIGN|SLAB_PANIC|SLAB_TYPESAFE_BY_RCU|
 			SLAB_ACCOUNT, sighand_ctor);
+	//管理进程的信号描述符（signal_struct）信息
 	signal_cachep = kmem_cache_create("signal_cache",
 			sizeof(struct signal_struct), 0,
 			SLAB_HWCACHE_ALIGN|SLAB_PANIC|SLAB_ACCOUNT,
 			NULL);
+	//管理打开文件信息
 	files_cachep = kmem_cache_create("files_cache",
 			sizeof(struct files_struct), 0,
 			SLAB_HWCACHE_ALIGN|SLAB_PANIC|SLAB_ACCOUNT,
 			NULL);
+	//管理文件系统信息
 	fs_cachep = kmem_cache_create("fs_cache",
 			sizeof(struct fs_struct), 0,
 			SLAB_HWCACHE_ALIGN|SLAB_PANIC|SLAB_ACCOUNT,
 			NULL);
-
+	//为非常重要的 vm_area_struct 分配了 SLAB 缓存。该结构体被内核用于管理虚拟内存空间（virtual memory space）
 	vm_area_cachep = KMEM_CACHE(vm_area_struct, SLAB_PANIC|SLAB_ACCOUNT);
+	//初始化 虚拟内存区域（vm_area_struct） 的 SLAB 缓存
 	mmap_init();
+	//为 命名空间（namespace） 初始化 SLAB 缓存
 	nsproxy_cache_init();
 }
 

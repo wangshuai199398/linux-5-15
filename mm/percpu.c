@@ -2791,6 +2791,7 @@ const char * const pcpu_fc_names[PCPU_FC_NR] __initconst = {
 
 enum pcpu_fc pcpu_chosen_fc __initdata = PCPU_FC_AUTO;
 
+// 根据 percpu_alloc 参数值设置 pcpu_chosen_fc 变量。默认第一个块分配器是 auto, percpu_wangs
 static int __init percpu_alloc_setup(char *str)
 {
 	if (!str)

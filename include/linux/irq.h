@@ -174,9 +174,15 @@ struct irq_common_data {
  * @chip_data:		platform-specific per-chip private data for the chip
  *			methods, to allow shared chip implementations
  */
+/*
+irq_data 结构体表示传递给中断芯片函数的一组每个中断的芯片相关数据
+*/
 struct irq_data {
+	// 用于访问芯片寄存器的掩码
 	u32			mask;
+	// 中断号
 	unsigned int		irq;
+	// 硬件中断号（在中断域中本地有效）
 	unsigned long		hwirq;
 	struct irq_common_data	*common;
 	struct irq_chip		*chip;
@@ -501,16 +507,20 @@ static inline irq_hw_number_t irqd_to_hwirq(struct irq_data *d)
  * @irq_nmi_setup:	function called from core code before enabling an NMI
  * @irq_nmi_teardown:	function called from core code after disabling an NMI
  * @flags:		chip specific flags
+ * 表示硬件中断芯片的描述符
  */
 struct irq_chip {
 	struct device	*parent_device;
 	const char	*name;
+	// 启动中断
 	unsigned int	(*irq_startup)(struct irq_data *data);
+	// 关闭中断
 	void		(*irq_shutdown)(struct irq_data *data);
 	void		(*irq_enable)(struct irq_data *data);
 	void		(*irq_disable)(struct irq_data *data);
-
+	// 开始处理一个新的中断
 	void		(*irq_ack)(struct irq_data *data);
+	// 屏蔽一个中断源
 	void		(*irq_mask)(struct irq_data *data);
 	void		(*irq_mask_ack)(struct irq_data *data);
 	void		(*irq_unmask)(struct irq_data *data);

@@ -12,6 +12,7 @@
 #include <linux/lockdep_types.h>
 
 typedef struct raw_spinlock {
+	// 体系结构指定的自旋锁实现
 	arch_spinlock_t raw_lock;
 #ifdef CONFIG_DEBUG_SPINLOCK
 	unsigned int magic, owner_cpu;

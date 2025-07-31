@@ -235,14 +235,17 @@ static __always_inline void handle_irq(struct irq_desc *desc,
 
 /*
  * common_interrupt 处理所有普通的设备中断（特殊的 SMP 跨 CPU 中断有它们自己的入口点）
+ * 接受一个参数 - pt_regs 结构体，它存放着用户空间寄存器的值
  * do_IRQ_wangs
+ * 原来的 do_IRQ 
  */
 DEFINE_IDTENTRY_IRQ(common_interrupt)
 {
+	// 返回被保存的 per-cpu 中断寄存器指针
 	struct pt_regs *old_regs = set_irq_regs(regs);
 	struct irq_desc *desc;
 
-	/* entry code tells RCU that we're not quiescent.  Check it. */
+	/* 入口代码告诉RCU我们当前不是静止状态。检查它 */
 	RCU_LOCKDEP_WARN(!rcu_is_watching(), "IRQ failed to wake up RCU");
 	//从 AX 寄存器里面拿到了中断向量 vector
 	//中断控制器发给每个CPU的中断向量都是每个CPU局部的，而抽象中断处理层的虚拟中断信号irq以及它对应的中断描述结构irq_desc是全局的，也即这个CPU的200号的中断向量

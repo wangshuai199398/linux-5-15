@@ -2118,6 +2118,7 @@ out:
 
 #ifdef CONFIG_64BIT
 
+// nanosleep_wangs
 SYSCALL_DEFINE2(nanosleep, struct __kernel_timespec __user *, rqtp,
 		struct __kernel_timespec __user *, rmtp)
 {

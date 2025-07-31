@@ -66,10 +66,11 @@ static inline bool radix_tree_is_internal_node(void *ptr)
 #define ROOT_TAG_SHIFT	(__GFP_BITS_SHIFT)
 
 #define RADIX_TREE_INIT(name, mask)	XARRAY_INIT(name, mask)
-
+// 完成 radix 的定义以及初始化 radix_wangs
 #define RADIX_TREE(name, mask) \
 	struct radix_tree_root name = RADIX_TREE_INIT(name, mask)
 
+// 第二种方式是手工定义 radix_tree_root 变量，之后再使用 mask 调用 INIT_RADIX_TREE 宏对变量进行初始化
 #define INIT_RADIX_TREE(root, mask) xa_init_flags(root, mask)
 
 static inline bool radix_tree_empty(const struct radix_tree_root *root)

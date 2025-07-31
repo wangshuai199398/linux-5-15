@@ -1401,7 +1401,7 @@ unreg:
 	clocksource_unregister(&clocksource_tsc_early);
 }
 
-
+// 注册TSC时钟源
 static int __init init_tsc_clocksource(void)
 {
 	if (!boot_cpu_has(X86_FEATURE_TSC) || !tsc_khz)

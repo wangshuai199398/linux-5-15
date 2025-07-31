@@ -32,6 +32,7 @@ static inline void __chk_io_ptr(const volatile void __iomem *ptr) { }
 # ifdef STRUCTLEAK_PLUGIN
 #  define __user	__attribute__((user))
 # else
+// __user 属性的主要目的是通过 sparse 工具检查 Linux 内核代码
 #  define __user
 # endif
 # define __iomem

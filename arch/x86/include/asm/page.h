@@ -51,6 +51,7 @@ static inline void copy_user_page(void *to, void *from, unsigned long vaddr,
  * Newer versions of gcc provide -fno-strict-overflow switch to handle this
  * case properly. Once all supported versions of gcc understand it, we can
  * remove this Voodoo magic stuff. (i.e. once gcc3.x is deprecated)
+ * 获取 vsyscall 内存页的物理地址
  */
 #define __pa_symbol(x) \
 	__phys_addr_symbol(__phys_reloc_hide((unsigned long)(x)))

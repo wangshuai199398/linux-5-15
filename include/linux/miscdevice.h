@@ -76,10 +76,12 @@
 struct device;
 struct attribute_group;
 
+// miscdevice_wangs
 struct miscdevice  {
 	int minor;
 	const char *name;
 	const struct file_operations *fops;
+	// 所有注册过的设备的链表
 	struct list_head list;
 	struct device *parent;
 	struct device *this_device;

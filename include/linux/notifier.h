@@ -48,20 +48,30 @@
 
 struct notifier_block;
 
+/* notifier_wangs
+nb —— 是一个指向函数指针的链表
+action —— 表示事件的类型。一个通知链可能支持多个事件，因此需要通过这个参数来区分不同的事件
+data —— 用于存储私有信息。它实际上允许为事件提供附加的数据信息
+*/
 typedef	int (*notifier_fn_t)(struct notifier_block *nb,
 			unsigned long action, void *data);
 
 struct notifier_block {
+	// 指向回调函数的指针
 	notifier_fn_t notifier_call;
+	// 指向下一个通知回调的链表指针
 	struct notifier_block __rcu *next;
+	// 表示回调优先级的字段（因为优先级更高的函数会被优先调用）
 	int priority;
 };
 
+// 原子通知链头
 struct atomic_notifier_head {
 	spinlock_t lock;
 	struct notifier_block __rcu *head;
 };
 
+// 阻塞通知链头
 struct blocking_notifier_head {
 	struct rw_semaphore rwsem;
 	struct notifier_block __rcu *head;
@@ -141,6 +151,7 @@ extern void srcu_init_notifier_head(struct srcu_notifier_head *nh);
 
 #ifdef __KERNEL__
 
+//在通知链的链表头完成初始化之后，希望从该通知链中接收通知的子系统，需要通过一个特定的注册函数进行注册
 extern int atomic_notifier_chain_register(struct atomic_notifier_head *nh,
 		struct notifier_block *nb);
 extern int blocking_notifier_chain_register(struct blocking_notifier_head *nh,
@@ -159,6 +170,7 @@ extern int raw_notifier_chain_unregister(struct raw_notifier_head *nh,
 extern int srcu_notifier_chain_unregister(struct srcu_notifier_head *nh,
 		struct notifier_block *nb);
 
+// 当通知的生产者希望将某个事件通知给订阅者时，会调用 *.notifier_call_chain 函数
 extern int atomic_notifier_call_chain(struct atomic_notifier_head *nh,
 		unsigned long val, void *v);
 extern int blocking_notifier_call_chain(struct blocking_notifier_head *nh,
@@ -173,13 +185,14 @@ extern int blocking_notifier_call_chain_robust(struct blocking_notifier_head *nh
 extern int raw_notifier_call_chain_robust(struct raw_notifier_head *nh,
 		unsigned long val_up, unsigned long val_down, void *v);
 
-#define NOTIFY_DONE		0x0000		/* Don't care */
-#define NOTIFY_OK		0x0001		/* Suits me */
-#define NOTIFY_STOP_MASK	0x8000		/* Don't call further */
+#define NOTIFY_DONE		0x0000		/* 表示订阅者对该通知不感兴趣 */
+#define NOTIFY_OK		0x0001		/* 表示通知已被正确处理 */
+#define NOTIFY_STOP_MASK	0x8000		/* 在之后的通知中将不会再调用回调函数 */
 #define NOTIFY_BAD		(NOTIFY_STOP_MASK|0x0002)
-						/* Bad/Veto action */
+						/* 表示处理过程中出现了问题 */
 /*
  * Clean way to return from the notifier and stop further calls.
+ * 表示通知已完成，但不应再继续调用其他回调函数
  */
 #define NOTIFY_STOP		(NOTIFY_OK|NOTIFY_STOP_MASK)
 

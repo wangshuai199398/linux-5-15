@@ -488,7 +488,7 @@ static inline void ftrace_dump(enum ftrace_dump_mode oops_dump_mode) { }
  * @ptr:	the pointer to the member.
  * @type:	the type of the container struct this is embedded in.
  * @member:	the name of the member within the struct.
- *
+ * 只需要知道结构体的类型（type），及里面类型为 list_head 的变量的名字（member）和地址（ptr)，就可以获得该结构体的起始地址
  */
 #define container_of(ptr, type, member) ({				\
 	void *__mptr = (void *)(ptr);					\

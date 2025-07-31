@@ -2770,7 +2770,8 @@ static __latent_entropy void rcu_core(void)
 	if (IS_ENABLED(CONFIG_RCU_STRICT_GRACE_PERIOD))
 		queue_work_on(rdp->cpu, rcu_gp_wq, &rdp->strict_work);
 }
-
+//RCU 的软中断处理函数
+//让 RCU 子系统能够在未来通过软中断机制执行其核心逻辑，比如清理数据、调用回调等任务，从而减轻实时路径的负担
 static void rcu_core_si(struct softirq_action *h)
 {
 	rcu_core();
@@ -4536,36 +4537,43 @@ static void __init rcu_init_one(void)
 		panic("rcu_init_one: rcu_num_lvls out of range");
 
 	/* Initialize the level-tracking arrays. */
-
+	//每一层的 rcu_node 指针偏移计算，建立 rcu_state.level[] 指向每层的起始 rcu_node
 	for (i = 1; i < rcu_num_lvls; i++)
 		rcu_state.level[i] =
 			rcu_state.level[i - 1] + num_rcu_lvl[i - 1];
+	//计算每层节点之间的分布关系（每个父节点带多少子节点）
 	rcu_init_levelspread(levelspread, num_rcu_lvl);
 
 	/* Initialize the elements themselves, starting from the leaves. */
-
+	//从叶子节点往上初始化树结构，逐层初始化每个 rcu_node
 	for (i = rcu_num_lvls - 1; i >= 0; i--) {
 		cpustride *= levelspread[i];
 		rnp = rcu_state.level[i];
 		for (j = 0; j < num_rcu_lvl[i]; j++, rnp++) {
+			//初始化锁
 			raw_spin_lock_init(&ACCESS_PRIVATE(rnp, lock));
+			//用于 lockdep 分析（调试用途）
 			lockdep_set_class_and_name(&ACCESS_PRIVATE(rnp, lock),
 						   &rcu_node_class[i], buf[i]);
 			raw_spin_lock_init(&rnp->fqslock);
 			lockdep_set_class_and_name(&rnp->fqslock,
 						   &rcu_fqs_class[i], fqs[i]);
+			//gp_seq、qsmask：宽限期状态、等待掩码
 			rnp->gp_seq = rcu_state.gp_seq;
 			rnp->gp_seq_needed = rcu_state.gp_seq;
 			rnp->completedqs = rcu_state.gp_seq;
 			rnp->qsmask = 0;
 			rnp->qsmaskinit = 0;
+			//grplo/grphi：该节点管理的 CPU 范围
 			rnp->grplo = j * cpustride;
 			rnp->grphi = (j + 1) * cpustride - 1;
 			if (rnp->grphi >= nr_cpu_ids)
 				rnp->grphi = nr_cpu_ids - 1;
+			//grpnum/grpmask：在父节点中的位置与掩码
 			if (i == 0) {
 				rnp->grpnum = 0;
 				rnp->grpmask = 0;
+				//parent：指向上层的父节点
 				rnp->parent = NULL;
 			} else {
 				rnp->grpnum = j % levelspread[i - 1];
@@ -4574,19 +4582,24 @@ static void __init rcu_init_one(void)
 					      j / levelspread[i - 1];
 			}
 			rnp->level = i;
+			//blkd_tasks：阻塞任务链表
 			INIT_LIST_HEAD(&rnp->blkd_tasks);
+			//初始化 nocb 相关机制
 			rcu_init_one_nocb(rnp);
+			//四个紧急等待队列
 			init_waitqueue_head(&rnp->exp_wq[0]);
 			init_waitqueue_head(&rnp->exp_wq[1]);
 			init_waitqueue_head(&rnp->exp_wq[2]);
 			init_waitqueue_head(&rnp->exp_wq[3]);
+			//扩展路径锁
 			spin_lock_init(&rnp->exp_lock);
 		}
 	}
-
+	//初始化 RCU 全局等待队列 gp_wq: 普通宽限期等待队列 expedited_wq: 加速宽限期等待队列
 	init_swait_queue_head(&rcu_state.gp_wq);
 	init_swait_queue_head(&rcu_state.expedited_wq);
 	rnp = rcu_first_leaf_node();
+	//绑定每个 CPU 到其叶子节点: 每个 CPU 获取其所属的叶子 rcu_node, 设置 rcu_data.mynode, 初始化 per-CPU 的 RCU 数据结构
 	for_each_possible_cpu(i) {
 		while (i > rnp->grphi)
 			rnp++;
@@ -4599,12 +4612,14 @@ static void __init rcu_init_one(void)
  * Compute the rcu_node tree geometry from kernel parameters.  This cannot
  * replace the definitions in tree.h because those are needed to size
  * the ->node array in the rcu_state structure.
+ * 根据系统中的 CPU 数量和配置参数，计算 RCU 层级结构的深度、每一层有多少节点、以及总共需要多少 rcu_node 结构体
  */
 void rcu_init_geometry(void)
 {
 	ulong d;
 	int i;
 	static unsigned long old_nr_cpu_ids;
+	//记录每一层能支持的最大 CPU 数
 	int rcu_capacity[RCU_NUM_LVLS];
 	static bool initialized;
 
@@ -4626,15 +4641,17 @@ void rcu_init_geometry(void)
 	 * jiffies_till_next_fqs are set to the RCU_JIFFIES_TILL_FORCE_QS
 	 * value, which is a function of HZ, then adding one for each
 	 * RCU_JIFFIES_FQS_DIV CPUs that might be on the system.
+	 * 计算触发 FQS（强制静止状态） 的时间间隔，除非用户显式设置过，否则使用默认值
 	 */
 	d = RCU_JIFFIES_TILL_FORCE_QS + nr_cpu_ids / RCU_JIFFIES_FQS_DIV;
 	if (jiffies_till_first_fqs == ULONG_MAX)
 		jiffies_till_first_fqs = d;
 	if (jiffies_till_next_fqs == ULONG_MAX)
 		jiffies_till_next_fqs = d;
+	//进一步调整调度相关的 jiffies（时间片计数器）
 	adjust_jiffies_till_sched_qs();
 
-	/* If the compile-time values are accurate, just leave. */
+	/* 如果运行时参数和编译时一致，就不需要重新计算，直接返回 */
 	if (rcu_fanout_leaf == RCU_FANOUT_LEAF &&
 	    nr_cpu_ids == NR_CPUS)
 		return;
@@ -4646,6 +4663,7 @@ void rcu_init_geometry(void)
 	 * and cannot exceed the number of bits in the rcu_node masks.
 	 * Complain and fall back to the compile-time values if this
 	 * limit is exceeded.
+	 * 检查 rcu_fanout_leaf 的合法性（它表示每个 rcu_node 可以有几个叶子子节点）。如果不合法则恢复默认并报警告
 	 */
 	if (rcu_fanout_leaf < 2 ||
 	    rcu_fanout_leaf > sizeof(unsigned long) * 8) {
@@ -4657,6 +4675,9 @@ void rcu_init_geometry(void)
 	/*
 	 * Compute number of nodes that can be handled an rcu_node tree
 	 * with the given number of levels.
+	 * 计算每一层最多可以容纳多少 CPU。例如：
+	 * 第 0 层：一个节点管 rcu_fanout_leaf 个 CPU
+	 * 第 1 层：每个节点管 rcu_fanout_leaf * RCU_FANOUT 个 CPU
 	 */
 	rcu_capacity[0] = rcu_fanout_leaf;
 	for (i = 1; i < RCU_NUM_LVLS; i++)
@@ -4665,6 +4686,7 @@ void rcu_init_geometry(void)
 	/*
 	 * The tree must be able to accommodate the configured number of CPUs.
 	 * If this limit is exceeded, fall back to the compile-time values.
+	 * 如果系统的 CPU 数量超过当前树结构可容纳的最大 CPU 数，就报警告并回退到默认设置
 	 */
 	if (nr_cpu_ids > rcu_capacity[RCU_NUM_LVLS - 1]) {
 		rcu_fanout_leaf = RCU_FANOUT_LEAF;
@@ -4673,17 +4695,20 @@ void rcu_init_geometry(void)
 	}
 
 	/* Calculate the number of levels in the tree. */
+	//根据当前 CPU 数量，计算出需要的 RCU 层级数
 	for (i = 0; nr_cpu_ids > rcu_capacity[i]; i++) {
 	}
 	rcu_num_lvls = i + 1;
 
 	/* Calculate the number of rcu_nodes at each level of the tree. */
+	//计算出每一层需要多少个 rcu_node 节点，结果保存在 num_rcu_lvl[] 中
 	for (i = 0; i < rcu_num_lvls; i++) {
 		int cap = rcu_capacity[(rcu_num_lvls - 1) - i];
 		num_rcu_lvl[i] = DIV_ROUND_UP(nr_cpu_ids, cap);
 	}
 
 	/* Calculate the total number of rcu_node structures. */
+	//最后统计出 RCU 树一共需要多少个 rcu_node 节点
 	rcu_num_nodes = 0;
 	for (i = 0; i < rcu_num_lvls; i++)
 		rcu_num_nodes += num_rcu_lvl[i];
@@ -4746,19 +4771,28 @@ static void __init kfree_rcu_batch_init(void)
 	if (register_shrinker(&kfree_rcu_shrinker))
 		pr_err("Failed to register kfree_rcu() shrinker!\n");
 }
-
+/*
+RCU（Read-Copy Update） 是一种在 Linux 内核中实现的、可扩展的高性能同步机制
+RCU 技术适用于很少被修改的数据结构。 它的核心思想非常简单：
+	•	比如我们有一个不常修改的数据结构；
+	•	如果某个线程需要修改这个数据结构，我们就先复制一份，然后在副本上进行修改；
+	•	与此同时，其他读取线程继续使用原来的版本；
+	•	接下来，我们需要等待一个安全的时机，也就是原始数据结构不再被任何线程使用的时候，再将原始版本更新为修改后的副本。
+*/
 void __init rcu_init(void)
 {
 	int cpu;
-
+	//检查 RCU 的运行时参数是否正确
 	rcu_early_boot_tests();
 
 	kfree_rcu_batch_init();
 	rcu_bootup_announce();
+	//根据 CPU 数量计算 RCU 节点树的几何结构
 	rcu_init_geometry();
 	rcu_init_one();
 	if (dump_tree)
 		rcu_dump_rcu_node_tree();
+	//软中断注册: 在宽限期处理等工作中，延迟执行 RCU 的核心任务
 	if (use_softirq)
 		open_softirq(RCU_SOFTIRQ, rcu_core_si);
 

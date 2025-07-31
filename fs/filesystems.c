@@ -65,6 +65,7 @@ static struct file_system_type **find_filesystem(const char *name, unsigned len)
  *  成功时返回 0，失败时返回一个负的错误码（errno code）。
  *
  *	传入的 struct file_system_type 结构体会被链接到内核的内部结构中，在文件系统被注销之前，不能释放该结构体
+ *  filesystem_wangs
  */
  
 int register_filesystem(struct file_system_type * fs)

@@ -46,13 +46,20 @@ struct timezone {
 /*
  * The IDs of the various system clocks (for POSIX.1b interval timers):
  */
+// 系统范围内的实时时钟（wall-clock time）
 #define CLOCK_REALTIME			0
+// 从某个未指定时间点开始的单调时间
 #define CLOCK_MONOTONIC			1
+// 表示某个进程的所有线程所消耗的 CPU 时间
 #define CLOCK_PROCESS_CPUTIME_ID	2
+// 表示某个线程特定的 CPU 时间
 #define CLOCK_THREAD_CPUTIME_ID		3
+// 与 CLOCK_MONOTONIC 类似，但不受 NTP 校准影响
 #define CLOCK_MONOTONIC_RAW		4
 #define CLOCK_REALTIME_COARSE		5
+// CLOCK_MONOTONIC 的更快版本
 #define CLOCK_MONOTONIC_COARSE		6
+// 与 CLOCK_MONOTONIC 类似，但包括系统挂起的时间
 #define CLOCK_BOOTTIME			7
 #define CLOCK_REALTIME_ALARM		8
 #define CLOCK_BOOTTIME_ALARM		9

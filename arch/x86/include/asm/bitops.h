@@ -218,7 +218,9 @@ static __always_inline bool variable_test_bit(long nr, volatile const unsigned l
 
 	return oldbit;
 }
-
+/*
+__builtin_constant_p 检查给定参数是否编译时恒定变量
+*/
 #define arch_test_bit(nr, addr)			\
 	(__builtin_constant_p((nr))		\
 	 ? constant_test_bit((nr), (addr))	\

@@ -310,9 +310,9 @@ struct module_use {
 };
 
 enum module_state {
-	MODULE_STATE_LIVE,	/* Normal state. */
-	MODULE_STATE_COMING,	/* Full formed, running module_init. */
-	MODULE_STATE_GOING,	/* Going away. */
+	MODULE_STATE_LIVE,	/* 模块已加载并运行 */
+	MODULE_STATE_COMING,	/* 模块正在加载 */
+	MODULE_STATE_GOING,	/* 模块正在卸载 */
 	MODULE_STATE_UNFORMED,	/* Still setting it up. */
 };
 

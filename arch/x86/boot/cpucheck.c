@@ -106,6 +106,8 @@ static int check_cpuflags(void)
  * level.  x86-64 is considered level 64 for this purpose.
  *
  * *err_flags_ptr is set to the flags error array if there are flags missing.
+ * 1）检查cpu标志，如果cpu是64位cpu，那么就设置long mode
+ * 2) 检查CPU的制造商，根据制造商的不同，设置不同的CPU选项。比如对于AMD出厂的cpu，如果不支持 SSE+SSE2，那么就禁止这些选项
  */
 int check_cpu(int *cpu_level_ptr, int *req_level_ptr, u32 **err_flags_ptr)
 {

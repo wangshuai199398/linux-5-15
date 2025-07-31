@@ -407,6 +407,9 @@ rwsem_del_waiter(struct rw_semaphore *sem, struct rwsem_waiter *waiter)
  * - writers are only marked woken if downgrading is false
  *
  * Implies rwsem_del_waiter() for all woken readers.
+ * 判断当前锁状态：
+ *   若已有读者存在，可以尝试唤醒他们
+ * 	 若空闲或有handoff标志，也可能唤醒队首写者
  */
 static void rwsem_mark_wake(struct rw_semaphore *sem,
 			    enum rwsem_wake_type wake_type,
@@ -948,7 +951,7 @@ rwsem_spin_on_owner(struct rw_semaphore *sem)
 #endif
 
 /*
- * Wait for the read lock to be granted
+ * 当一个线程想以读者身份加锁（down_read）时，如果无法立即获得锁（比如已经有写者持锁或排队），就会走这个“慢路径”进入等待队列，并等待唤醒
  */
 static struct rw_semaphore __sched *
 rwsem_down_read_slowpath(struct rw_semaphore *sem, long count, unsigned int state)
@@ -963,6 +966,7 @@ rwsem_down_read_slowpath(struct rw_semaphore *sem, long count, unsigned int stat
 	 * To prevent a constant stream of readers from starving a sleeping
 	 * waiter, don't attempt optimistic lock stealing if the lock is
 	 * currently owned by readers.
+	 * 如果：已有读者拥有锁，当前读者数量 > 1（说明是“接力读者”），没有写锁在持有，为了防止“永远不让写者执行”，当前读者将进入队列等待，而不是自旋或偷锁
 	 */
 	if ((atomic_long_read(&sem->owner) & RWSEM_READER_OWNED) &&
 	    (rcnt > 1) && !(count & RWSEM_WRITER_LOCKED))
@@ -970,6 +974,7 @@ rwsem_down_read_slowpath(struct rw_semaphore *sem, long count, unsigned int stat
 
 	/*
 	 * Reader optimistic lock stealing.
+	 * 如果没有写者持锁，也没有被标记为 handoff，则尝试“偷”到锁。如果是第一个读者且队列非空，则唤醒其他在等待的读者
 	 */
 	if (!(count & (RWSEM_WRITER_LOCKED | RWSEM_FLAG_HANDOFF))) {
 		rwsem_set_reader_owned(sem);
@@ -991,12 +996,14 @@ rwsem_down_read_slowpath(struct rw_semaphore *sem, long count, unsigned int stat
 	}
 
 queue:
+	// 初始化等待者结构 
 	waiter.task = current;
 	waiter.type = RWSEM_WAITING_FOR_READ;
 	waiter.timeout = jiffies + RWSEM_WAIT_TIMEOUT;
 	waiter.handoff_set = false;
-
+	// 加锁 wait_lock 保护等待队列
 	raw_spin_lock_irq(&sem->wait_lock);
+	// 如果队列为空且无写者/hand-off标志，当前读者可以直接进入临界区，否则添加 WAITERS 标志并进入队列
 	if (list_empty(&sem->wait_list)) {
 		/*
 		 * In case the wait queue is empty and the lock isn't owned
@@ -1015,9 +1022,11 @@ queue:
 		}
 		adjustment += RWSEM_FLAG_WAITERS;
 	}
+	// 加入等待队列 & 更新状态
 	rwsem_add_waiter(sem, &waiter);
 
 	/* we're now waiting on the lock, but no longer actively locking */
+	// 加入队列后，更新 sem->count：减去一个读者 bias；可能还加上了 WAITERS 标志
 	count = atomic_long_add_return(adjustment, &sem->count);
 
 	/*
@@ -1026,6 +1035,7 @@ queue:
 	 * If there are no writers and we are first in the queue,
 	 * wake our own waiter to join the existing active readers !
 	 */
+	// 判断是否可以唤醒其他等待者，如果当前没有持锁者（读/写），或者无写者但有队列，则可以唤醒前面等待者（通常是读者）
 	if (!(count & RWSEM_LOCK_MASK)) {
 		clear_nonspinnable(sem);
 		wake = true;
@@ -1038,12 +1048,14 @@ queue:
 	wake_up_q(&wake_q);
 
 	/* wait to be given the lock */
+	// 休眠等待锁，线程进入睡眠状态，等待被唤醒。当被唤醒时 waiter.task 会被置空（表示锁到手）
 	for (;;) {
 		set_current_state(state);
 		if (!smp_load_acquire(&waiter.task)) {
 			/* Matches rwsem_mark_wake()'s smp_store_release(). */
 			break;
 		}
+		// 异常中断处理（信号打断），如果线程等待期间收到信号（如 Ctrl+C），则跳出等待并返回 -EINTR 错误
 		if (signal_pending_state(state, current)) {
 			raw_spin_lock_irq(&sem->wait_lock);
 			if (waiter.task)
@@ -1069,7 +1081,7 @@ out_nolock:
 }
 
 /*
- * Wait until we successfully acquire the write lock
+ * Wait until we successfully acquire the write lock 获取写锁，挂起当前写者进程直到成功获取锁
  */
 static struct rw_semaphore *
 rwsem_down_write_slowpath(struct rw_semaphore *sem, int state)
@@ -1078,15 +1090,15 @@ rwsem_down_write_slowpath(struct rw_semaphore *sem, int state)
 	struct rwsem_waiter waiter;
 	DEFINE_WAKE_Q(wake_q);
 
-	/* do optimistic spinning and steal lock if possible */
+	/* 如果当前CPU核允许“在锁释放前原地忙等”（spinning），并且锁有希望很快释放，则进入乐观自旋逻辑 */
 	if (rwsem_can_spin_on_owner(sem) && rwsem_optimistic_spin(sem)) {
 		/* rwsem_optimistic_spin() implies ACQUIRE on success */
 		return sem;
 	}
 
 	/*
-	 * Optimistic spinning failed, proceed to the slowpath
-	 * and block until we can acquire the sem.
+	 * Optimistic spinning failed, proceed to the slowpath and block until we can acquire the sem.
+	 * 把当前进程封装成 rwsem_waiter，准备加入等待队列
 	 */
 	waiter.task = current;
 	waiter.type = RWSEM_WAITING_FOR_WRITE;
@@ -1094,9 +1106,10 @@ rwsem_down_write_slowpath(struct rw_semaphore *sem, int state)
 	waiter.handoff_set = false;
 
 	raw_spin_lock_irq(&sem->wait_lock);
+	// 加入等待队列
 	rwsem_add_waiter(sem, &waiter);
 
-	/* we're now waiting on the lock */
+	/* 如果不是队首，可能需要唤醒前面的读者或写者，避免“锁饥饿” */
 	if (rwsem_first_waiter(sem) != &waiter) {
 		count = atomic_long_read(&sem->count);
 
@@ -1110,11 +1123,11 @@ rwsem_down_write_slowpath(struct rw_semaphore *sem, int state)
 		 */
 		if (count & RWSEM_WRITER_MASK)
 			goto wait;
-
+		// 尝试唤醒前面的读者或写者（如果我是第N个）
 		rwsem_mark_wake(sem, (count & RWSEM_READER_MASK)
 					? RWSEM_WAKE_READERS
 					: RWSEM_WAKE_ANY, &wake_q);
-
+		// 唤醒后重置唤醒队列 wake_q
 		if (!wake_q_empty(&wake_q)) {
 			/*
 			 * We want to minimize wait_lock hold time especially
@@ -1126,20 +1139,23 @@ rwsem_down_write_slowpath(struct rw_semaphore *sem, int state)
 			raw_spin_lock_irq(&sem->wait_lock);
 		}
 	} else {
+		// 若是第一个等待者，设置 WAITERS 标志位
 		atomic_long_or(RWSEM_FLAG_WAITERS, &sem->count);
 	}
 
 wait:
-	/* wait until we successfully acquire the lock */
+	/* wait until we successfully acquire the lock 设置当前任务为睡眠状态 */
 	set_current_state(state);
+	// 进入主等待循环（睡眠 + 尝试加锁）
 	for (;;) {
+		// 如果可以获取写锁 rwsem_try_write_lock，则跳出
 		if (rwsem_try_write_lock(sem, &waiter)) {
 			/* rwsem_try_write_lock() implies ACQUIRE on success */
 			break;
 		}
 
 		raw_spin_unlock_irq(&sem->wait_lock);
-
+		// 检查是否收到中断信号 signal_pending_state
 		if (signal_pending_state(state, current))
 			goto out_nolock;
 
@@ -1150,6 +1166,7 @@ wait:
 		 * has just released the lock, OWNER_NULL will be returned.
 		 * In this case, we attempt to acquire the lock again
 		 * without sleeping.
+		 * 若设置了 handoff 标志，则可以在 rwsem_spin_on_owner 中“盯住上一个 owner”做最后一次尝试
 		 */
 		if (waiter.handoff_set) {
 			enum owner_state owner_state;
@@ -1161,14 +1178,16 @@ wait:
 			if (owner_state == OWNER_NULL)
 				goto trylock_again;
 		}
-
+		// 否则 schedule 主动睡眠
 		schedule();
 		lockevent_inc(rwsem_sleep_writer);
 		set_current_state(state);
 trylock_again:
 		raw_spin_lock_irq(&sem->wait_lock);
 	}
+	// 成功获取锁后，清理状态，状态恢复为 RUNNING
 	__set_current_state(TASK_RUNNING);
+	// 清理等待队列，删除当前等待者
 	raw_spin_unlock_irq(&sem->wait_lock);
 	lockevent_inc(rwsem_wlock);
 	return sem;
@@ -1188,18 +1207,20 @@ out_nolock:
 /*
  * handle waking up a waiter on the semaphore
  * - up_read/up_write has decremented the active part of count if we come here
+ * 唤醒 sem 的等待队列中排队的读者或写者
  */
 static struct rw_semaphore *rwsem_wake(struct rw_semaphore *sem)
 {
 	unsigned long flags;
 	DEFINE_WAKE_Q(wake_q);
-
+	// 加锁并关闭中断，用来保护信号量的等待队列（sem->wait_list），防止并发访问
 	raw_spin_lock_irqsave(&sem->wait_lock, flags);
-
+	// 如果等待队列非空，调用 rwsem_mark_wake，它会根据情况，决定是否唤醒等待中的读者/写者，被选中的任务不会立即被唤醒，而是被加入 wake_q，延迟到锁释放后统一处理
 	if (!list_empty(&sem->wait_list))
 		rwsem_mark_wake(sem, RWSEM_WAKE_ANY, &wake_q);
-
+	// 解锁并恢复中断
 	raw_spin_unlock_irqrestore(&sem->wait_lock, flags);
+	// 统一唤醒 wake_q 中的所有任务（通过调度器），这些任务原本是因为锁未释放而休眠的
 	wake_up_q(&wake_q);
 
 	return sem;
@@ -1323,12 +1344,17 @@ static inline void __up_read(struct rw_semaphore *sem)
 	DEBUG_RWSEMS_WARN_ON(!is_rwsem_reader_owned(sem), sem);
 
 	preempt_disable();
+	// 标记当前线程不再拥有读锁
 	rwsem_clear_reader_owned(sem);
+	// 原子释放锁（减去一个读者）
 	tmp = atomic_long_add_return_release(-RWSEM_READER_BIAS, &sem->count);
 	DEBUG_RWSEMS_WARN_ON(tmp < 0, sem);
+	// 检查是否需要唤醒等待者，当前 没有其他活动读者或写者（LOCK_MASK为0），但仍有 等待者 存在
 	if (unlikely((tmp & (RWSEM_LOCK_MASK|RWSEM_FLAG_WAITERS)) ==
 		      RWSEM_FLAG_WAITERS)) {
+		// 乐观自旋策略做状态清理
 		clear_nonspinnable(sem);
+		// 唤醒等待的线程（比如写者）
 		rwsem_wake(sem);
 	}
 	preempt_enable();
@@ -1350,9 +1376,12 @@ static inline void __up_write(struct rw_semaphore *sem)
 			    !rwsem_test_oflags(sem, RWSEM_NONSPINNABLE), sem);
 
 	preempt_disable();
+	// 将 sem 的 owner 字段清空，表示当前锁已经没有持有者了
 	rwsem_clear_owner(sem);
+	// 原子地将 count 减去 RWSEM_WRITER_LOCKED（写者锁偏置值，通常是 0xFFFFFFFF00000001），这一步是写锁真正的释放操作
 	tmp = atomic_long_fetch_add_release(-RWSEM_WRITER_LOCKED, &sem->count);
 	preempt_enable();
+	// 如果 count 的历史值中含有 等待标志位（RWSEM_FLAG_WAITERS），说明有进程在等这把锁
 	if (unlikely(tmp & RWSEM_FLAG_WAITERS))
 		rwsem_wake(sem);
 }
@@ -1543,7 +1572,7 @@ int down_read_trylock(struct rw_semaphore *sem)
 EXPORT_SYMBOL(down_read_trylock);
 
 /*
- * lock for writing
+ * lock for writing rw_wangs
  */
 void __sched down_write(struct rw_semaphore *sem)
 {
@@ -1586,17 +1615,18 @@ int down_write_trylock(struct rw_semaphore *sem)
 EXPORT_SYMBOL(down_write_trylock);
 
 /*
- * release a read lock
+ * 释放读锁
  */
 void up_read(struct rw_semaphore *sem)
 {
+	// 记录锁的释放，用于 死锁检测 和锁依赖分析
 	rwsem_release(&sem->dep_map, _RET_IP_);
 	__up_read(sem);
 }
 EXPORT_SYMBOL(up_read);
 
 /*
- * release a write lock
+ * 释放写锁
  */
 void up_write(struct rw_semaphore *sem)
 {

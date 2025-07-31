@@ -1262,7 +1262,7 @@ void do_user_addr_fault(struct pt_regs *regs,
 		if (regs->flags & X86_EFLAGS_IF)
 			local_irq_enable();
 	}
-
+	// 更新缺页中断内核计数器
 	perf_sw_event(PERF_COUNT_SW_PAGE_FAULTS, 1, regs, address);
 
 	if (error_code & X86_PF_WRITE)
@@ -1283,6 +1283,7 @@ void do_user_addr_fault(struct pt_regs *regs,
 	 * to consider the PF_PK bit.
 	 */
 	if (is_vsyscall_vaddr(address)) {
+		// 获取虚拟系统调用的编号，对其进行检查，如果出错则打印错误信息并发送段错误信号（segmentation fault）
 		if (emulate_vsyscall(error_code, regs, address))
 			return;
 	}

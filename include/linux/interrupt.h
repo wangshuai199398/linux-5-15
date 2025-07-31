@@ -68,15 +68,20 @@
  * IRQF_NO_DEBUG - Exclude from runnaway detection for IPI and similar handlers,
  *		   depends on IRQF_PERCPU.
  */
+// 允许多个设备共享此中断号
 #define IRQF_SHARED		0x00000080
 #define IRQF_PROBE_SHARED	0x00000100
 #define __IRQF_TIMER		0x00000200
+// 此中断号属于单独cpu的(per cpu)
 #define IRQF_PERCPU		0x00000400
+// 此中断不参与irq平衡时
 #define IRQF_NOBALANCING	0x00000800
+// 此中断用于轮询
 #define IRQF_IRQPOLL		0x00001000
 #define IRQF_ONESHOT		0x00002000
 #define IRQF_NO_SUSPEND		0x00004000
 #define IRQF_FORCE_RESUME	0x00008000
+// 中断不能线程化
 #define IRQF_NO_THREAD		0x00010000
 #define IRQF_EARLY_RESUME	0x00020000
 #define IRQF_COND_SUSPEND	0x00040000
@@ -114,7 +119,7 @@ typedef irqreturn_t (*irq_handler_t)(int, void *);
  * @thread_flags:	与 @thread 相关的标志
  * @thread_mask:	用于追踪线程活动的位掩码
  * @dir:	    指向 /proc/irq/NN/name 条目的指针
- * 对于这个中断的所有处理动作，都串在这个链表上
+ * 表示一个中断动作描述符，对于这个中断的所有处理动作，都串在这个链表上
  */
 struct irqaction {
 	irq_handler_t		handler;
@@ -151,13 +156,14 @@ request_threaded_irq(unsigned int irq, irq_handler_t handler,
 
 /**
  * 为中断添加一个处理程序
- * @irq:	要申请的中断编号
+ * @irq:	要申请的中断号
  * @handler:当该中断发生时被调用的函数。用于线程化中断的主处理函数。如果为 NULL，则会安装默认的主处理函数
- * @flags:	中断处理标志
+ * @flags:	中断处理标志 IRQF_SHARED
  * @name:	产生该中断的设备名称
- * @dev:	传递给中断处理函数的私有数据指针（cookie）
+ * @dev:	传递给中断处理函数的私有数据指针
  *
- * 此调用会申请一个中断并建立一个处理函数；详细信息请参考 request_threaded_irq 的文档。
+ * 此调用会申请一个中断并建立一个处理函数；详细信息请参考 request_threaded_irq 的文档
+ * irq_wangs
  */
 static inline int __must_check
 request_irq(unsigned int irq, irq_handler_t handler, unsigned long flags,
@@ -508,7 +514,9 @@ DECLARE_STATIC_KEY_FALSE(force_irqthreads_key);
    frequency threaded job scheduling. For almost all the purposes
    tasklets are more than enough. F.e. all serial device BHs et
    al. should be converted to tasklets, not to softirqs.
- */
+   softirq_wangs
+   两个 tasklet 相关 HI_SOFTIRQ TASKLET_SOFTIRQ，3个网络相关，1个块处理相关，两个定时器相关，另外调度器和 RCU 也各占一个
+*/
 
 enum
 {
@@ -580,21 +588,29 @@ static inline struct task_struct *this_cpu_ksoftirqd(void)
    * Tasklet is strictly serialized wrt itself, but not
      wrt another tasklets. If client needs some intertask synchronization,
      he makes it with spinlocks.
+	代表一个 Tasklet
  */
 
 struct tasklet_struct
 {
+	// 调度队列中的下一个 Tasklet
 	struct tasklet_struct *next;
+	// 当前这个 Tasklet 的状态
 	unsigned long state;
+	// 这个 Tasklet 是否处于活动状态
 	atomic_t count;
+	// 这个 Tasklet 是否处于活动状态
 	bool use_callback;
+	// Tasklet 的回调函数
 	union {
 		void (*func)(unsigned long data);
 		void (*callback)(struct tasklet_struct *t);
 	};
+	// 回调函数的参数
 	unsigned long data;
 };
 
+// 如下两个宏可以静态地初始化一个 tasklet
 #define DECLARE_TASKLET(name, _callback)		\
 struct tasklet_struct name = {				\
 	.count = ATOMIC_INIT(0),			\
@@ -649,14 +665,18 @@ static inline void tasklet_unlock_spin_wait(struct tasklet_struct *t) { }
 
 extern void __tasklet_schedule(struct tasklet_struct *t);
 
+// tasklet_wangs 提供2个函数标记一个 tasklet 已经准备就绪
+// 使用普通优先级调度一个 tasklet
 static inline void tasklet_schedule(struct tasklet_struct *t)
 {
+	// 检测并设置所给的 tasklet 为 TASKLET_STATE_SCHED 状态
 	if (!test_and_set_bit(TASKLET_STATE_SCHED, &t->state))
 		__tasklet_schedule(t);
 }
 
 extern void __tasklet_hi_schedule(struct tasklet_struct *t);
 
+// 使用高优先级调度一个 tasklet
 static inline void tasklet_hi_schedule(struct tasklet_struct *t)
 {
 	if (!test_and_set_bit(TASKLET_STATE_SCHED, &t->state))

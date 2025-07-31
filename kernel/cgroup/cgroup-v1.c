@@ -627,8 +627,10 @@ static int cgroup_clone_children_write(struct cgroup_subsys_state *css,
 }
 
 /* cgroup core interface files for the legacy hierarchies */
+//cgroup_wangs
 struct cftype cgroup1_base_files[] = {
 	{
+		//设置与该cgroup关联的所有进程 PID
 		.name = "cgroup.procs",
 		.seq_start = cgroup_pidlist_start,
 		.seq_next = cgroup_pidlist_next,

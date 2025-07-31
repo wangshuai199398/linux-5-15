@@ -126,6 +126,7 @@ u64 x86_perf_event_update(struct perf_event *event)
 	 */
 again:
 	prev_raw_count = local64_read(&hwc->prev_count);
+	// 汇编指令读取寄存器的值
 	rdpmcl(hwc->event_base_rdpmc, new_raw_count);
 
 	if (local64_cmpxchg(&hwc->prev_count, prev_raw_count,
@@ -1705,7 +1706,7 @@ int x86_pmu_handle_irq(struct pt_regs *regs)
 
 		if (!x86_perf_event_set_period(event))
 			continue;
-
+		// 采样函数
 		if (perf_event_overflow(event, &data, regs))
 			x86_pmu_stop(event, 0);
 	}
@@ -1727,6 +1728,7 @@ void perf_events_lapic_init(void)
 	apic_write(APIC_LVTPC, APIC_DM_NMI);
 }
 
+// perf_wangs
 static int
 perf_event_nmi_handler(unsigned int cmd, struct pt_regs *regs)
 {
@@ -2063,6 +2065,7 @@ void x86_pmu_update_cpu_context(struct pmu *pmu, int cpu)
 	cpuctx->ctx.pmu = pmu;
 }
 
+// pmu_wangs
 static int __init init_hw_perf_events(void)
 {
 	struct x86_pmu_quirk *quirk;

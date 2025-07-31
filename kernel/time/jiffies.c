@@ -98,7 +98,7 @@ int register_refined_jiffies(long cycles_per_second)
 	do_div(nsec_per_tick, (u32)shift_hz);
 
 	refined_jiffies.mult = ((u32)nsec_per_tick) << JIFFIES_SHIFT;
-
+	// 注册时间源
 	__clocksource_register(&refined_jiffies);
 	return 0;
 }

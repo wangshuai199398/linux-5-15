@@ -36,9 +36,10 @@ struct set_adt_elem {
 	int before;
 };
 
-/* Type structure */
+/* Type structure list_set_wangs */
 struct list_set {
 	u32 size;		/* size of set list array */
+	// 存储动态定时器（dynamic timers）
 	struct timer_list gc;	/* garbage collection */
 	struct ip_set *set;	/* attached to this ip_set */
 	struct net *net;	/* namespace */

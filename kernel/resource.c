@@ -29,7 +29,7 @@
 #include <uapi/linux/magic.h>
 #include <asm/io.h>
 
-
+// ioport_wangs
 struct resource ioport_resource = {
 	.name	= "PCI IO",
 	.start	= 0,
@@ -37,7 +37,7 @@ struct resource ioport_resource = {
 	.flags	= IORESOURCE_IO,
 };
 EXPORT_SYMBOL(ioport_resource);
-
+// iomem_wangs
 struct resource iomem_resource = {
 	.name	= "PCI mem",
 	.start	= 0,

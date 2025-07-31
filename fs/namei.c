@@ -124,6 +124,7 @@
 
 #define EMBEDDED_NAME_MAX	(PATH_MAX - offsetof(struct filename, iname))
 
+// getname_flags 函数的主要目的是从用户空间复制文件路径到内核空间
 struct filename *
 getname_flags(const char __user *filename, int flags, int *empty)
 {
@@ -145,7 +146,7 @@ getname_flags(const char __user *filename, int flags, int *empty)
 	 */
 	kname = (char *)result->iname;
 	result->name = kname;
-
+	// 复制传递给 open 系统调用的用户空间的文件名到内核空间
 	len = strncpy_from_user(kname, filename, EMBEDDED_NAME_MAX);
 	if (unlikely(len < 0)) {
 		__putname(result);
@@ -562,8 +563,11 @@ void path_put(const struct path *path)
 EXPORT_SYMBOL(path_put);
 
 #define EMBEDDED_LEVELS 2
-//文件都是一串的路径名称，需要逐个解析。nameidata在解析和查找路径的时候提供辅助作用
-// 文件“/root/hello/world/data”
+/*
+nameidata 结构体提供了一个链接到文件 inode
+文件都是一串的路径名称，需要逐个解析。nameidata在解析和查找路径的时候提供辅助作用
+文件“/root/hello/world/data”
+*/
 struct nameidata {
 	// 文件目录“/root/hello/world”
 	struct path	path;
@@ -3629,6 +3633,7 @@ static int do_open(struct nameidata *nd,
 	}
 	error = may_open(mnt_userns, &nd->path, acc_mode, open_flag);
 	if (!error && !(file->f_mode & FMODE_OPENED))
+		// 调用一个底层文件系统的打开操作
 		error = vfs_open(&nd->path, file);
 	if (!error)
 		error = ima_file_check(file, op->acc_mode);
@@ -3767,7 +3772,9 @@ static struct file *path_openat(struct nameidata *nd,
 		error = do_o_path(nd, flags, file);
 	//进入标准路径解析和文件创建/打开逻辑
 	} else {
+		// 预备工作
 		const char *s = path_init(nd, flags);
+		// 执行（文件）名解析
 		while (!(error = link_path_walk(s, nd)) &&
 		       (s = open_last_lookups(nd, file, op)) != NULL)
 			;
@@ -3798,8 +3805,9 @@ struct file *do_filp_open(int dfd, struct filename *pathname,
 	struct nameidata nd;
 	int flags = op->lookup_flags;
 	struct file *filp;
-	//初始化了 struct nameidata
+	//初始化了 nameidata
 	set_nameidata(&nd, dfd, pathname, NULL);
+	// path_openat 会被调用三次。Linux 内核会以 RCU 模式打开文件。这是最有效的打开文件的方式。如果打开失败，内核进入正常模式。第三次调用相对较少（出现），仅在 nfs 文件系统中使用
 	filp = path_openat(&nd, op, flags | LOOKUP_RCU);
 	if (unlikely(filp == ERR_PTR(-ECHILD)))
 		filp = path_openat(&nd, op, flags);
@@ -4083,6 +4091,7 @@ SYSCALL_DEFINE3(mknod, const char __user *, filename, umode_t, mode, unsigned, d
  * care to map the inode according to @mnt_userns before checking permissions.
  * On non-idmapped mounts or if permission checking is to be performed on the
  * raw inode simply passs init_user_ns.
+ * 创建目录
  */
 int vfs_mkdir(struct user_namespace *mnt_userns, struct inode *dir,
 	      struct dentry *dentry, umode_t mode)
@@ -4103,7 +4112,7 @@ int vfs_mkdir(struct user_namespace *mnt_userns, struct inode *dir,
 
 	if (max_links && dir->i_nlink >= max_links)
 		return -EMLINK;
-
+	// kernfs_iop_mkdir
 	error = dir->i_op->mkdir(mnt_userns, dir, dentry, mode);
 	if (!error)
 		fsnotify_mkdir(dir, dentry);

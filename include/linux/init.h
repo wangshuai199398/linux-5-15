@@ -48,6 +48,7 @@
 /* These are for everybody (although not all archs will actually
    discard it in modules) */
 #define __init		__section(".init.text") __cold  __latent_entropy __noinitretpoline __nocfi
+// __initdata 意味着这些内存都会在内核初始化结束后释放掉
 #define __initdata	__section(".init.data")
 #define __initconst	__section(".init.rodata")
 #define __exitdata	__section(".exit.data")
@@ -278,6 +279,7 @@ extern bool initcall_debug;
 #define pure_initcall(fn)		__define_initcall(fn, 0)
 
 #define core_initcall(fn)		__define_initcall(fn, 1)
+// 等待所有某个级别的与模块相关的初始化例程完成
 #define core_initcall_sync(fn)		__define_initcall(fn, 1s)
 #define postcore_initcall(fn)		__define_initcall(fn, 2)
 #define postcore_initcall_sync(fn)	__define_initcall(fn, 2s)

@@ -462,9 +462,10 @@ static void __init save_mem_devices(const struct dmi_header *dm, void *v)
 	dmi_memdev[nr].size = bytes;
 	nr++;
 }
-
+//检查 DMI 是否可用
 static void __init dmi_memdev_walk(void)
 {
+	//收集内存设备的有关信息
 	if (dmi_walk_early(count_mem_devices) == 0 && dmi_memdev_nr) {
 		dmi_memdev = dmi_alloc(sizeof(*dmi_memdev) * dmi_memdev_nr);
 		if (dmi_memdev)
@@ -709,6 +710,7 @@ static void __init dmi_scan_machine(void)
 			return;
 		}
 	} else if (IS_ENABLED(CONFIG_DMI_SCAN_MACHINE_NON_EFI_FALLBACK)) {
+		//将 0xf0000 和 0x10000 之间的内存重新映射并追加到 early_ioremap 上
 		p = dmi_early_remap(SMBIOS_ENTRY_POINT_SCAN_START, 0x10000);
 		if (p == NULL)
 			goto error;
@@ -718,6 +720,7 @@ static void __init dmi_scan_machine(void)
 		 * first, and if not found, fall back to 32-bit entry point.
 		 */
 		memcpy_fromio(buf, p, 16);
+		//迭代所有的 DMI 头部地址，并且查找 _SM_ 字符串
 		for (q = p + 16; q < p + 0x10000; q += 16) {
 			memcpy_fromio(buf + 16, q, 16);
 			if (!dmi_smbios3_present(buf)) {
@@ -825,10 +828,11 @@ subsys_initcall(dmi_init);
  */
 void __init dmi_setup(void)
 {
+	//遍历 System Management BIOS 结构，并从中提取信息
 	dmi_scan_machine();
 	if (!dmi_available)
 		return;
-
+	//遍历整个内存设备
 	dmi_memdev_walk();
 	dump_stack_set_arch_desc("%s", dmi_ids_string);
 }

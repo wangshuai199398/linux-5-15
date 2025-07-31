@@ -841,6 +841,7 @@ void __init *early_memremap_decrypted_wp(resource_size_t phys_addr,
 
 static pte_t bm_pte[PAGE_SIZE/sizeof(pte_t)] __page_aligned_bss;
 
+// early_ioremap_pmd 函数只能获得内存全局目录以及为给定地址计算页中部目录
 static inline pmd_t * __init early_ioremap_pmd(unsigned long addr)
 {
 	/* Don't assume we're using swapper_pg_dir at this point */
@@ -863,20 +864,26 @@ bool __init is_early_ioremap_ptep(pte_t *ptep)
 	return ptep >= &bm_pte[0] && ptep < &bm_pte[PAGE_SIZE/sizeof(pte_t)];
 }
 
+/*
+
+*/
 void __init early_ioremap_init(void)
 {
 	pmd_t *pmd;
 
 #ifdef CONFIG_X86_64
+	// 检查固定映射是否与页中部目录对齐
 	BUILD_BUG_ON((fix_to_virt(0) + PAGE_SIZE) & ((1 << PMD_SHIFT) - 1));
 #else
 	WARN_ON((fix_to_virt(0) + PAGE_SIZE) & ((1 << PMD_SHIFT) - 1));
 #endif
-
+	// 对 ioremap 的大体初始化,early_ioremap_setup 结束后，我们获得了页中部目录
 	early_ioremap_setup();
-
+	//获得了 FIX_BTMAP_BEGIN 的页中间目录条目，并把它赋值给了 pmd 变量
 	pmd = early_ioremap_pmd(fix_to_virt(FIX_BTMAP_BEGIN));
+	// 之后我们用 0 填充 bm_pte (早期 ioremap 页表入口),启动时间页表 bm_pte 写满 0
 	memset(bm_pte, 0, sizeof(bm_pte));
+	//设置给定的页中间目录的页表条目
 	pmd_populate_kernel(&init_mm, pmd, bm_pte);
 
 	/*
@@ -902,6 +909,9 @@ void __init early_ioremap_init(void)
 	}
 }
 
+/*
+为给定的物理地址获取页表入口(保存在 bm_pte 中，见上文)
+*/
 void __init __early_set_fixmap(enum fixed_addresses idx,
 			       phys_addr_t phys, pgprot_t flags)
 {
@@ -916,10 +926,12 @@ void __init __early_set_fixmap(enum fixed_addresses idx,
 
 	/* Sanitize 'prot' against any unsupported bits: */
 	pgprot_val(flags) &= __supported_pte_mask;
-
+	// 用 pgprot_val 宏检查了给定的页标志，依赖这个标志选择调用 set_pte 还是 pte_clear
+	// 调用 set_pte 来设置页表入口，就像 set_pmd 一样，只不过用于 PTE(见上文)
 	if (pgprot_val(flags))
 		set_pte(pte, pfn_pte(phys >> PAGE_SHIFT, flags));
 	else
 		pte_clear(&init_mm, addr, pte);
+	// 
 	flush_tlb_one_kernel(addr);
 }

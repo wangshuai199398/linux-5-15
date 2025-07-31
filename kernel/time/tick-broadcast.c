@@ -25,6 +25,7 @@
  */
 
 static struct tick_device tick_broadcast_device;
+// tick_broadcast_mask 是在 tick_device_uses_broadcast 函数中填充的，该函数会在时钟事件设备（clock events device）注册过程中对其进行检查
 static cpumask_var_t tick_broadcast_mask __cpumask_var_read_mostly;
 static cpumask_var_t tick_broadcast_on __cpumask_var_read_mostly;
 static cpumask_var_t tmpmask __cpumask_var_read_mostly;
@@ -73,6 +74,7 @@ const struct clock_event_device *tick_get_wakeup_device(int cpu)
 
 /*
  * Start the device in periodic mode
+ * 检查所给定的 clock event 设备，并调用 tick_setup_periodic 函数
  */
 static void tick_broadcast_start_periodic(struct clock_event_device *bc)
 {
@@ -82,6 +84,7 @@ static void tick_broadcast_start_periodic(struct clock_event_device *bc)
 
 /*
  * Check, if the device can be utilized as broadcast device:
+ * 检查该 clock events 设备的 features 字段。顾名思义，features 表示该时钟设备所支持的特性
  */
 static bool tick_check_broadcast_device(struct clock_event_device *curdev,
 					struct clock_event_device *newdev)
@@ -159,6 +162,7 @@ static bool tick_set_oneshot_wakeup_device(struct clock_event_device *newdev,
 
 /*
  * Conditionally install/replace broadcast device
+ * 检查指定的 clock event 设备是否可以作为广播设备（broadcast device），如果可以，就将其安装为广播设备
  */
 void tick_install_broadcast_device(struct clock_event_device *dev, int cpu)
 {
@@ -166,19 +170,20 @@ void tick_install_broadcast_device(struct clock_event_device *dev, int cpu)
 
 	if (tick_set_oneshot_wakeup_device(dev, cpu))
 		return;
-
+	// 检查所给定的 clock events 设备是否可以作为广播设备（broadcast device）使用
 	if (!tick_check_broadcast_device(cur, dev))
 		return;
-
+	// 检查 clock events 所属模块是否已正确加载。我们这么做的目的是确保该设备已经被正确初始化，并可安全使用
 	if (!try_module_get(dev->owner))
 		return;
-
+	// 释放旧的 clock events 设备，并将旧的功能处理程序替换为一个 dummy（空）处理程序
 	clockevents_exchange_device(cur, dev);
 	if (cur)
 		cur->event_handler = clockevents_handle_noop;
 	tick_broadcast_device.evtdev = dev;
+	// 检查 tick_broadcast_mask 是否非空（即是否有处理器需要广播支持）
 	if (!cpumask_empty(tick_broadcast_mask))
-		tick_broadcast_start_periodic(dev);
+		tick_broadcast_start_periodic(dev);//将该 clock events 设备以周期模式启动
 
 	if (!(dev->features & CLOCK_EVT_FEAT_ONESHOT))
 		return;
@@ -261,6 +266,7 @@ int tick_device_uses_broadcast(struct clock_event_device *dev, int cpu)
 	if (!tick_device_is_functional(dev)) {
 		dev->event_handler = tick_handle_periodic;
 		tick_device_setup_broadcast_func(dev);
+		// 设置
 		cpumask_set_cpu(cpu, tick_broadcast_mask);
 		if (tick_broadcast_device.mode == TICKDEV_MODE_PERIODIC)
 			tick_broadcast_start_periodic(bc);
@@ -342,6 +348,7 @@ int tick_receive_broadcast(void)
 
 /*
  * Broadcast the event to the cpus, which are set in the mask (mangled).
+ * 会调用给定 clock event 设备的广播函数（broadcast function），该函数会向一组处理器发送 IPI 中断
  */
 static bool tick_do_broadcast(struct cpumask *mask)
 {
@@ -387,6 +394,7 @@ static bool tick_do_broadcast(struct cpumask *mask)
 /*
  * Periodic broadcast:
  * - invoke the broadcast handlers
+ * 将请求被唤醒的处理器编号存储到一个临时的 cpumask 中，并调用 tick_do_broadcast 函数
  */
 static bool tick_do_periodic_broadcast(void)
 {
@@ -423,6 +431,7 @@ static void tick_handle_periodic_broadcast(struct clock_event_device *dev)
 	 * We run the handler of the local cpu after dropping
 	 * tick_broadcast_lock because the handler might deadlock when
 	 * trying to switch to oneshot mode.
+	 * 调用对应 tick_device 的事件处理函数（event handler）
 	 */
 	if (bc_local)
 		td->evtdev->event_handler(td->evtdev);
@@ -511,6 +520,8 @@ EXPORT_SYMBOL_GPL(tick_broadcast_control);
 
 /*
  * Set the periodic handler depending on broadcast on/off
+ * 该函数会检查第二个参数，该参数表示广播状态（开启或关闭），并根据其值设置相应的广播处理程序（broadcast handler）
+ * 当一个 clock event 设备触发中断时，将会调用 dev->event_handler
  */
 void tick_set_periodic_handler(struct clock_event_device *dev, int broadcast)
 {
@@ -1222,14 +1233,23 @@ int __tick_broadcast_oneshot_control(enum tick_broadcast_state state)
 }
 #endif
 
+/*
+使用 zalloc_cpumask_var 函数来分配不同的 CPU 掩码（cpumask）
+*/
 void __init tick_broadcast_init(void)
 {
+	// tick_broadcast_mask：一个位图，表示处于睡眠模式的处理器集合
 	zalloc_cpumask_var(&tick_broadcast_mask, GFP_NOWAIT);
+	// 记录哪些处理器处于周期性（periodic）tick 广播状态
 	zalloc_cpumask_var(&tick_broadcast_on, GFP_NOWAIT);
+	// 临时使用的位图，用作中间处理数据
 	zalloc_cpumask_var(&tmpmask, GFP_NOWAIT);
 #ifdef CONFIG_TICK_ONESHOT
+	// 存储需要被通知的处理器编号
 	zalloc_cpumask_var(&tick_broadcast_oneshot_mask, GFP_NOWAIT);
+	// 存储那些等待广播的处理器编号
 	zalloc_cpumask_var(&tick_broadcast_pending_mask, GFP_NOWAIT);
+	// 存储那些被强制进行广播的处理器编号
 	zalloc_cpumask_var(&tick_broadcast_force_mask, GFP_NOWAIT);
 #endif
 }

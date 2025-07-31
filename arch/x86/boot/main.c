@@ -14,16 +14,14 @@
 
 #include "boot.h"
 #include "string.h"
-
+//包含setup_header hdr，这个结构包含了linux boot protocol中定义的相同字段并且由boot loader填写
 struct boot_params boot_params __attribute__((aligned(16)));
 
 char *HEAP = _end;
 char *heap_end = _end;		/* Default end of heap = no heap */
 
 /*
- * Copy the header into the boot parameter block.  Since this
- * screws up the old-style command line protocol, adjust by
- * filling in the new-style command line pointer instead.
+ * 将头部信息复制到引导参数块中。由于这会破坏旧式命令行协议，因此需要进行调整，改为填写新式命令行指针
  */
 
 static void copy_boot_params(void)
@@ -36,6 +34,7 @@ static void copy_boot_params(void)
 		absolute_pointer(OLD_CL_ADDRESS);
 
 	BUILD_BUG_ON(sizeof(boot_params) != 4096);
+	//copy.S
 	memcpy(&boot_params.hdr, &hdr, sizeof(hdr));
 
 	if (!boot_params.hdr.cmd_line_ptr &&
@@ -60,6 +59,8 @@ static void copy_boot_params(void)
  * Query the keyboard lock status as given by the BIOS, and
  * set the keyboard repeat rate to maximum.  Unclear why the latter
  * is done here; this might be possible to kill off as stale code.
+ * 调用0x16中断来获取键盘状态
+ * 在获取了键盘状态之后，代码再次调用0x16中断来设置键盘的按键检测频率
  */
 static void keyboard_init(void)
 {
@@ -117,11 +118,13 @@ static void init_heap(void)
 	char *stack_end;
 
 	if (boot_params.hdr.loadflags & CAN_USE_HEAP) {
+		//计算堆栈结束地址 stack_end = esp - STACK_SIZE
 		asm("leal %P1(%%esp),%0"
 		    : "=r" (stack_end) : "i" (-STACK_SIZE));
-
+		//计算堆结束地址
 		heap_end = (char *)
 			((size_t)boot_params.hdr.heap_end_ptr + 0x200);
+		//全局堆和堆栈是相邻的，但是增长方向是相反的
 		if (heap_end > stack_end)
 			heap_end = stack_end;
 	} else {
@@ -130,37 +133,38 @@ static void init_heap(void)
 		     "may be limited!\n");
 	}
 }
-
+//main_wangs
 void main(void)
 {
-	/* First, copy the boot header into the "zeropage" */
+	/* First, 拷贝内核设置信息到 boot_params 结构的相应字段 */
 	copy_boot_params();
 
-	/* Initialize the early-boot console */
+	/* 初始化 early-boot 控制台 */
 	console_init();
 	if (cmdline_find_option_bool("debug"))
+		//定义在tty.c
 		puts("early console in setup code\n");
 
-	/* End of heap check */
+	/* 初始化全局堆 */
 	init_heap();
 
-	/* Make sure we have all the proper CPU support */
+	/* 检查CPU */
 	if (validate_cpu()) {
 		puts("Unable to boot - please use a kernel appropriate "
 		     "for your CPU.\n");
 		die();
 	}
 
-	/* Tell the BIOS what CPU mode we intend to run in. */
+	/* 告诉 BIOS 我们打算运行在哪种 CPU 模式下 */
 	set_bios_mode();
 
 	/* 探测物理内存 */
 	detect_memory();
 
-	/* Set keyboard repeat rate (why?) and query the lock flags */
+	/* 设置键盘的重复速率，并查询锁定键的状态 */
 	keyboard_init();
 
-	/* Query Intel SpeedStep (IST) information */
+	/* 查询 Intel 动态调整CPU的频率和电压 的功能 */
 	query_ist();
 
 	/* Query APM information */
@@ -168,14 +172,14 @@ void main(void)
 	query_apm_bios();
 #endif
 
-	/* Query EDD information */
+	/* 查询磁盘驱动信息 */
 #if defined(CONFIG_EDD) || defined(CONFIG_EDD_MODULE)
 	query_edd();
 #endif
 
-	/* Set the video mode */
+	/* 显示模式初始化 */
 	set_video();
 
-	/* Do the last things and invoke protected mode */
+	/* 做最后的事情，并启动保护模式 */
 	go_to_protected_mode();
 }

@@ -42,7 +42,7 @@ void load_trampoline_pgtable(void)
 	 */
 	__flush_tlb_all();
 }
-
+//保留从 0x0 到1M的低端内存用作到实模式的跳板(用于重启等...)
 void __init reserve_real_mode(void)
 {
 	phys_addr_t mem;
@@ -85,7 +85,7 @@ static void sme_sev_setup_real_mode(struct trampoline_header *th)
 	}
 #endif
 }
-
+//建立到 实模式 代码的跳板
 static void __init setup_real_mode(void)
 {
 	u16 real_mode_seg;

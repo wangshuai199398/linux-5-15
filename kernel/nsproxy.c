@@ -36,6 +36,7 @@ struct nsproxy init_nsproxy = {
 	.ipc_ns			= &init_ipc_ns,
 #endif
 	.mnt_ns			= NULL,
+	//默认pid命名空间
 	.pid_ns_for_children	= &init_pid_ns,
 #ifdef CONFIG_NET
 	//默认网络命名空间
@@ -71,7 +72,7 @@ static struct nsproxy *create_new_namespaces(unsigned long flags,
 {
 	struct nsproxy *new_nsp;
 	int err;
-
+	//申请新的nsprocy
 	new_nsp = create_nsproxy();
 	if (!new_nsp)
 		return ERR_PTR(-ENOMEM);
@@ -93,7 +94,7 @@ static struct nsproxy *create_new_namespaces(unsigned long flags,
 		err = PTR_ERR(new_nsp->ipc_ns);
 		goto out_ipc;
 	}
-
+	//复制或创建PID命名空间
 	new_nsp->pid_ns_for_children =
 		copy_pid_ns(flags, user_ns, tsk->nsproxy->pid_ns_for_children);
 	if (IS_ERR(new_nsp->pid_ns_for_children)) {

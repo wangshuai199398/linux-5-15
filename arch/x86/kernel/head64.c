@@ -318,7 +318,13 @@ static void __init reset_early_page_tables(void)
 	write_cr3(__sme_pa_nodebug(early_top_pgt));
 }
 
-/* Create a new PMD entry */
+/* Create a new PMD entry
+   PGD   Page Global Directory      页全局目录，顶层目录
+   P4D   Page 4th-level Directory   第四层目录（在 5 级页表中才启用）
+   PUD   Page Upper Directory       上层目录
+   PMD   Page Middle Directory      中间目录
+   PTE   Page Table Entry           最终指向物理页的条目（叶子节点）
+*/
 bool __init __early_make_pgtable(unsigned long address, pmdval_t pmd)
 {
 	unsigned long physaddr = address - __PAGE_OFFSET;
@@ -332,6 +338,7 @@ bool __init __early_make_pgtable(unsigned long address, pmdval_t pmd)
 		return false;
 
 again:
+	//取得页表中包含引起 #PF 中断的地址的那一项，将其赋值给 pgd 变量
 	pgd_p = &early_top_pgt[pgd_index(address)].pgd;
 	pgd = *pgd_p;
 
@@ -343,8 +350,14 @@ again:
 	if (!pgtable_l5_enabled())
 		p4d_p = pgd_p;
 	else if (pgd)
+		//如果它包含了正确的全局页表项的话，我们就把这一项的物理地址处理后赋值
 		p4d_p = (p4dval_t *)((pgd & PTE_PFN_MASK) + __START_KERNEL_map - phys_base);
 	else {
+		/*
+		如果 pgd 没有包含有效的地址，我们就检查 next_early_pgt 与 EARLY_DYNAMIC_PAGE_TABLES（即 64 ）的大小
+		EARLY_DYNAMIC_PAGE_TABLES 它是一个固定大小的缓冲区，用来在需要的时候建立新的页表
+		如果 next_early_pgt 比 EARLY_DYNAMIC_PAGE_TABLES 大，我们就用一个上层页目录指针指向当前的动态页表，并将它的物理地址与 _KERPG_TABLE 访问权限一起写入全局页目录表
+		*/
 		if (next_early_pgt >= EARLY_DYNAMIC_PAGE_TABLES) {
 			reset_early_page_tables();
 			goto again;
@@ -369,9 +382,10 @@ again:
 		memset(pud_p, 0, sizeof(*pud_p) * PTRS_PER_PUD);
 		*p4d_p = (p4dval_t)pud_p - __START_KERNEL_map + phys_base + _KERNPG_TABLE;
 	}
+	//修正上层页目录的地址
 	pud_p += pud_index(address);
 	pud = *pud_p;
-
+	//对中层页目录重复上面同样的操作
 	if (pud)
 		pmd_p = (pmdval_t *)((pud & PTE_PFN_MASK) + __START_KERNEL_map - phys_base);
 	else {
@@ -388,7 +402,7 @@ again:
 
 	return true;
 }
-
+//缺页中断
 static bool __init early_make_pgtable(unsigned long address)
 {
 	unsigned long physaddr = address - __PAGE_OFFSET;
@@ -430,7 +444,9 @@ static unsigned long get_cmd_line_ptr(void)
 
 	return cmd_line_ptr;
 }
-
+/*
+__init: 表示这个函数只在初始化阶段使用，并且它所使用的内存将会被释放
+*/
 static void __init copy_bootdata(char *real_mode_data)
 {
 	char * command_line;
@@ -443,9 +459,12 @@ static void __init copy_bootdata(char *real_mode_data)
 	sme_map_bootdata(real_mode_data);
 
 	memcpy(&boot_params, real_mode_data, sizeof(boot_params));
+	//对成员进行清零
 	sanitize_boot_params(&boot_params);
+	//得到命令行的地址
 	cmd_line_ptr = get_cmd_line_ptr();
 	if (cmd_line_ptr) {
+		//把它的虚拟地址拷贝到一个字节数组 boot_command_line 中
 		command_line = __va(cmd_line_ptr);
 		memcpy(boot_command_line, command_line, COMMAND_LINE_SIZE);
 	}
@@ -476,13 +495,15 @@ static void __init copy_bootdata(char *real_mode_data)
 	初始化子系统、驱动、挂载根文件系统
 		|
 	启动 init 进程(PID 1)
+
+	real_mode_data: boot_params 结构体的虚拟地址
 */
 asmlinkage __visible void __init x86_64_start_kernel(char * real_mode_data)
 {
-	/*
-	 * Build-time sanity checks on the kernel image and module
-	 * area mappings. (these are purely build-time and produce no code)
-	 */
+	/* 内核编译（构建）阶段时核映像和模块区域映射的一致性检查 
+	   模块的虚拟地址不能低于内核 text 段基地址 __START_KERNEL_map
+	   包含模块的内核 text 段的空间大小不能小于内核镜像大小 等
+	*/
 	BUILD_BUG_ON(MODULES_VADDR < __START_KERNEL_map);
 	BUILD_BUG_ON(MODULES_VADDR - __START_KERNEL_map < KERNEL_IMAGE_SIZE);
 	BUILD_BUG_ON(MODULES_LEN + KERNEL_IMAGE_SIZE > 2*PUD_SIZE);
@@ -492,12 +513,12 @@ asmlinkage __visible void __init x86_64_start_kernel(char * real_mode_data)
 	MAYBE_BUILD_BUG_ON(!(((MODULES_END - 1) & PGDIR_MASK) ==
 				(__START_KERNEL & PGDIR_MASK)));
 	BUILD_BUG_ON(__fix_to_virt(__end_of_fixed_addresses) <= MODULES_END);
-
+	//存储了每个CPU中 cr4 的Shadow Copy, 上下文切换可能会修改 cr4 中的位，因此需要保存每个CPU中 cr4 的内容
 	cr4_init_shadow();
 
-	/* Kill off the identity-map trampoline */
+	/* 重置了所有的全局页目录项，同时向 cr3 中重新写入了的全局页目录表的地址 */
 	reset_early_page_tables();
-
+	//清空了从 __bss_stop 到 __bss_start 的 _bss 段，下一步将是建立初期 IDT（中断描述符表） 的处理代码
 	clear_bss();
 
 	clear_page(init_top_pgt);
@@ -510,14 +531,12 @@ asmlinkage __visible void __init x86_64_start_kernel(char * real_mode_data)
 	sme_early_init();
 
 	kasan_early_init();
-
+	//中断描述符表早期设置
 	idt_setup_early_handler();
-
+	//把 real_mod_data （定义在 arch/x86/kernel/setup.h） 拷贝进 boot_params
 	copy_bootdata(__va(real_mode_data));
 
-	/*
-	 * Load microcode early on BSP.
-	 */
+	/* Load microcode early on BSP. 加载处理器微代码 */
 	load_ucode_bsp();
 
 	/* set init_top_pgt kernel high mapping*/

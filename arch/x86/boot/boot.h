@@ -68,7 +68,7 @@ static inline u32 inl(u16 port)
 	asm volatile("inl %1,%0" : "=a" (v) : "dN" (port));
 	return v;
 }
-
+//对 I/O 端口 0x80 写入任何的字节都将得到 1 ms 的延时。在上面的代码中，代码将 al 寄存器中的值写到了这个端口
 static inline void io_delay(void)
 {
 	const u16 DELAY_PORT = 0x80;

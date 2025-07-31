@@ -311,6 +311,11 @@ static __always_inline u32  __pv_wait_head_or_lock(struct qspinlock *lock,
  *                       :       v                               |  :
  * contended             :    (*,x,y) +--> (*,0,0) ---> (*,0,1) -'  :
  *   queue               :         ^--'                             :
+ * 
+ * 当 val 指示当前锁已被占用时，该函数会：
+ *   1.	先尝试乐观地加锁（设置 pending 位）
+ *   2.	若失败，则进入慢路径，使用 MCS 锁排队
+ *   3.	直到获取锁后退出，完成加锁操作
  */
 void queued_spin_lock_slowpath(struct qspinlock *lock, u32 val)
 {
@@ -319,17 +324,16 @@ void queued_spin_lock_slowpath(struct qspinlock *lock, u32 val)
 	int idx;
 
 	BUILD_BUG_ON(CONFIG_NR_CPUS >= (1U << _Q_TAIL_CPU_BITS));
-
+	// 若启用了 paravirtualization（PV，用于虚拟机优化），跳转到 PV 特殊路径
 	if (pv_enabled())
 		goto pv_queue;
-
+	// 若 virt_spin_lock() 成功抢锁，直接返回
 	if (virt_spin_lock(lock))
 		return;
 
 	/*
-	 * Wait for in-progress pending->locked hand-overs with a bounded
-	 * number of spins so that we guarantee forward progress.
-	 *
+	 * 如果当前状态是 PENDING，说明别的线程正在等待锁转交
+	 * 当前线程短暂自旋，等待 pending → locked 的交接完成，避免过早入队（提高性能）
 	 * 0,1,0 -> 0,0,1
 	 */
 	if (val == _Q_PENDING_VAL) {
@@ -339,24 +343,22 @@ void queued_spin_lock_slowpath(struct qspinlock *lock, u32 val)
 	}
 
 	/*
-	 * If we observe any contention; queue.
+	 * 如果我们检测到任何争用，就排队
 	 */
 	if (val & ~_Q_LOCKED_MASK)
 		goto queue;
 
-	/*
-	 * trylock || pending
-	 *
+	/* 再尝试设置 PENDING 位
+	 * 表示“我准备抢锁”，设置 PENDING 标志
+	 * 如果此时没有人竞争锁，并能成功获取，则锁住并返回
 	 * 0,0,* -> 0,1,* -> 0,0,1 pending, trylock
 	 */
 	val = queued_fetch_set_pending_acquire(lock);
 
-	/*
-	 * If we observe contention, there is a concurrent locker.
+	/* 检测锁竞争 → 入队排队
+	 * 如果锁值中包含 TAIL（有人排队）或 PENDING（其他线程也在抢锁），说明竞争激烈 → 排队
 	 *
-	 * Undo and queue; our setting of PENDING might have made the
-	 * n,0,0 -> 0,0,0 transition fail and it will now be waiting
-	 * on @next to become !NULL.
+	 * 我们需要撤销当前操作并加入等待队列；因为我们设置 PENDING 标志的操作可能导致原本的 n,0,0 → 0,0,0 状态转换失败，现在那个线程可能正在等待 @next 变为非 NULL
 	 */
 	if (unlikely(val & ~_Q_LOCKED_MASK)) {
 
@@ -368,21 +370,17 @@ void queued_spin_lock_slowpath(struct qspinlock *lock, u32 val)
 	}
 
 	/*
-	 * We're pending, wait for the owner to go away.
+	 * 我们当前处于 PENDING 状态，需等待当前锁拥有者释放锁，然后自己抢占锁
 	 *
-	 * 0,1,1 -> 0,1,0
+	 * 状态转换：0,1,1 -> 0,1,0（表示清除 PENDING 标志）
 	 *
-	 * this wait loop must be a load-acquire such that we match the
-	 * store-release that clears the locked bit and create lock
-	 * sequentiality; this is because not all
-	 * clear_pending_set_locked() implementations imply full
-	 * barriers.
+	 * 这个等待循环必须使用load-acquire，以配合释放锁时的store-release，从而建立锁的顺序一致性；这是因为并非所有 clear_pending_set_locked 的实现都隐含完整的内存屏障
 	 */
 	if (val & _Q_LOCKED_MASK)
 		atomic_cond_read_acquire(&lock->val, !(VAL & _Q_LOCKED_MASK));
 
 	/*
-	 * take ownership and clear the pending bit.
+	 * 获取所有权并清除 PENDING 位
 	 *
 	 * 0,1,0 -> 0,0,1
 	 */
@@ -391,24 +389,21 @@ void queued_spin_lock_slowpath(struct qspinlock *lock, u32 val)
 	return;
 
 	/*
-	 * End of pending bit optimistic spinning and beginning of MCS
-	 * queuing.
+	 * PENDING 位的乐观自旋结束，MCS 排队开始，进入排队路径（MCS 队列锁）
 	 */
 queue:
 	lockevent_inc(lock_slowpath);
 pv_queue:
+	//获取当前 CPU 对应的 MCS 锁节点，构造链表的节点（MCS 样式），用于链式等待锁
 	node = this_cpu_ptr(&qnodes[0].mcs);
 	idx = node->count++;
 	tail = encode_tail(smp_processor_id(), idx);
 
 	/*
-	 * 4 nodes are allocated based on the assumption that there will
-	 * not be nested NMIs taking spinlocks. That may not be true in
-	 * some architectures even though the chance of needing more than
-	 * 4 nodes will still be extremely unlikely. When that happens,
-	 * we fall back to spinning on the lock directly without using
-	 * any MCS node. This is not the most elegant solution, but is
-	 * simple enough.
+	 * 分配了 4 个节点，是基于“不会在嵌套的 NMI（不可屏蔽中断）中获取自旋锁”的假设
+	 * 但在某些架构上，这个假设可能不成立，尽管实际中需要超过 4 个节点的情况极其罕见
+	 * 当确实发生这种情况时，我们会回退到直接在锁上自旋，而不使用任何 MCS 节点
+	 * 构建一个本地 MCS 节点（MCS 风格），挂入锁的等待链表中。每个 CPU 通常有一组预分配的 qnodes，用于避免动态内存分配
 	 */
 	if (unlikely(idx >= MAX_NODES)) {
 		lockevent_inc(lock_no_node);
@@ -420,14 +415,13 @@ pv_queue:
 	node = grab_mcs_node(node, idx);
 
 	/*
-	 * Keep counts of non-zero index values:
+	 * 统计非零索引值的数量
 	 */
 	lockevent_cond_inc(lock_use_node2 + idx - 1, idx);
 
 	/*
-	 * Ensure that we increment the head node->count before initialising
-	 * the actual node. If the compiler is kind enough to reorder these
-	 * stores, then an IRQ could overwrite our assignments.
+	 * 确保我们在初始化实际节点之前，先递增 head 节点的 count 字段
+	 * 如果编译器“好心”地重新排序了这些写操作（store），那么中断（IRQ）可能会覆盖我们正在赋的值
 	 */
 	barrier();
 
@@ -436,101 +430,91 @@ pv_queue:
 	pv_init_node(node);
 
 	/*
-	 * We touched a (possibly) cold cacheline in the per-cpu queue node;
-	 * attempt the trylock once more in the hope someone let go while we
-	 * weren't watching.
+	 * 我们访问了每个 CPU 的队列节点中的一个（可能是）冷缓存行
+	 * 再次尝试一次 trylock，希望在我们“没注意”的这段时间里，有其他线程释放了锁
+	 * 尝试再次获取锁
 	 */
 	if (queued_spin_trylock(lock))
 		goto release;
 
 	/*
-	 * Ensure that the initialisation of @node is complete before we
-	 * publish the updated tail via xchg_tail() and potentially link
-	 * @node into the waitqueue via WRITE_ONCE(prev->next, node) below.
+	 * 确保在通过 xchg_tail 更新 tail 并可能通过 WRITE_ONCE(prev->next, node) 将 @node 链接到等待队列之前，@node 的初始化已经完成
 	 */
 	smp_wmb();
 
-	/*
-	 * Publish the updated tail.
-	 * We have already touched the queueing cacheline; don't bother with
-	 * pending stuff.
+	/* 构建 MCS 队列并等待获取锁
+	 * 发布更新后的 tail（队尾）
+	 * 我们已经访问过排队相关的缓存行，因此无需再处理 PENDING 状态的事情
 	 *
 	 * p,*,* -> n,*,*
+	 * 更新队列的尾部，通过 xchg_tail() 原子更新锁的尾部，返回旧尾部用于构造链
 	 */
 	old = xchg_tail(lock, tail);
 	next = NULL;
 
-	/*
-	 * if there was a previous node; link it and wait until reaching the
-	 * head of the waitqueue.
+	/* 
+	 * 如果存在前一个节点：将其连接上，并等待直到自己成为等待队列的头部
+	 * 检索原先的尾部
 	 */
 	if (old & _Q_TAIL_MASK) {
+		// 说明已有线程排队 → 链接前驱
 		prev = decode_tail(old);
 
 		/* Link @node into the waitqueue. */
 		WRITE_ONCE(prev->next, node);
 
 		pv_wait_node(node, prev);
+		// 自旋等待
 		arch_mcs_spin_lock_contended(&node->locked);
 
 		/*
-		 * While waiting for the MCS lock, the next pointer may have
-		 * been set by another lock waiter. We optimistically load
-		 * the next pointer & prefetch the cacheline for writing
-		 * to reduce latency in the upcoming MCS unlock operation.
+		 * 在等待 MCS 锁期间，next 指针可能已经被其他等待锁的线程设置
+		 * 我们会“乐观地”加载这个 next 指针，并预取它所在的缓存行用于写入，以减少即将到来的 MCS 解锁操作的延迟
 		 */
 		next = READ_ONCE(node->next);
 		if (next)
 			prefetchw(next);
 	}
 
-	/*
-	 * we're at the head of the waitqueue, wait for the owner & pending to
-	 * go away.
+	/* 等待持锁者释放锁（成为队头）
+	 * 我们现在处于等待队列的队头，需等待锁的拥有者和 PENDING 状态都清除
 	 *
-	 * *,x,y -> *,0,0
+	 * 状态变化：*,x,y → *,0,0（只关心 locked 和 pending 位的变化）
 	 *
-	 * this wait loop must use a load-acquire such that we match the
-	 * store-release that clears the locked bit and create lock
-	 * sequentiality; this is because the set_locked() function below
-	 * does not imply a full barrier.
+	 * 这个等待循环必须使用带有 acquire 语义的加载操作，以配合释放锁时的 store-release，从而建立锁的顺序一致性；
+	 * 这是因为下面的 set_locked() 函数并不隐含完整的内存屏障
 	 *
-	 * The PV pv_wait_head_or_lock function, if active, will acquire
-	 * the lock and return a non-zero value. So we have to skip the
-	 * atomic_cond_read_acquire() call. As the next PV queue head hasn't
-	 * been designated yet, there is no way for the locked value to become
-	 * _Q_SLOW_VAL. So both the set_locked() and the
-	 * atomic_cmpxchg_relaxed() calls will be safe.
+	 * 如果启用了 PV（paravirtual 虚拟化）机制，pv_wait_head_or_lock 函数会尝试获取锁，并返回非零值，表示已成功获取锁。
+	 * 这时我们必须跳过 atomic_cond_read_acquire() 的调用
 	 *
-	 * If PV isn't active, 0 will be returned instead.
+	 * 由于新的 PV 队列头尚未被指定，锁的值不会变成 _Q_SLOW_VAL，所以 set_locked() 和 atomic_cmpxchg_relaxed() 的调用都是安全的
+	 * 
+	 * 如果 PV 没有启用，则该函数返回 0
 	 *
 	 */
 	if ((val = pv_wait_head_or_lock(lock, node)))
 		goto locked;
-
+	// 等成为队头后，再等待锁变空，再去尝试 set_locked()
 	val = atomic_cond_read_acquire(&lock->val, !(VAL & _Q_LOCKED_PENDING_MASK));
 
 locked:
 	/*
-	 * claim the lock:
+	 * 尝试获取锁：设置锁位（真正持有锁）
 	 *
-	 * n,0,0 -> 0,0,1 : lock, uncontended
-	 * *,*,0 -> *,*,1 : lock, contended
+	 * n,0,0 → 0,0,1: 表示无竞争地加锁（uncontended）
+	 * *,*,0 -> *,*,1: 表示在有竞争的情况下加锁（contended）
 	 *
-	 * If the queue head is the only one in the queue (lock value == tail)
-	 * and nobody is pending, clear the tail code and grab the lock.
-	 * Otherwise, we only need to grab the lock.
+	 * 如果队列头是队列中的唯一元素（即锁的值等于 tail），并且没有线程处于 pending 状态，那么我们可以清除 tail 字段并直接获取锁。
+	 * 否则，我们只需要设置锁位即可（不管 tail）
 	 */
 
 	/*
-	 * In the PV case we might already have _Q_LOCKED_VAL set, because
-	 * of lock stealing; therefore we must also allow:
+	 * 在启用 Paravirtualization（PV）机制的情况下，可能由于锁被“偷走”（lock stealing），我们已经设置了 _Q_LOCKED_VAL，因此还必须允许以下状态转换：
 	 *
-	 * n,0,1 -> 0,0,1
+	 * n,0,1 -> 0,0,1: 允许在已加锁但没有其他线程 pending 的情况下继续加锁
 	 *
-	 * Note: at this point: (val & _Q_PENDING_MASK) == 0, because of the
-	 *       above wait condition, therefore any concurrent setting of
-	 *       PENDING will make the uncontended transition fail.
+	 * 注意：此时 (val & _Q_PENDING_MASK) == 0，因为之前的等待逻辑已经确保了 PENDING 位为 0。
+	 *      因此如果有线程并发地再次设置 PENDING，会导致无竞争路径的加锁失败
 	 */
 	if ((val & _Q_TAIL_MASK) == tail) {
 		if (atomic_try_cmpxchg_relaxed(&lock->val, &val, _Q_LOCKED_VAL))
@@ -538,14 +522,13 @@ locked:
 	}
 
 	/*
-	 * Either somebody is queued behind us or _Q_PENDING_VAL got set
-	 * which will then detect the remaining tail and queue behind us
-	 * ensuring we'll see a @next.
+	 * 要么是有其他线程排在我们后面，要么是 _Q_PENDING_VAL 被设置了
+	 * 接下来它将检测到剩余的 tail 并排在我们后面，确保我们最终会看到一个 @next 指针
 	 */
 	set_locked(lock);
 
 	/*
-	 * contended path; wait for next if not observed yet, release.
+	 * 竞争路径：如果尚未看到 next 节点，则等待；之后释放锁
 	 */
 	if (!next)
 		next = smp_cond_load_relaxed(&node->next, (VAL));

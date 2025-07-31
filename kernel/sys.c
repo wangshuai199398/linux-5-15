@@ -1448,7 +1448,7 @@ SYSCALL_DEFINE2(setdomainname, char __user *, name, int, len)
 	}
 	return errno;
 }
-
+// getrlimit_wangs
 SYSCALL_DEFINE2(getrlimit, unsigned int, resource, struct rlimit __user *, rlim)
 {
 	struct rlimit value;
@@ -1462,7 +1462,7 @@ SYSCALL_DEFINE2(getrlimit, unsigned int, resource, struct rlimit __user *, rlim)
 }
 
 #ifdef CONFIG_COMPAT
-
+// setrlimit_wangs
 COMPAT_SYSCALL_DEFINE2(setrlimit, unsigned int, resource,
 		       struct compat_rlimit __user *, rlim)
 {
@@ -1592,7 +1592,10 @@ static void rlim64_to_rlim(const struct rlimit64 *rlim64, struct rlimit *rlim)
 		rlim->rlim_max = (unsigned long)rlim64->rlim_max;
 }
 
-/* make sure you are allowed to change @tsk limits before calling this */
+/* make sure you are allowed to change @tsk limits before calling this 
+resource：资源类型（如 RLIMIT_NOFILE）
+rlim：指向用户空间的 rlimit 结构体的指针，用于将结果返回给调用者。
+*/
 int do_prlimit(struct task_struct *tsk, unsigned int resource,
 		struct rlimit *new_rlim, struct rlimit *old_rlim)
 {
@@ -1602,7 +1605,8 @@ int do_prlimit(struct task_struct *tsk, unsigned int resource,
 	if (resource >= RLIM_NLIMITS)
 		return -EINVAL;
 	resource = array_index_nospec(resource, RLIM_NLIMITS);
-
+	// 检查给定的软限制是否不超过硬限制；另外，如果给定的资源类型是“最大文件描述符数量”，还需要检查硬限制是否不超过 sysctl_nr_open 的值
+	// sysctl_nr_open 的值可以通过 procfs 查看：cat /proc/sys/fs/nr_open
 	if (new_rlim) {
 		if (new_rlim->rlim_cur > new_rlim->rlim_max)
 			return -EINVAL;
@@ -1612,14 +1616,18 @@ int do_prlimit(struct task_struct *tsk, unsigned int resource,
 	}
 
 	/* protect tsk->signal and tsk->sighand from disappearing */
+	// 确保在更新指定资源的限制时，相关的信号处理程序（signal handlers）不会被销毁
+	// 之所以需要这样做，是因为 prlimit 系统调用允许我们通过指定的 PID 来更新其他进程的资源限制。
 	read_lock(&tasklist_lock);
 	if (!tsk->sighand) {
 		retval = -ESRCH;
 		goto out;
 	}
 
+	// 由于任务列表（task list）已被锁定，我们就可以安全地获取负责该进程指定资源限制的 rlimit 实例
 	rlim = tsk->signal->rlim + resource;
 	task_lock(tsk->group_leader);
+	// 如果 new_rlim 不为 NULL，就更新相应的限制值；
 	if (new_rlim) {
 		/* Keep the capable check against init_user_ns until
 		   cgroups can contain all limits */
@@ -1629,6 +1637,7 @@ int do_prlimit(struct task_struct *tsk, unsigned int resource,
 		if (!retval)
 			retval = security_task_setrlimit(tsk, resource, new_rlim);
 	}
+	// 如果 old_rlim 不为 NULL，则将当前的限制值填充进去
 	if (!retval) {
 		if (old_rlim)
 			*old_rlim = *rlim;

@@ -61,12 +61,13 @@ static __always_inline void boot_init_stack_canary(void)
 	 * of randomness. The TSC only matters for very early init,
 	 * there it already has some randomness on most systems. Later
 	 * on during the bootup the random pool has true entropy too.
+	 * 使用随机数和时戳计数器计算新的 canary 值
 	 */
 	get_random_bytes(&canary, sizeof(canary));
 	tsc = rdtsc();
 	canary += tsc + (tsc << 32UL);
 	canary &= CANARY_MASK;
-
+	//给 stack_canary 设置随机数
 	current->stack_canary = canary;
 #ifdef CONFIG_X86_64
 	this_cpu_write(fixed_percpu_data.stack_canary, canary);

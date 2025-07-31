@@ -710,6 +710,7 @@ static void flush_memcg_stats_dwork(struct work_struct *w)
  * @memcg: the memory cgroup
  * @idx: the stat item - can be enum memcg_stat_item or enum node_stat_item
  * @val: delta to add to the counter, can be negative
+ * 详细内存记账
  */
 void __mod_memcg_state(struct mem_cgroup *memcg, int idx, int val)
 {
@@ -725,7 +726,7 @@ static unsigned long memcg_page_state_local(struct mem_cgroup *memcg, int idx)
 {
 	long x = 0;
 	int cpu;
-
+	// 读取
 	for_each_possible_cpu(cpu)
 		x += per_cpu(memcg->vmstats_percpu->state[idx], cpu);
 #ifdef CONFIG_SMP
@@ -734,7 +735,7 @@ static unsigned long memcg_page_state_local(struct mem_cgroup *memcg, int idx)
 #endif
 	return x;
 }
-
+// 完成详细内存记账，记录到 memcg->vmstats_percpu->state[]
 void __mod_memcg_lruvec_state(struct lruvec *lruvec, enum node_stat_item idx,
 			      int val)
 {
@@ -2610,13 +2611,14 @@ static int try_charge_memcg(struct mem_cgroup *memcg, gfp_t gfp_mask,
 retry:
 	if (consume_stock(memcg, nr_pages))
 		return 0;
-
+	// 对使用的内存进行记账，如果记账后没有超过限制就跳到记账成功后返回
 	if (!do_memsw_account() ||
 	    page_counter_try_charge(&memcg->memsw, batch, &counter)) {
 		if (page_counter_try_charge(&memcg->memory, batch, &counter))
 			goto done_restock;
 		if (do_memsw_account())
 			page_counter_uncharge(&memcg->memsw, batch);
+		// 如果记账超过限制，记录内存使用量超过限制的内存控制组
 		mem_over_limit = mem_cgroup_from_counter(counter, memory);
 	} else {
 		mem_over_limit = mem_cgroup_from_counter(counter, memsw);
@@ -2655,6 +2657,7 @@ retry:
 	memcg_memory_event(mem_over_limit, MEMCG_MAX);
 
 	psi_memstall_enter(&pflags);
+	// 尝试对超出限制的内存控制组进行内存回收，即尝试对容器中使用的 PageCache 进行回收
 	nr_reclaimed = try_to_free_mem_cgroup_pages(mem_over_limit, nr_pages,
 						    gfp_mask, may_swap);
 	psi_memstall_leave(&pflags);
@@ -2703,6 +2706,7 @@ retry:
 	 * a forward progress or bypass the charge if the oom killer
 	 * couldn't make any progress.
 	 */
+	// 无法回收足够的内存，触发 oom_killer，如果不想被kill可以设置 echo 1 > memory.oom_control
 	oom_status = mem_cgroup_oom(mem_over_limit, gfp_mask,
 		       get_order(nr_pages * PAGE_SIZE));
 	if (oom_status == OOM_SUCCESS) {
@@ -2738,6 +2742,7 @@ done_restock:
 	 * change in the meantime.  As high limit is checked again before
 	 * reclaim, the cost of mismatch is negligible.
 	 */
+	// 记账成功
 	do {
 		bool mem_high, swap_high;
 
@@ -3381,6 +3386,7 @@ static int mem_cgroup_resize_max(struct mem_cgroup *memcg,
 	bool drained = false;
 	int ret;
 	bool limits_invariant;
+	// 非 swap 就是 memcg->memory
 	struct page_counter *counter = memsw ? &memcg->memsw : &memcg->memory;
 
 	do {
@@ -3403,6 +3409,7 @@ static int mem_cgroup_resize_max(struct mem_cgroup *memcg,
 		}
 		if (max > counter->max)
 			enlarge = true;
+		//设置到 max 变量中
 		ret = page_counter_set_max(counter, max);
 		mutex_unlock(&memcg_max_mutex);
 
@@ -3586,6 +3593,7 @@ static unsigned long mem_cgroup_usage(struct mem_cgroup *memcg, bool swap)
 		if (swap)
 			val += memcg_page_state(memcg, MEMCG_SWAP);
 	} else {
+		// 读取的就是 memcg->memory 下的 usage 字段
 		if (!swap)
 			val = page_counter_read(&memcg->memory);
 		else
@@ -3789,19 +3797,22 @@ out:
  * 对于内存来讲，写入内存的限制使用函数 mem_cgroup_write->mem_cgroup_resize_limit 来设置 struct mem_cgroup 的 memory.limit 成员
  * 在进程执行过程中，申请内存的时候，我们会调用 handle_pte_fault->do_anonymous_page()->mem_cgroup_try_charge()
  * 然后调用 get_mem_cgroup_from_mm 获得这个进程对应的 mem_cgroup 结构，然后在 try_charge 中，根据 mem_cgroup 的限制，看是否可以申请分配内存
+ * cgroup_wangs
  */
 static ssize_t mem_cgroup_write(struct kernfs_open_file *of,
 				char *buf, size_t nbytes, loff_t off)
 {
+	// 获取 mem_cgroup 内核对象
 	struct mem_cgroup *memcg = mem_cgroup_from_css(of_css(of));
 	unsigned long nr_pages;
 	int ret;
 
 	buf = strstrip(buf);
+	// 将用户输入的字节数转化成页数
 	ret = page_counter_memparse(buf, "-1", &nr_pages);
 	if (ret)
 		return ret;
-
+	// 记录用户配置
 	switch (MEMFILE_ATTR(of_cft(of)->private)) {
 	case RES_LIMIT:
 		if (mem_cgroup_is_root(memcg)) { /* Can't set limit on root */
@@ -4041,16 +4052,18 @@ static int memcg_stat_show(struct seq_file *m, void *v)
 	BUILD_BUG_ON(ARRAY_SIZE(memcg1_stat_names) != ARRAY_SIZE(memcg1_stats));
 
 	mem_cgroup_flush_stats();
-
+	// 输出 cache、rss、shmem、mapped_file 等统计
 	for (i = 0; i < ARRAY_SIZE(memcg1_stats); i++) {
 		unsigned long nr;
 
 		if (memcg1_stats[i] == MEMCG_SWAP && !do_memsw_account())
 			continue;
+		// 从 memcg->vmstats_percpu->state[] 数组中读取出来
 		nr = memcg_page_state_local(memcg, memcg1_stats[i]);
+		// 通过 memcg1_stat_names 把每一个元素转化为我们肉眼可见的指标名
 		seq_printf(m, "%s %lu\n", memcg1_stat_names[i], nr * PAGE_SIZE);
 	}
-
+	// 输出 pagein pageout 等统计
 	for (i = 0; i < ARRAY_SIZE(memcg1_events); i++)
 		seq_printf(m, "%s %lu\n", vm_event_name(memcg1_events[i]),
 			   memcg_events_local(memcg, memcg1_events[i]));
@@ -4938,9 +4951,10 @@ out_kfree:
 
 	return ret;
 }
-
+// cgroup_wangs
 static struct cftype mem_cgroup_legacy_files[] = {
 	{
+		//容器总内存消耗
 		.name = "usage_in_bytes",
 		.private = MEMFILE_PRIVATE(_MEM, RES_USAGE),
 		.read_u64 = mem_cgroup_read_u64,
@@ -4952,6 +4966,7 @@ static struct cftype mem_cgroup_legacy_files[] = {
 		.read_u64 = mem_cgroup_read_u64,
 	},
 	{
+		//最大使用内存
 		.name = "limit_in_bytes",
 		.private = MEMFILE_PRIVATE(_MEM, RES_LIMIT),
 		.write = mem_cgroup_write,
@@ -4970,6 +4985,7 @@ static struct cftype mem_cgroup_legacy_files[] = {
 		.read_u64 = mem_cgroup_read_u64,
 	},
 	{
+		//更详细的内存消耗
 		.name = "stat",
 		.seq_show = memcg_stat_show,
 	},
@@ -4988,6 +5004,7 @@ static struct cftype mem_cgroup_legacy_files[] = {
 		.flags = CFTYPE_NO_PREFIX | CFTYPE_WORLD_WRITABLE,
 	},
 	{
+		//是否允许容器使用swap作为内存
 		.name = "swappiness",
 		.read_u64 = mem_cgroup_swappiness_read,
 		.write_u64 = mem_cgroup_swappiness_write,
@@ -4998,6 +5015,7 @@ static struct cftype mem_cgroup_legacy_files[] = {
 		.write_u64 = mem_cgroup_move_charge_write,
 	},
 	{
+		//容器中进程的oom策略
 		.name = "oom_control",
 		.seq_show = mem_cgroup_oom_control_read,
 		.write_u64 = mem_cgroup_oom_control_write,
@@ -5008,6 +5026,7 @@ static struct cftype mem_cgroup_legacy_files[] = {
 	},
 #ifdef CONFIG_NUMA
 	{
+		//容器在各个numa节点上的内存分配情况
 		.name = "numa_stat",
 		.seq_show = memcg_numa_stat_show,
 	},
@@ -5223,7 +5242,7 @@ static struct mem_cgroup *mem_cgroup_alloc(void)
 
 	size = sizeof(struct mem_cgroup);
 	size += nr_node_ids * sizeof(struct mem_cgroup_per_node *);
-
+	//申请 mem_cgroup 对象
 	memcg = kzalloc(size, GFP_KERNEL);
 	if (!memcg)
 		return ERR_PTR(error);

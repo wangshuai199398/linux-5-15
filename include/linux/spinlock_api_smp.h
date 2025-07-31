@@ -138,8 +138,11 @@ static inline void __raw_spin_lock_bh(raw_spinlock_t *lock)
 
 static inline void __raw_spin_lock(raw_spinlock_t *lock)
 {
+	// 禁止抢占
 	preempt_disable();
+	// 锁安全检测相关 需要打开 CONFIG_LOCKDEP
 	spin_acquire(&lock->dep_map, 0, 0, _RET_IP_);
+	// 调用 do_raw_spin_lock
 	LOCK_CONTENDED(lock, do_raw_spin_trylock, do_raw_spin_lock);
 }
 

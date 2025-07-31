@@ -110,7 +110,7 @@ static void init_espfix_random(void)
 	page_random = (rand / ESPFIX_STACKS_PER_PAGE)
 		& (ESPFIX_PAGE_SPACE - 1);
 }
-
+//首先会将 espfix 页表的上级目录安装到内核页目录中
 void __init init_espfix_bsp(void)
 {
 	pgd_t *pgd;
@@ -121,10 +121,10 @@ void __init init_espfix_bsp(void)
 	p4d = p4d_alloc(&init_mm, pgd, ESPFIX_BASE_ADDR);
 	p4d_populate(&init_mm, p4d, espfix_pud_page);
 
-	/* Randomize the locations */
+	/* Randomize the locations 为 espfix 页分配一个随机位置 */
 	init_espfix_random();
 
-	/* The rest is the same as for any other processor */
+	/* The rest is the same as for any other processor 为当前 CPU 启用 espfix 功能 */
 	init_espfix_ap(0);
 }
 

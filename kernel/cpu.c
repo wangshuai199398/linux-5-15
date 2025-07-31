@@ -2681,17 +2681,18 @@ void set_cpu_online(unsigned int cpu, bool online)
 }
 
 /*
- * Activate the first processor.
+ * 激活第一个CPU
  */
 void __init boot_cpu_init(void)
 {
+	//获取当前处理器的ID 现在是0
 	int cpu = smp_processor_id();
 
 	/* Mark the boot cpu "present", "online" etc for SMP and UP case */
-	set_cpu_online(cpu, true);
-	set_cpu_active(cpu, true);
-	set_cpu_present(cpu, true);
-	set_cpu_possible(cpu, true);
+	set_cpu_online(cpu, true);//设置在线
+	set_cpu_active(cpu, true);//设置激活，active 是 online 的一个子集，通常是用在热插拔过程中判断是否允许迁移任务到该 CPU
+	set_cpu_present(cpu, true);//设置某个 CPU 为存在状态
+	set_cpu_possible(cpu, true);//设置支持CPU热插拔
 
 #ifdef CONFIG_SMP
 	__boot_cpu_id = cpu;

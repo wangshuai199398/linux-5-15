@@ -137,7 +137,7 @@ static void vsmp_apic_post_init(void)
 	/* need to update phys_pkg_id */
 	apic->phys_pkg_id = apicid_phys_pkg_id;
 }
-
+//初始化 ScaleMP vSMP 架构支持
 void __init vsmp_init(void)
 {
 	detect_vsmp_box();

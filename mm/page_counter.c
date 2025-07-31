@@ -117,7 +117,9 @@ bool page_counter_try_charge(struct page_counter *counter,
 		 * we either see the new limit or the setter sees the
 		 * counter has changed and retries.
 		 */
+		// 先把要记账的 nr_pages 加到当前 page_counter 的 usage 字段上来
 		new = atomic_long_add_return(nr_pages, &c->usage);
+		// 接着判断新的 usage 是否超过了 max（用户设置的上限）
 		if (new > c->max) {
 			atomic_long_sub(nr_pages, &c->usage);
 			propagate_protected_usage(c, new);
@@ -187,6 +189,7 @@ int page_counter_set_max(struct page_counter *counter, unsigned long nr_pages)
 		 * the limit, so if it sees the old limit, we see the
 		 * modified counter and retry.
 		 */
+		// 不能太小
 		usage = page_counter_read(counter);
 
 		if (usage > nr_pages)
@@ -196,7 +199,7 @@ int page_counter_set_max(struct page_counter *counter, unsigned long nr_pages)
 
 		if (page_counter_read(counter) <= usage)
 			return 0;
-
+		// 设置失败处理
 		counter->max = old;
 		cond_resched();
 	}

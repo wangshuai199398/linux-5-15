@@ -72,6 +72,7 @@ static struct pid_namespace *create_pid_namespace(struct user_namespace *user_ns
 	struct pid_namespace *parent_pid_ns)
 {
 	struct pid_namespace *ns;
+	//新pid namespace level + 1
 	unsigned int level = parent_pid_ns->level + 1;
 	struct ucounts *ucounts;
 	int err;
@@ -88,6 +89,7 @@ static struct pid_namespace *create_pid_namespace(struct user_namespace *user_ns
 		goto out;
 
 	err = -ENOMEM;
+	//申请内存
 	ns = kmem_cache_zalloc(pid_ns_cachep, GFP_KERNEL);
 	if (ns == NULL)
 		goto out_dec;
@@ -104,7 +106,9 @@ static struct pid_namespace *create_pid_namespace(struct user_namespace *user_ns
 	ns->ns.ops = &pidns_operations;
 
 	refcount_set(&ns->ns.count, 1);
+	//设置新命名空间level
 	ns->level = level;
+	//新命名空间和旧命名空间组成一颗树
 	ns->parent = get_pid_ns(parent_pid_ns);
 	ns->user_ns = get_user_ns(user_ns);
 	ns->ucounts = ucounts;

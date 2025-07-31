@@ -44,6 +44,7 @@ static void __section(".inittext") bios_putchar(int ch)
 	ireg.cx = 0x0001;
 	ireg.ah = 0x0e;
 	ireg.al = ch;
+	//使用bios int10中断
 	intcall(0x10, &ireg, NULL);
 }
 
@@ -57,7 +58,7 @@ void __section(".inittext") putchar(int ch)
 	if (early_serial_base != 0)
 		serial_putchar(ch);
 }
-
+//__attribute__((section(".inittext"))) 说明这段代码将被放入 .inittext 代码段，关于 .inittext 代码段的定义可以在setup.ld中找到
 void __section(".inittext") puts(const char *str)
 {
 	while (*str)

@@ -254,85 +254,76 @@ exit_idle:
 }
 
 /*
- * Generic idle loop implementation
+ * 通用的 idle 循环实现
  *
- * Called with polling cleared.
+ * 在关闭轮询（polling）模式的情况下调用。
+ * 用于在 CPU 没有任务可执行时执行“空闲”逻辑，是进入 idle 状态的核心路径之一
  */
 static void do_idle(void)
 {
 	int cpu = smp_processor_id();
 
-	/*
-	 * Check if we need to update blocked load
-	 */
+	/* 如果当前 CPU 是调度器中负责负载均衡的那一个，它会在 idle 时尝试执行任务迁移，减少不均衡 */
 	nohz_run_idle_balance(cpu);
 
-	/*
-	 * If the arch has a polling bit, we maintain an invariant:
+	/* 如果架构支持轮询位（polling bit），我们会保持以下不变性：
 	 *
-	 * Our polling bit is clear if we're not scheduled (i.e. if rq->curr !=
-	 * rq->idle). This means that, if rq->idle has the polling bit set,
-	 * then setting need_resched is guaranteed to cause the CPU to
-	 * reschedule.
-	 */
-
+	 * 当当前 CPU 没有运行 idle 进程（即 rq->curr != rq->idle）时，轮询位应被清除
+	 * 这意味着，如果 rq->idle 设置了轮询位（polling bit），那么只要设置了 need_resched 标志，就能确保该 CPU 会重新调度任务（reschedule）*/
+	//设置 polling 状态并通知 NOHZ 子系统 CPU 即将进入 idle 状态，通知调度器当前 CPU 进入轮询模式，不依赖 tick 定时器中断
 	__current_set_polling();
+	// NOHZ 模式中关闭周期性 tick（timer tick）
 	tick_nohz_idle_enter();
-
+	// 进入主 idle 循环，直到有任务可运行（need_resched 被设置）
 	while (!need_resched()) {
 		rmb();
-
+		// 关闭中断
 		local_irq_disable();
-
+		// 如果 CPU 已下线，停止 tick，报告 CPU 已进入死亡状态，并进入平台相关的“CPU 死亡”路径（如热插拔）
 		if (cpu_is_offline(cpu)) {
 			tick_nohz_idle_stop_tick();
 			cpuhp_report_idle_dead();
 			arch_cpu_idle_dead();
 		}
-
+		// 由架构层提供的钩子，用于执行平台相关 idle 前设置（如进入 C1/C2/C3）
 		arch_cpu_idle_enter();
+		// 确保 RCU 推迟的任务在 idle 前被唤醒
 		rcu_nocb_flush_deferred_wakeup();
 
-		/*
-		 * In poll mode we reenable interrupts and spin. Also if we
-		 * detected in the wakeup from idle path that the tick
-		 * broadcast device expired for us, we don't want to go deep
-		 * idle as we know that the IPI is going to arrive right away.
-		 */
+		/* 在轮询（poll）模式下，我们会重新开启中断并进行自旋。
+		 * 同时，如果我们在从空闲状态被唤醒的路径中检测到 tick 广播设备已经为我们触发了中断，那么就不会进入深度空闲状态（deep idle），因为知道 IPI（中断请求）即将马上到达 */
+		// 判断是否需要进入轮询或深度 idle：如果强制使用轮询（如调试）或 tick 广播设备已经过期，则启用轮询 idle（cpu_idle_poll()）
 		if (cpu_idle_force_poll || tick_check_broadcast_expired()) {
 			tick_nohz_idle_restart_tick();
 			cpu_idle_poll();
 		} else {
+			// 否则调用 cpuidle 框架进入深度节能 idle 模式（如 C-states）
 			cpuidle_idle_call();
 		}
+		// 从 idle 退出时恢复上下文
 		arch_cpu_idle_exit();
 	}
 
-	/*
-	 * Since we fell out of the loop above, we know TIF_NEED_RESCHED must
-	 * be set, propagate it into PREEMPT_NEED_RESCHED.
-	 *
-	 * This is required because for polling idle loops we will not have had
-	 * an IPI to fold the state for us.
-	 */
+	/* 由于我们已经从上面的循环中跳出，可以确定 TIF_NEED_RESCHED 标志一定已经被设置，因此需要将其传递到 PREEMPT_NEED_RESCHED 中
+	   这是必要的，因为对于轮询（polling）空闲循环来说，我们不会收到 IPI（中断）来帮我们合并调度状态，所以必须手动处理这个状态传递 */
+	// 重新设置调度标志，清除 polling 状态
 	preempt_set_need_resched();
+	// 重新启用周期性 tick（NOHZ 退出）
 	tick_nohz_idle_exit();
+	// 清除 polling 状态
 	__current_clr_polling();
 
-	/*
-	 * We promise to call sched_ttwu_pending() and reschedule if
-	 * need_resched() is set while polling is set. That means that clearing
-	 * polling needs to be visible before doing these things.
-	 */
+	/* 我们承诺：如果在设置了轮询（polling）状态的同时，need_resched() 被设置，那么我们将调用 sched_ttwu_pending() 并进行重新调度（reschedule）
+	   这意味着，在执行这些操作之前，必须确保清除 polling 状态对其他处理器是可见的（即内存可见性保证） */
+	// 内存屏障确保 polling 清除对其他 CPU 可见
 	smp_mb__after_atomic();
 
-	/*
-	 * RCU relies on this call to be done outside of an RCU read-side
-	 * critical section.
-	 */
+	/* RCU（Read-Copy Update）依赖于该调用在 RCU 读侧临界区之外执行 */
+	// 处理在 idle 状态中接收到但尚未执行的跨核函数调用（如 smp_call_function()）
 	flush_smp_call_function_from_idle();
+	// 调用调度器，切换到真正的可运行任务（退出 idle）
 	schedule_idle();
-
+	// 如果启用了 livepatch（内核热补丁），进行补丁状态更新
 	if (unlikely(klp_patch_pending(current)))
 		klp_update_patch_state(current);
 }

@@ -543,7 +543,9 @@ int __get_unused_fd_flags(unsigned flags, unsigned long nofile)
 {
 	return alloc_fd(0, nofile, flags);
 }
-
+/*
+获取当前程序打开文件的（文件描述符）表，系统中文件描述符 minimum (0) 和 maximum (RLIMIT_NOFILE)
+*/
 int get_unused_fd_flags(unsigned flags)
 {
 	//RLIMIT_NOFILE 是 limits.conf 中配置的 nofile
@@ -999,6 +1001,7 @@ struct file *task_lookup_next_fd_rcu(struct task_struct *task, unsigned int *ret
  *
  * The fput_needed flag returned by fget_light should be passed to the
  * corresponding fput_light.
+ * 尝试从表中获取一致的文件描述符编号
  */
 static unsigned long __fget_light(unsigned int fd, fmode_t mask)
 {

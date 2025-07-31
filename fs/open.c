@@ -1065,6 +1065,7 @@ inline int build_open_flags(const struct open_how *how, struct open_flags *op)
 	u64 flags = how->flags;
 	u64 strip = FMODE_NONOTIFY | O_CLOEXEC;
 	int lookup_flags = 0;
+	// 权限模式
 	int acc_mode = ACC_MODE(flags);
 
 	BUILD_BUG_ON_MSG(upper_32_bits(VALID_OPEN_FLAGS),
@@ -1114,6 +1115,7 @@ inline int build_open_flags(const struct open_how *how, struct open_flags *op)
 		if (!(acc_mode & MAY_WRITE))
 			return -EINVAL;
 	}
+	// O_PATH 标志允许我们在下列情形获得文件描述符：在文件系统(目录)树中指示一个位置；仅仅只在文件描述符层面执行操作
 	if (flags & O_PATH) {
 		/* O_PATH only permits certain other flags to be set. */
 		if (flags & ~O_PATH_FLAGS)
@@ -1126,6 +1128,8 @@ inline int build_open_flags(const struct open_how *how, struct open_flags *op)
 	 * check for O_DSYNC if the need any syncing at all we enforce it's
 	 * always set instead of having to deal with possibly weird behaviour
 	 * for malicious applications setting only __O_SYNC.
+	 * O_SYNC 标志确保在所有的数据写入到磁盘前，任何关于写的调用不会返回
+	 * O_DSYNC 和 O_SYNC 类似，但 (O_DSYNC) 没有要求所有将被写入的元数据（像 atime,mtime 等等）等待
 	 */
 	if (flags & __O_SYNC)
 		flags |= O_DSYNC;
@@ -1133,18 +1137,19 @@ inline int build_open_flags(const struct open_how *how, struct open_flags *op)
 	op->open_flag = flags;
 
 	/* O_TRUNC implies we need access checks for write permissions */
+	// O_TRUNC 标志表示如果已打开的文件之前已经存在则删节为 0
 	if (flags & O_TRUNC)
 		acc_mode |= MAY_WRITE;
 
-	/* Allow the LSM permission hook to distinguish append
-	   access from general write access. */
+	/* Allow the LSM permission hook to distinguish append access from general write access. */
+	// O_APPEND 标志允许以 append mode (追加模式) 打开一个文件。因此在写已打开的文件会追加，而不是覆写
 	if (flags & O_APPEND)
 		acc_mode |= MAY_APPEND;
 
 	op->acc_mode = acc_mode;
-
+	// intent 允许我们知道我们的目的，真正想对文件做什么，打开，新建，重命名等等操作。如果我们的 flags 参数包含这个 O_PATH 标志，即我们不能对文件内容做任何事情，open_flags 会被设置为 0
 	op->intent = flags & O_PATH ? 0 : LOOKUP_OPEN;
-
+	// 如果我们想要新建文件，我们可以设置 LOOKUP_CREATE，并且使用 O_EXEC 标志来确认文件之前不存在
 	if (flags & O_CREAT) {
 		op->intent |= LOOKUP_CREATE;
 		if (flags & O_EXCL) {
@@ -1152,7 +1157,8 @@ inline int build_open_flags(const struct open_how *how, struct open_flags *op)
 			flags |= O_NOFOLLOW;
 		}
 	}
-
+	// 如果我们想要打开一个目录，我们可以使用 LOOKUP_DIRECTORY
+	// 如果想要遍历但不想使用软链接，可以使用 LOOKUP_FOLLOW
 	if (flags & O_DIRECTORY)
 		lookup_flags |= LOOKUP_DIRECTORY;
 	if (!(flags & O_NOFOLLOW))
@@ -1240,6 +1246,7 @@ static long do_sys_openat2(int dfd, const char __user *filename,
 			   struct open_how *how)
 {
 	struct open_flags op;
+	// 检查给定的 flags 参数是否有效，并处理不同的 flags 和 mode 条件
 	int fd = build_open_flags(how, &op);
 	struct filename *tmp;
 
@@ -1252,12 +1259,14 @@ static long do_sys_openat2(int dfd, const char __user *filename,
 	//获取一个空闲的文件描述符
 	fd = get_unused_fd_flags(how->flags);
 	if (fd >= 0) {
-		//创建这个 struct file 结构
+		//解析给定的文件路径名到 file 结构体，创建这个 file 结构
 		struct file *f = do_filp_open(dfd, tmp, &op);
 		if (IS_ERR(f)) {
+			// 释放文件描述符
 			put_unused_fd(fd);
 			fd = PTR_ERR(f);
 		} else {
+			// 如果 do_filp_open() 执行成功并返回 file 结构体，将会在当前程序的文件描述符表中存储这个 file 结构体
 			fsnotify_open(f);
 			//将文件描述符和file结构关联起来
 			fd_install(fd, f);
@@ -1276,6 +1285,7 @@ long do_sys_open(int dfd, const char __user *filename, int flags, umode_t mode)
 //open_wangs
 SYSCALL_DEFINE3(open, const char __user *, filename, int, flags, umode_t, mode)
 {
+	// 如果系统或配置强制需要支持大文件,则添加 O_LARGEFILE 标志
 	if (force_o_largefile())
 		flags |= O_LARGEFILE;
 	return do_sys_open(AT_FDCWD, filename, flags, mode);

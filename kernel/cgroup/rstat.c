@@ -145,6 +145,7 @@ static struct cgroup *cgroup_rstat_cpu_pop_updated(struct cgroup *pos,
 }
 
 /* see cgroup_rstat_flush() */
+//进行PerCPU变量中CPU统计信息进行汇总
 static void cgroup_rstat_flush_locked(struct cgroup *cgrp, bool may_sleep)
 	__releases(&cgroup_rstat_lock) __acquires(&cgroup_rstat_lock)
 {
@@ -160,7 +161,7 @@ static void cgroup_rstat_flush_locked(struct cgroup *cgrp, bool may_sleep)
 		raw_spin_lock(cpu_lock);
 		while ((pos = cgroup_rstat_cpu_pop_updated(pos, cgrp, cpu))) {
 			struct cgroup_subsys_state *css;
-
+			//将该CPU上记录的CPU统计信息汇总到cgroup的全局变量bstat中
 			cgroup_base_stat_flush(pos, cpu);
 
 			rcu_read_lock();
@@ -316,6 +317,7 @@ static void cgroup_base_stat_sub(struct cgroup_base_stat *dst_bstat,
 
 static void cgroup_base_stat_flush(struct cgroup *cgrp, int cpu)
 {
+	//获取当前PerCPU值
 	struct cgroup_rstat_cpu *rstatc = cgroup_rstat_cpu(cgrp, cpu);
 	struct cgroup *parent = cgroup_parent(cgrp);
 	struct cgroup_base_stat cur, delta;
@@ -333,6 +335,7 @@ static void cgroup_base_stat_flush(struct cgroup *cgrp, int cpu)
 
 	/* propagate percpu delta to global */
 	delta = cur;
+	// 计算从上一次到现在的CPU使用增量，将增量加到cgroup全局统计变量 bstat 中
 	cgroup_base_stat_sub(&delta, &rstatc->last_bstat);
 	cgroup_base_stat_add(&cgrp->bstat, &delta);
 	cgroup_base_stat_add(&rstatc->last_bstat, &delta);
@@ -374,7 +377,10 @@ void __cgroup_account_cputime(struct cgroup *cgrp, u64 delta_exec)
 	rstatc->bstat.cputime.sum_exec_runtime += delta_exec;
 	cgroup_base_stat_cputime_account_end(cgrp, rstatc, flags);
 }
-
+/*
+将本次节拍的时间 delta_exec 添加到了 cgroup 中为统计 CPU 利用率而存在的PerCPU变量 rstat_cpu 中了
+cgroup_base_stat_cputime_account_begin 访问的是 cgroup 下的 rstat_cpu
+*/
 void __cgroup_account_cputime_field(struct cgroup *cgrp,
 				    enum cpu_usage_stat index, u64 delta_exec)
 {
@@ -382,7 +388,7 @@ void __cgroup_account_cputime_field(struct cgroup *cgrp,
 	unsigned long flags;
 
 	rstatc = cgroup_base_stat_cputime_account_begin(cgrp, &flags);
-
+	//对于user和nice，cgroup都统计到了utime（用户态时间）下，对于system、irq和softirq都统计到了stime（内核态时间）下
 	switch (index) {
 	case CPUTIME_USER:
 	case CPUTIME_NICE:
@@ -438,12 +444,15 @@ static void root_cgroup_cputime(struct task_cputime *cputime)
 
 void cgroup_base_stat_cputime_show(struct seq_file *seq)
 {
+	// 找到当前文件对应的 cgroup 内核对象
 	struct cgroup *cgrp = seq_css(seq)->cgroup;
 	u64 usage, utime, stime;
 	struct task_cputime cputime;
 
 	if (cgroup_parent(cgrp)) {
+		//将percpu中存储的时间信息汇总到cgroup全局变量bstat中
 		cgroup_rstat_flush_hold(cgrp);
+		//访问当前cgroup bstat中存储的时间信息
 		usage = cgrp->bstat.cputime.sum_exec_runtime;
 		cputime_adjust(&cgrp->bstat.cputime, &cgrp->prev_cputime,
 			       &utime, &stime);
@@ -454,7 +463,7 @@ void cgroup_base_stat_cputime_show(struct seq_file *seq)
 		utime = cputime.utime;
 		stime = cputime.stime;
 	}
-
+	// 将纳秒转换为微妙，并打印输出
 	do_div(usage, NSEC_PER_USEC);
 	do_div(utime, NSEC_PER_USEC);
 	do_div(stime, NSEC_PER_USEC);

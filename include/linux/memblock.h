@@ -66,8 +66,11 @@ struct memblock_region {
  * @name: the memory type symbolic name
  */
 struct memblock_type {
+	// 描述当前内存块中内存区域的数量
 	unsigned long cnt;
+	// 所有内存区域的大小
 	unsigned long max;
+	// 内存区域的已分配数组的尺寸
 	phys_addr_t total_size;
 	struct memblock_region *regions;
 	char *name;
@@ -79,9 +82,12 @@ struct memblock_type {
  * @current_limit: physical address of the current allocation limit
  * @memory: usable memory regions
  * @reserved: reserved memory regions
+ * memblock_wangs
  */
 struct memblock {
+	// true: 允许内存以自底向上模式进行分配
 	bool bottom_up;  /* is bottom up direction? */
+	// 描述了内存块的尺寸限制
 	phys_addr_t current_limit;
 	struct memblock_type memory;
 	struct memblock_type reserved;

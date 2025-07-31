@@ -50,24 +50,34 @@ struct pt_regs;
  * @debugfs_file:	    对应 debugfs 中的文件节点
  * @name:		        中断流控制处理函数的名称，用于 /proc/interrupts 输出
  * 
- * 对于每一个中断，都有一个对中断的描述结构 struct irq_desc，它有一个重要的成员变量是 struct irqaction，用于表示处理这个中断的动作
+ * 表示一个中断描述符，对于每一个中断，都有一个对中断的描述结构 irq_desc，它有一个重要的成员变量是 irqaction，用于表示处理这个中断的动作
  */
 struct irq_desc {
+	//每个中断及其芯片的通用数据
 	struct irq_common_data	irq_common_data;
 	struct irq_data		irq_data;
+	//每个 CPU 的中断统计信息
 	unsigned int __percpu	*kstat_irqs;
+	//一个用来调用中断处理程序的上层 API，在设备树 和 APIC 的初始化过程中就设定好了。内核通过它选择正确的函数以及 irq->actions 的调用链
 	irq_flow_handler_t	handle_irq;
+	//与中断发生时要调用的 ISR 相关
 	struct irqaction	*action;	/* IRQ action list */
+	//中断源的状态（取自 include/linux/irq.h 中的枚举及宏）
 	unsigned int		status_use_accessors;
 	unsigned int		core_internal_state__do_not_mess_with_it;
+	//表示中断是否启用（0 为启用，>0 表示禁用次数）
 	unsigned int		depth;		/* nested irq disables */
 	unsigned int		wake_depth;	/* nested wake enables */
 	unsigned int		tot_count;
+	//该 IRQ 线路上的中断触发次数
 	unsigned int		irq_count;	/* For detecting broken IRQs */
+	//未处理中断的老化计时器
 	unsigned long		last_unhandled;	/* Aging timer for unhandled count */
+	//未处理中断计数
 	unsigned int		irqs_unhandled;
 	atomic_t		threads_handled;
 	int			threads_handled_last;
+	//用于序列化访问的自旋锁
 	raw_spinlock_t		lock;
 	struct cpumask		*percpu_enabled;
 	const struct cpumask	*percpu_affinity;
@@ -75,6 +85,7 @@ struct irq_desc {
 	const struct cpumask	*affinity_hint;
 	struct irq_affinity_notify *affinity_notify;
 #ifdef CONFIG_GENERIC_PENDING_IRQ
+	//待处理的重新均衡中断掩码
 	cpumask_var_t		pending_mask;
 #endif
 #endif
@@ -100,6 +111,7 @@ struct irq_desc {
 #endif
 	struct mutex		request_mutex;
 	int			parent_irq;
+	//中断描述符的所属模块（用于模块引用计数）
 	struct module		*owner;
 	const char		*name;
 } ____cacheline_internodealigned_in_smp;
@@ -151,6 +163,7 @@ static inline void *irq_desc_get_handler_data(struct irq_desc *desc)
 
 /*
  * Architectures call this to let the generic IRQ layer handle an interrupt.
+ * 调用中断处理程序
  * 这里的 handle_irq，最终会调用 __handle_irq_event_percpu
  */
 static inline void generic_handle_irq_desc(struct irq_desc *desc)

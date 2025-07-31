@@ -1204,14 +1204,15 @@ int tg_nop(struct task_group *tg, void *data)
 //将nice值根据预定义的权重数组转化为实际的权重
 static void set_load_weight(struct task_struct *p, bool update_load)
 {
-	//假设nice为0，上面提到过p->static_prio = 120, 则计算出的prio为20
+	//计算出初始优先级,假设nice为0，上面提到过p->static_prio = 120, 则计算出的prio为20
 	int prio = p->static_prio - MAX_RT_PRIO;
 	struct load_weight lw;
-
 	if (task_has_idle_policy(p)) {
+		//如果当前进程是空闲进程（idle process），那么我们会为它设置最小的负载权重
 		lw.weight = scale_load(WEIGHT_IDLEPRIO);
 		lw.inv_weight = WMULT_IDLEPRIO;
 	} else {
+//将其作为索引，查找 sched_prio_to_weight 和 sched_prio_to_wmult 两个数组，用来设置 weight 和 inv_weight 的值。这两个数组根据优先级值提供对应的负载权重
 		lw.weight = scale_load(sched_prio_to_weight[prio]);
 		lw.inv_weight = sched_prio_to_wmult[prio];
 	}
@@ -6391,7 +6392,7 @@ static void __sched notrace __schedule(unsigned int sched_mode)
 
 		migrate_disable_switch(rq, prev);
 		psi_sched_switch(prev, next, !task_on_rq_queued(prev));
-
+		// 静态跟踪点
 		trace_sched_switch(sched_mode & SM_MASK_PREEMPT, prev, next);
 
 		/* Also unlocks the rq: 执行上下文切换并把新进程切换到运行状态 */
@@ -8728,12 +8729,13 @@ void show_state_filter(unsigned int state_filter)
 }
 
 /**
- * init_idle - set up an idle thread for a given CPU
- * @idle: task in question
- * @cpu: CPU the idle task belongs to
+ * 为指定的 CPU 设置一个空闲线程（idle thread）
+ * @idle: 要设置的任务（即空闲线程）
+ * @cpu:  该空闲线程所属的 CPU
  *
- * NOTE: this function does not set the idle thread's NEED_RESCHED
- * flag, to make booting more robust.
+ * NOTE: 此函数不会设置空闲线程的 NEED_RESCHED 标志，这样做是为了使系统启动过程更加健壮
+ * 在 Linux 中，每个 CPU 都需要一个专属的“空闲线程”（idle thread）。当该 CPU 上没有任何其他任务可运行时，调度器就会调度这个空闲线程来运行，保证 CPU 不会处于未定义状态。
+ * idle_wangs
  */
 void __init init_idle(struct task_struct *idle, int cpu)
 {
@@ -9398,8 +9400,9 @@ int in_sched_functions(unsigned long addr)
 
 #ifdef CONFIG_CGROUP_SCHED
 /*
- * Default task group.
- * Every task in system belongs to this group at bootup.
+ * 默认任务组。根 task_group
+ * 系统中的每个任务在启动时都属于该组
+ * task_group_wangs
  */
 struct task_group root_task_group;
 LIST_HEAD(task_groups);
@@ -9462,11 +9465,12 @@ void __init sched_init(void)
 			cpumask_size(), GFP_KERNEL, cpu_to_node(i));
 	}
 #endif /* CONFIG_CPUMASK_OFFSTACK */
-
+	//初始化用于实时任务和截止时间任务的 CPU 带宽控制
 	init_rt_bandwidth(&def_rt_bandwidth, global_rt_period(), global_rt_runtime());
 	init_dl_bandwidth(&def_dl_bandwidth, global_rt_period(), global_rt_runtime());
 
 #ifdef CONFIG_SMP
+	//root domain（根域）的初始化
 	init_defrootdomain();
 #endif
 
@@ -9481,9 +9485,11 @@ void __init sched_init(void)
 	list_add(&root_task_group.list, &task_groups);
 	INIT_LIST_HEAD(&root_task_group.children);
 	INIT_LIST_HEAD(&root_task_group.siblings);
+	//初始化自动进程组调度（automatic process group scheduling）
+	//Autogroup 功能的作用是在通过 setsid 创建新会话时，自动创建并填充一个新的任务组
 	autogroup_init(&init_task);
 #endif /* CONFIG_CGROUP_SCHED */
-
+	//遍历系统中所有可能存在的 CPU，并为每个可能的 CPU 初始化一个运行队列（runqueue）
 	for_each_possible_cpu(i) {
 		struct rq *rq;
 
@@ -9566,7 +9572,7 @@ void __init sched_init(void)
 		rq->core_cookie = 0UL;
 #endif
 	}
-
+	//为系统中的第一个任务设置它的负载权重
 	set_load_weight(&init_task, false);
 
 	/*
@@ -9582,13 +9588,14 @@ void __init sched_init(void)
 	 * when this runqueue becomes "idle".
 	 */
 	init_idle(current, smp_processor_id());
-
+	//计算下一次用于更新 CPU 负载的时间周期
 	calc_load_update = jiffies + LOAD_FREQ;
 
 #ifdef CONFIG_SMP
 	idle_thread_set_boot_cpu();
 	balance_push_set(smp_processor_id(), false);
 #endif
+	//初始化 完全公平调度类
 	init_sched_fair_class();
 
 	psi_init();
@@ -9866,7 +9873,7 @@ static void sched_unregister_group(struct task_group *tg)
 struct task_group *sched_create_group(struct task_group *parent)
 {
 	struct task_group *tg;
-
+	//从内核的内存分配器中申请一个task_group类型的对象
 	tg = kmem_cache_alloc(task_group_cache, GFP_KERNEL | __GFP_ZERO);
 	if (!tg)
 		return ERR_PTR(-ENOMEM);
@@ -9951,9 +9958,11 @@ static void sched_change_group(struct task_struct *tsk, int type)
 	 * which is pointless here. Thus, we pass "true" to task_css_check()
 	 * to prevent lockdep warnings.
 	 */
+	//查找task_group
 	tg = container_of(task_css_check(tsk, cpu_cgrp_id, true),
 			  struct task_group, css);
 	tg = autogroup_task_group(tsk, tg);
+	// 修改 task_struct 所对应的 task_group，设置到新归属上
 	tsk->sched_task_group = tg;
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
@@ -9970,6 +9979,7 @@ static void sched_change_group(struct task_struct *tsk, int type)
  * The caller of this function should have put the task in its new group by
  * now. This function just updates tsk->se.cfs_rq and tsk->se.parent to reflect
  * its new group.
+ * 将进程加入新调度组
  */
 void sched_move_task(struct task_struct *tsk)
 {
@@ -9977,20 +9987,22 @@ void sched_move_task(struct task_struct *tsk)
 		DEQUEUE_SAVE | DEQUEUE_MOVE | DEQUEUE_NOCLOCK;
 	struct rq_flags rf;
 	struct rq *rq;
-
+	//找到task所在的runqueue
 	rq = task_rq_lock(tsk, &rf);
 	update_rq_clock(rq);
 
 	running = task_current(rq, tsk);
+	// 从runqueue中出来
 	queued = task_on_rq_queued(tsk);
 
 	if (queued)
 		dequeue_task(rq, tsk, queue_flags);
 	if (running)
 		put_prev_task(rq, tsk);
-
+	//修改task的group
+	//先将进程从旧tg的cfs_rq中移除且更新cfs_rq的负载，再将进程添加到新tg的cfs_rq，并更新cfs_rq的负载
 	sched_change_group(tsk, TASK_MOVE_GROUP);
-
+	// 此时进程的调度组已经更新，重新将进程加回 runqueue
 	if (queued)
 		enqueue_task(rq, tsk, queue_flags);
 	if (running) {
@@ -10021,7 +10033,7 @@ cpu_cgroup_css_alloc(struct cgroup_subsys_state *parent_css)
 		/* This is early initialization for the top cgroup */
 		return &root_task_group.css;
 	}
-	//创建 task_group
+	//创建CPU子系统的内核对象 task_group
 	tg = sched_create_group(parent);
 	if (IS_ERR(tg))
 		return ERR_PTR(-ENOMEM);
@@ -10332,6 +10344,7 @@ static int tg_set_cfs_bandwidth(struct task_group *tg, u64 period, u64 quota,
 				u64 burst)
 {
 	int i, ret = 0, runtime_enabled, runtime_was_enabled;
+	//获取 cfs_bandwidth 对象
 	struct cfs_bandwidth *cfs_b = &tg->cfs_bandwidth;
 
 	if (tg == &root_task_group)
@@ -10382,6 +10395,7 @@ static int tg_set_cfs_bandwidth(struct task_group *tg, u64 period, u64 quota,
 	if (runtime_enabled && !runtime_was_enabled)
 		cfs_bandwidth_usage_inc();
 	raw_spin_lock_irq(&cfs_b->lock);
+	//对 cfs_bandwidth 对象进行设置
 	cfs_b->period = ns_to_ktime(period);
 	cfs_b->quota = quota;
 	cfs_b->burst = burst;
@@ -10679,8 +10693,10 @@ static int cpu_idle_write_s64(struct cgroup_subsys_state *css,
 }
 #endif
 
+//cgroup_wangs
 static struct cftype cpu_legacy_files[] = {
 #ifdef CONFIG_FAIR_GROUP_SCHED
+	//修改 cpu.shares
 	{
 		.name = "shares",
 		.read_u64 = cpu_shares_read_u64,
@@ -10883,9 +10899,10 @@ static ssize_t cpu_max_write(struct kernfs_open_file *of,
 	return ret ?: nbytes;
 }
 #endif
-
+//cgroup_wangs
 static struct cftype cpu_files[] = {
 #ifdef CONFIG_FAIR_GROUP_SCHED
+	//修改 cpu.weight
 	{
 		.name = "weight",
 		.flags = CFTYPE_NOT_ON_ROOT,

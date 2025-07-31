@@ -559,15 +559,15 @@ static int do_task_stat(struct seq_file *m, struct pid_namespace *ns,
 	/* apply timens offset for boottime and convert nsec -> ticks */
 	start_time =
 		nsec_to_clock_t(timens_add_boottime_ns(task->start_boottime));
-
+	// 第一列
 	seq_put_decimal_ull(m, "", pid_nr_ns(pid, ns));
-	seq_puts(m, " (");
+	seq_puts(m, " (");// 第二列
 	proc_task_name(m, task, false);
 	seq_puts(m, ") ");
-	seq_putc(m, state);
-	seq_put_decimal_ll(m, " ", ppid);
-	seq_put_decimal_ll(m, " ", pgid);
-	seq_put_decimal_ll(m, " ", sid);
+	seq_putc(m, state);// 第三列
+	seq_put_decimal_ll(m, " ", ppid);//第四列
+	seq_put_decimal_ll(m, " ", pgid);//第五列
+	seq_put_decimal_ll(m, " ", sid);//第六列
 	seq_put_decimal_ll(m, " ", tty_nr);
 	seq_put_decimal_ll(m, " ", tty_pgrp);
 	seq_put_decimal_ull(m, " ", task->flags);
@@ -575,10 +575,10 @@ static int do_task_stat(struct seq_file *m, struct pid_namespace *ns,
 	seq_put_decimal_ull(m, " ", cmin_flt);
 	seq_put_decimal_ull(m, " ", maj_flt);
 	seq_put_decimal_ull(m, " ", cmaj_flt);
-	seq_put_decimal_ull(m, " ", nsec_to_clock_t(utime));
-	seq_put_decimal_ull(m, " ", nsec_to_clock_t(stime));
-	seq_put_decimal_ll(m, " ", nsec_to_clock_t(cutime));
-	seq_put_decimal_ll(m, " ", nsec_to_clock_t(cstime));
+	seq_put_decimal_ull(m, " ", nsec_to_clock_t(utime));//第14列
+	seq_put_decimal_ull(m, " ", nsec_to_clock_t(stime));//第15列
+	seq_put_decimal_ll(m, " ", nsec_to_clock_t(cutime));//第16列
+	seq_put_decimal_ll(m, " ", nsec_to_clock_t(cstime));//第17列
 	seq_put_decimal_ll(m, " ", priority);
 	seq_put_decimal_ll(m, " ", nice);
 	seq_put_decimal_ll(m, " ", num_threads);

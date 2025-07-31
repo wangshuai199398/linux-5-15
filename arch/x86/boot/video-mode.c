@@ -27,7 +27,11 @@ int force_x, force_y;	/* Don't query the BIOS for cols/rows */
 int do_restore;		/* Screen contents changed during mode flip */
 int graphic_mode;	/* Graphic mode with linear frame buffer */
 
-/* Probe the video drivers and have them generate their mode lists. */
+/* Probe the video drivers and have them generate their mode lists. 
+简单遍历所有的显卡，并通过调用驱动程序设置显卡所支持的显示模式
+video_cards 指向了一个在 arch/x86/boot/setup.ld 中定义的叫做 .videocards 的内存段
+在 .videocards 内存段实际上存放的就是所有被内核初始化代码定义的 card_info 结构（可以看成是一个数组），所以 probe_cards 函数可以使用 video_cards，通过循环遍历所有的 card_info
+*/
 void probe_cards(int unsafe)
 {
 	struct card_info *card;
@@ -66,7 +70,10 @@ int mode_defined(u16 mode)
 	return 0;
 }
 
-/* Set mode (without recalc) */
+/* Set mode (without recalc)
+遍历内核知道的所有 card_info 信息，如果发现某张显卡支持传入的模式，这调用 card_info 结构中保存的 set_mode 函数地址进行显卡显示模式的设置
+以 video_vga 这个 card_info 结构来说，保存在其中的 set_mode 函数就指向了 vga_set_mode 函数
+*/
 static int raw_set_mode(u16 mode, u16 *real_mode)
 {
 	int nmode, i;
@@ -147,14 +154,14 @@ int set_mode(u16 mode)
 	int rv;
 	u16 real_mode;
 
-	/* Very special mode numbers... */
+	/* 检查传入的mode参数 */
 	if (mode == VIDEO_CURRENT_MODE)
 		return 0;	/* Nothing to do... */
 	else if (mode == NORMAL_VGA)
 		mode = VIDEO_80x25;
 	else if (mode == EXTENDED_VGA)
 		mode = VIDEO_8POINT;
-
+	//设置
 	rv = raw_set_mode(mode, &real_mode);
 	if (rv)
 		return rv;
@@ -165,6 +172,7 @@ int set_mode(u16 mode)
 	/* Save the canonical mode number for the kernel, not
 	   an alias, size specification or menu position */
 #ifndef _WAKEUP
+	//最终的显示模式被写回 boot_params.hdr.vid_mode
 	boot_params.hdr.vid_mode = real_mode;
 #endif
 	return 0;

@@ -15,7 +15,19 @@
  * The sys_call_table[] is no longer used for system calls, but
  * kernel/trace/trace_syscalls.c still wants to know the system
  * call address.
+ * sys_call_table_wangs
  */
+/*
+asmlinkage const sys_call_ptr_t sys_call_table[__NR_syscall_max+1] = {
+	[0 ... __NR_syscall_max] = &sys_ni_syscall,
+	[0] = sys_read,
+	[1] = sys_write,
+	[2] = sys_open,
+	...
+	...
+	...
+};
+*/
 #define __SYSCALL(nr, sym) __x64_##sym,
 const sys_call_ptr_t sys_call_table[] = {
 #include <asm/syscalls_64.h>

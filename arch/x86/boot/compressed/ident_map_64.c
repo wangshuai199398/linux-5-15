@@ -115,6 +115,7 @@ static void add_identity_map(unsigned long start, unsigned long end)
 }
 
 /* Locates and clears a region for a new top level page table. */
+//初始化一个内存区域，它用于可能需要的新页表
 void initialize_identity_maps(void *rmode)
 {
 	unsigned long cmdline;

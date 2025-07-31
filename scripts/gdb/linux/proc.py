@@ -49,8 +49,8 @@ LxVersion()
 
 
 # Resource Structure Printers
-#  /proc/iomem
-#  /proc/ioports
+#  /proc/iomem   提供每个物理设备的系统内存映射地址
+#  /proc/ioports 提供用于设备输入输出通信的一组注册端口区域
 
 def get_resources(resource, depth):
     while resource:

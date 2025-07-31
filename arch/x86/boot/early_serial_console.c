@@ -49,7 +49,11 @@ static void parse_earlyprintk(void)
 	char arg[32];
 	int pos = 0;
 	int port = 0;
-
+	/*命令行参数是否包含earlyprintk，包含则分析选项内容得到控制台使用的串口信息，然后进行串口初始化，可能的值：
+		serial,0x3f8,115200
+		serial,ttyS0,115200
+		ttyS0,115200
+	*/
 	if (cmdline_find_option("earlyprintk", arg, sizeof(arg)) > 0) {
 		char *e;
 

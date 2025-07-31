@@ -1488,18 +1488,18 @@ setup_irq_thread(struct irqaction *new, unsigned int irq, bool secondary)
 }
 
 /*
- * Internal function to register an irqaction - typically used to
- * allocate special interrupts that are part of the architecture.
+ * 用于注册 irqaction 的内部函数 —— 通常用于分配架构相关的特殊中断
+ * 在给定的中断号 irq 上注册一个新的中断处理程序 new，并将其附加到中断描述符 desc 上
+ * 
+ * 加锁规则：
+ * desc->request_mutex：用于在并发执行 free_irq() 时提供串行化保护
+ *   chip_bus_lock：用于对慢速总线操作提供串行化保护
+ *     desc->lock：用于对硬中断提供串行化保护
  *
- * Locking rules:
- *
- * desc->request_mutex	Provides serialization against a concurrent free_irq()
- *   chip_bus_lock	Provides serialization for slow bus operations
- *     desc->lock	Provides serialization against hard interrupts
- *
- * chip_bus_lock and desc->lock are sufficient for all other management and
- * interrupt related functions. desc->request_mutex solely serializes
- * request/free_irq().
+ * 对于所有其他管理和中断相关的函数，chip_bus_lock 和 desc->lock 的组合已经足够
+ * desc->request_mutex 仅用于串行化 request_irq() 和 free_irq() 的调用
+ * 
+ * __setup_irq 是 Linux 中用于注册中断的底层函数，它完成了从资源申请、线程创建、参数校验到硬件配置的一整套流程，确保中断处理程序能够正确、安全地挂载到指定中断线上
  */
 static int
 __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
@@ -1513,33 +1513,24 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 
 	if (desc->irq_data.chip == &no_irq_chip)
 		return -ENOSYS;
+	//给定的中断描述符模块拥有者不为 NULL
 	if (!try_module_get(desc->owner))
 		return -ENODEV;
 
 	new->irq = irq;
 
-	/*
-	 * If the trigger type is not specified by the caller,
-	 * then use the default for this interrupt.
-	 */
+	/* 如果驱动未指定中断的触发方式（如上升沿、下降沿等），则使用系统默认的设置 */
 	if (!(new->flags & IRQF_TRIGGER_MASK))
 		new->flags |= irqd_get_trigger_type(&desc->irq_data);
 
-	/*
-	 * Check whether the interrupt nests into another interrupt
-	 * thread.
-	 */
+	// 检查中断是否嵌套在其他中断线程中。如果是的，则用 irq_nested_primary_handler 替换 irq_default_priamry_handler
 	nested = irq_settings_is_nested_thread(desc);
 	if (nested) {
 		if (!new->thread_fn) {
 			ret = -EINVAL;
 			goto out_mput;
 		}
-		/*
-		 * Replace the primary handler which was provided from
-		 * the driver for non nested interrupt handling by the
-		 * dummy function which warns when called.
-		 */
+		/* 将驱动程序为非嵌套中断处理提供的主处理函数，替换为一个哑函数（dummy function），该函数在被调用时会发出警告 */
 		new->handler = irq_nested_primary_handler;
 	} else {
 		if (irq_settings_can_thread(desc)) {
@@ -1549,11 +1540,8 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 		}
 	}
 
-	/*
-	 * Create a handler thread when a thread function is supplied
-	 * and the interrupt does not nest into another interrupt thread.
-	 * 如果设定了以单独的线程运行中断处理函数就创建这个内核线程
-	 */
+	/* 当提供了线程处理函数，且该中断不会嵌套在另一个中断线程中时，创建一个处理线程
+	 * 给定的中断不是嵌套的且设定了以单独的线程运行中断处理函数就创建中断处理线程 */
 	if (new->thread_fn && !nested) {
 		ret = setup_irq_thread(new, irq, false);
 		if (ret)
@@ -1565,35 +1553,20 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 		}
 	}
 
-	/*
-	 * Drivers are often written to work w/o knowledge about the
-	 * underlying irq chip implementation, so a request for a
-	 * threaded irq without a primary hard irq context handler
-	 * requires the ONESHOT flag to be set. Some irq chips like
-	 * MSI based interrupts are per se one shot safe. Check the
-	 * chip flags, so we can avoid the unmask dance at the end of
-	 * the threaded handler for those.
-	 */
+	/* 驱动程序通常在不了解底层 IRQ 芯片实现的情况下编写，因此，如果请求一个线程化中断（threaded irq）而没有提供主硬中断上下文处理函数，就必须设置 ONESHOT 标志
+	某些中断控制器（如基于 MSI 的中断）本身就是一次性安全（one shot safe）的。通过检查芯片的标志，我们可以在处理线程结束时避免执行解除屏蔽（unmask）的操作 */
+	//检查 ONESHOT 安全性和调整标志位，如果中断控制器是“oneshot 安全的”，就不需要设置 IRQF_ONESHOT，可节省处理流程
 	if (desc->irq_data.chip->flags & IRQCHIP_ONESHOT_SAFE)
 		new->flags &= ~IRQF_ONESHOT;
 
-	/*
-	 * Protects against a concurrent __free_irq() call which might wait
-	 * for synchronize_hardirq() to complete without holding the optional
-	 * chip bus lock and desc->lock. Also protects against handing out
-	 * a recycled oneshot thread_mask bit while it's still in use by
-	 * its previous owner.
-	 */
+	/* 用于防止与并发的 __free_irq() 调用产生冲突，后者可能在未持有可选的芯片总线锁（chip bus lock）和 desc->lock 的情况下，等待 synchronize_hardirq() 完成 
+	同时也用于防止在上一个所有者仍在使用某个 oneshot thread_mask 位时，该位被错误地重新分配出去	*/
 	mutex_lock(&desc->request_mutex);
 
-	/*
-	 * Acquire bus lock as the irq_request_resources() callback below
-	 * might rely on the serialization or the magic power management
-	 * functions which are abusing the irq_bus_lock() callback,
-	 */
+	/* 获取总线锁（bus lock），因为下面的 irq_request_resources 回调可能依赖该锁提供的串行化，或者依赖那些滥用 irq_bus_lock 回调的特殊电源管理功能 */
 	chip_bus_lock(desc);
 
-	/* First installed action requests resources. */
+	/* 如果这是第一个 action，则分配资源 */
 	if (!desc->action) {
 		ret = irq_request_resources(desc);
 		if (ret) {
@@ -1603,25 +1576,14 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 		}
 	}
 
-	/*
-	 * The following block of code has to be executed atomically
-	 * protected against a concurrent interrupt and any of the other
-	 * management calls which are not serialized via
-	 * desc->request_mutex or the optional bus lock.
-	 * 如果 struct irq_desc 里面已经有 struct irqaction 了，就将新的 struct irqaction 挂在链表的末端
-	 */
+	/* 以下这段代码必须以原子方式执行，以防止与并发中断以及其他管理函数的竞争，这些管理函数并不会通过 desc->request_mutex 或可选的总线锁进行串行化保护
+	 * 如果 struct irq_desc 里面已经有 struct irqaction 了，就将新的 struct irqaction 挂在链表的末端 */
 	raw_spin_lock_irqsave(&desc->lock, flags);
 	old_ptr = &desc->action;
 	old = *old_ptr;
 	if (old) {
-		/*
-		 * Can't share interrupts unless both agree to and are
-		 * the same type (level, edge, polarity). So both flag
-		 * fields must have IRQF_SHARED set and the bits which
-		 * set the trigger type must match. Also all must
-		 * agree on ONESHOT.
-		 * Interrupt lines used for NMIs cannot be shared.
-		 */
+		/* 除非双方都同意，并且中断类型（电平、边沿、极性）相同，否则不能共享中断。因此，两个标志字段都必须设置 IRQF_SHARED，且用于设置触发类型的位必须完全匹配 
+		此外，所有使用者还必须在 ONESHOT 标志上达成一致。用于 NMI（不可屏蔽中断）的中断线路不能被共享 */
 		unsigned int oldtype;
 
 		if (desc->istate & IRQS_NMI) {
@@ -1631,34 +1593,27 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 			goto out_unlock;
 		}
 
-		/*
-		 * If nobody did set the configuration before, inherit
-		 * the one provided by the requester.
-		 */
+		/* 如果之前没有人设置过该配置，则继承请求者提供的配置 */
 		if (irqd_trigger_type_was_set(&desc->irq_data)) {
 			oldtype = irqd_get_trigger_type(&desc->irq_data);
 		} else {
 			oldtype = new->flags & IRQF_TRIGGER_MASK;
 			irqd_set_trigger_type(&desc->irq_data, oldtype);
 		}
-
+		//检查 IRQF_SHARED、触发方式、ONESHOT 是否匹配
 		if (!((old->flags & new->flags) & IRQF_SHARED) ||
 		    (oldtype != (new->flags & IRQF_TRIGGER_MASK)) ||
 		    ((old->flags ^ new->flags) & IRQF_ONESHOT))
 			goto mismatch;
 
-		/* All handlers must agree on per-cpuness */
+		/* 检查 PERCPU 标志一致性 */
 		if ((old->flags & IRQF_PERCPU) !=
 		    (new->flags & IRQF_PERCPU))
 			goto mismatch;
 
 		/* add new interrupt at end of irq queue */
 		do {
-			/*
-			 * Or all existing action->thread_mask bits,
-			 * so we can find the next zero bit for this
-			 * new action.
-			 */
+			/* 或者遍历所有已有的 action->thread_mask 位，以便我们可以为这个新的 action 找到下一个为 0 的位 */
 			thread_mask |= old->thread_mask;
 			old_ptr = &old->next;
 			old = *old_ptr;
@@ -1666,11 +1621,8 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 		shared = 1;
 	}
 
-	/*
-	 * Setup the thread mask for this irqaction for ONESHOT. For
-	 * !ONESHOT irqs the thread mask is 0 so we can avoid a
-	 * conditional in irq_wake_thread().
-	 */
+	/* 为启用了 ONESHOT 的 irqaction 设置线程掩码（thread mask）。对于非 ONESHOT 的中断（!ONESHOT），线程掩码为 0，这样就可以在 irq_wake_thread 中避免使用条件判断 */
+	//设置 thread_mask 用于 ONESHOT 中断
 	if (new->flags & IRQF_ONESHOT) {
 		/*
 		 * Unlikely to have 32 resp 64 irqs sharing one line,
@@ -1680,54 +1632,34 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 			ret = -EBUSY;
 			goto out_unlock;
 		}
-		/*
-		 * The thread_mask for the action is or'ed to
-		 * desc->thread_active to indicate that the
-		 * IRQF_ONESHOT thread handler has been woken, but not
-		 * yet finished. The bit is cleared when a thread
-		 * completes. When all threads of a shared interrupt
-		 * line have completed desc->threads_active becomes
-		 * zero and the interrupt line is unmasked. See
-		 * handle.c:irq_wake_thread() for further information.
-		 *
-		 * If no thread is woken by primary (hard irq context)
-		 * interrupt handlers, then desc->threads_active is
-		 * also checked for zero to unmask the irq line in the
-		 * affected hard irq flow handlers
-		 * (handle_[fasteoi|level]_irq).
-		 *
-		 * The new action gets the first zero bit of
-		 * thread_mask assigned. See the loop above which or's
-		 * all existing action->thread_mask bits.
-		 */
+
+		/* action 的 thread_mask 会通过按位或（OR）操作设置到 desc->threads_active 中，用于指示该 IRQF_ONESHOT 类型的线程处理程序已经被唤醒，但尚未执行完毕。
+		 * 当线程执行完后，相应的位会被清除。
+		 * 当共享中断线上的所有线程都执行完成时，desc->threads_active 会变为 0，此时中断线将被解除屏蔽（unmask）。详细信息可参考 handle.c:irq_wake_thread()
+		 * 如果主（硬中断上下文）处理函数没有唤醒任何线程，则也会检查 desc->threads_active 是否为 0，以决定是否在相应的硬中断处理流程（如 handle_fasteoi_irq 或 handle_level_irq）中解除屏蔽
+		 * 新的 action 会被分配到 thread_mask 中第一个为 0 的位。具体请参考前面遍历已有 action->thread_mask 位的循环 */
+		//分配一个线程掩码，用于标记当前线程是否还在处理中，防止重复触发
 		new->thread_mask = 1UL << ffz(thread_mask);
 
 	} else if (new->handler == irq_default_primary_handler &&
 		   !(desc->irq_data.chip->flags & IRQCHIP_ONESHOT_SAFE)) {
 		/*
-		 * The interrupt was requested with handler = NULL, so
-		 * we use the default primary handler for it. But it
-		 * does not have the oneshot flag set. In combination
-		 * with level interrupts this is deadly, because the
-		 * default primary handler just wakes the thread, then
-		 * the irq lines is reenabled, but the device still
-		 * has the level irq asserted. Rinse and repeat....
-		 *
-		 * While this works for edge type interrupts, we play
-		 * it safe and reject unconditionally because we can't
-		 * say for sure which type this interrupt really
-		 * has. The type flags are unreliable as the
-		 * underlying chip implementation can override them.
+		 * 该中断是通过 handler = NULL 的方式请求的，因此我们使用默认的主处理函数（default primary handler）。但此时并未设置 ONESHOT 标志
+		 * 如果与电平触发型中断（level interrupt）组合使用，这将非常危险，因为默认的主处理函数仅仅是唤醒线程，随后就重新使能中断线，但设备此时仍然保持中断信号为有效电平，
+		 * 这就会导致中断被不断重复触发，形成“唤醒 → 使能 → 再触发”的死循环。
+		 * 虽然这种方式在边沿触发型中断中是可行的，但出于安全考虑，我们选择无条件地拒绝这种做法，因为我们无法确定该中断的实际类型。
+		 * 触发类型标志并不可靠，因为底层芯片的实现可能会覆盖它们。
 		 */
 		pr_err("Threaded irq requested with handler=NULL and !ONESHOT for %s (irq %d)\n",
 		       new->name, irq);
 		ret = -EINVAL;
 		goto out_unlock;
 	}
-
+	//中断类型设置、激活中断
 	if (!shared) {
 		/* Setup the type (level, edge polarity) if configured: */
 		if (new->flags & IRQF_TRIGGER_MASK) {
+			// 设置触发方式
 			ret = __irq_set_trigger(desc,
 						new->flags & IRQF_TRIGGER_MASK);
 
@@ -1735,17 +1667,9 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 				goto out_unlock;
 		}
 
-		/*
-		 * Activate the interrupt. That activation must happen
-		 * independently of IRQ_NOAUTOEN. request_irq() can fail
-		 * and the callers are supposed to handle
-		 * that. enable_irq() of an interrupt requested with
-		 * IRQ_NOAUTOEN is not supposed to fail. The activation
-		 * keeps it in shutdown mode, it merily associates
-		 * resources if necessary and if that's not possible it
-		 * fails. Interrupts which are in managed shutdown mode
-		 * will simply ignore that activation request.
-		 */
+		/*激活该中断。这个激活操作必须独立于 IRQ_NOAUTOEN 标志进行。request_irq 可能会失败，调用方应负责处理这种情况。但对于带有 IRQ_NOAUTOEN 标志的中断来说，调用 enable_irq 不应该失败
+		  激活操作会让中断保持在关闭（shutdown）模式下，它主要是用于在必要时关联资源，如果无法关联，则激活失败。 对于处于托管关闭模式（managed shutdown mode）下的中断，它们会直接忽略该激活请求 */
+		//激活中断（不等于使能中断）
 		ret = irq_activate(desc);
 		if (ret)
 			goto out_unlock;
@@ -1777,12 +1701,7 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 		    irq_settings_can_autoenable(desc)) {
 			irq_startup(desc, IRQ_RESEND, IRQ_START_COND);
 		} else {
-			/*
-			 * Shared interrupts do not go well with disabling
-			 * auto enable. The sharing interrupt might request
-			 * it while it's still disabled and then wait for
-			 * interrupts forever.
-			 */
+			/* 共享中断不适合与禁止自动使能（auto enable）一起使用。因为某个共享的中断可能会在中断仍处于禁用状态时被请求，从而导致它永远等待中断而无法触发 */
 			WARN_ON_ONCE(new->flags & IRQF_SHARED);
 			/* Undo nested disables: */
 			desc->depth = 1;
@@ -1797,19 +1716,16 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 			pr_warn("irq %d uses trigger mode %u; requested %u\n",
 				irq, omsk, nmsk);
 	}
-
+	//注册、关联 action，将新的 action 挂到 desc 中
 	*old_ptr = new;
-
+	//设置电源管理回调
 	irq_pm_install_action(desc, new);
 
-	/* Reset broken irq detection when installing new handler */
+	/* 安装新的处理程序时，重置损坏中断（broken irq）的检测状态 */
 	desc->irq_count = 0;
 	desc->irqs_unhandled = 0;
 
-	/*
-	 * Check whether we disabled the irq via the spurious handler
-	 * before. Reenable it and give it another chance.
-	 */
+	/* 检查该中断之前是否被伪中断处理器（spurious handler）禁用了。如果是，重新使能它，给它另一次机会 */
 	if (shared && (desc->istate & IRQS_SPURIOUS_DISABLED)) {
 		desc->istate &= ~IRQS_SPURIOUS_DISABLED;
 		__enable_irq(desc);
@@ -1820,10 +1736,10 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 	mutex_unlock(&desc->request_mutex);
 
 	irq_setup_timings(desc, new);
-
+	//唤醒中断线程，等待线程准备就绪
 	wake_up_and_wait_for_irq_thread_ready(desc, new);
 	wake_up_and_wait_for_irq_thread_ready(desc, new->secondary);
-
+	//注册 procfs 信息，在 /proc/irq/ 中添加信息，便于调试
 	register_irq_proc(irq, desc);
 	new->dir = NULL;
 	register_handler_proc(irq, new);
@@ -2106,7 +2022,7 @@ const void *free_nmi(unsigned int irq, void *dev_id)
  *	分配一个中断
  *	@irq:       要分配的中断编号
  *	@handler:   中断发生时被调用的函数。用于线程化中断的主处理函数。如果 handler 为 NULL 且 thread_fn 不为 NULL，则会安装默认的主处理函数。
- *	@thread_fn: 从中断处理线程中调用的函数。如果为 NULL，则不会创建中断线程。
+ *	@thread_fn: 不为 NULL，它会创建 irq 线程，并在该线程中执行给定的 irq 处理程序
  *	@irqflags:  中断类型标志
  *	@devname:   声明设备用的 ASCII 名称
  *	@dev_id:    传递给处理函数的私有数据指针（cookie）
@@ -2154,21 +2070,23 @@ int request_threaded_irq(unsigned int irq, irq_handler_t handler,
 	 *
 	 * Also IRQF_COND_SUSPEND only makes sense for shared interrupts and
 	 * it cannot be set along with IRQF_NO_SUSPEND.
+	 * 确保共享中断时传入了真正的 dev_id，不然后面搞不清楚哪台设备产生了中断
+	 * IRQF_COND_SUSPEND 仅对共享中断生效
 	 */
 	if (((irqflags & IRQF_SHARED) && !dev_id) ||
 	    ((irqflags & IRQF_SHARED) && (irqflags & IRQF_NO_AUTOEN)) ||
 	    (!(irqflags & IRQF_SHARED) && (irqflags & IRQF_COND_SUSPEND)) ||
 	    ((irqflags & IRQF_NO_SUSPEND) && (irqflags & IRQF_COND_SUSPEND)))
 		return -EINVAL;
-	//根据中断信号查找中断描述结构
+	// 根据中断号查找中断描述符
 	desc = irq_to_desc(irq);
 	if (!desc)
 		return -EINVAL;
-
+	// 检查描述符的状态，确保我们可以请求中断
 	if (!irq_settings_can_request(desc) ||
 	    WARN_ON(irq_settings_is_per_cpu_devid(desc)))
 		return -EINVAL;
-
+	//检查给定的中断处理程序
 	if (!handler) {
 		if (!thread_fn)
 			return -EINVAL;
@@ -2190,7 +2108,7 @@ int request_threaded_irq(unsigned int irq, irq_handler_t handler,
 		kfree(action);
 		return retval;
 	}
-	//设置中断
+	//注册中断
 	retval = __setup_irq(irq, desc, action);
 
 	if (retval) {

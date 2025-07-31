@@ -449,7 +449,9 @@ static inline int do___read_seqcount_retry(const seqcount_t *s, unsigned start)
 
 static inline int do_read_seqcount_retry(const seqcount_t *s, unsigned start)
 {
+	//防止 CPU 将临界区内的数据读取操作乱序移动到这条语句之前
 	smp_rmb();
+	// 判断在读取共享数据的过程中是否有写操作发生，从而决定是否需要重试读取
 	return do___read_seqcount_retry(s, start);
 }
 
@@ -470,7 +472,9 @@ do {									\
 static inline void do_raw_write_seqcount_begin(seqcount_t *s)
 {
 	kcsan_nestable_atomic_begin();
+	// 计数器加一，加一之前：读者或其他写者可能正在读写数据；加一之后（变成奇数）：表示写者正在进行写操作；
 	s->sequence++;
+	// 所有在 smp_wmb() 之前的写操作，必须在 smp_wmb() 之后的写操作之前完成。
 	smp_wmb();
 }
 
@@ -853,6 +857,7 @@ static __always_inline void write_seqcount_latch_end(seqcount_latch_t *s)
  * For more info, see:
  *    - Comments on top of seqcount_t
  *    - Documentation/locking/seqlock.rst
+ * seq_wangs
  */
 typedef struct {
 	/*
@@ -872,6 +877,7 @@ typedef struct {
 /**
  * seqlock_init() - dynamic initializer for seqlock_t
  * @sl: Pointer to the seqlock_t instance
+ * 动态初始化
  */
 #define seqlock_init(sl)						\
 	do {								\
@@ -882,6 +888,7 @@ typedef struct {
 /**
  * DEFINE_SEQLOCK(sl) - Define a statically allocated seqlock_t
  * @sl: Name of the seqlock_t instance
+ * 静态初始化
  */
 #define DEFINE_SEQLOCK(sl) \
 		seqlock_t sl = __SEQLOCK_UNLOCKED(sl)
@@ -891,6 +898,7 @@ typedef struct {
  * @sl: Pointer to seqlock_t
  *
  * Return: count, to be passed to read_seqretry()
+ * 读者永远不会阻塞写者，开始顺序读取临界区
  */
 static inline unsigned read_seqbegin(const seqlock_t *sl)
 {
@@ -907,6 +915,8 @@ static inline unsigned read_seqbegin(const seqlock_t *sl)
  * retried).
  *
  * Return: true if a read section retry is required, else false
+ * 比较当前的计数器值与当初读取时的计数器值
+ * 参数：顺序锁；初始计数器值（进入临界区时通过 read_seqbegin() 获取）；
  */
 static inline unsigned read_seqretry(const seqlock_t *sl, unsigned start)
 {
@@ -931,9 +941,11 @@ static inline unsigned read_seqretry(const seqlock_t *sl, unsigned start)
  * Context: if the seqlock_t read section, or other write side critical
  * sections, can be invoked from hardirq or softirq contexts, use the
  * _irqsave or _bh variants of this function instead.
+ * 
  */
 static inline void write_seqlock(seqlock_t *sl)
 {
+	//获取自旋锁，防止其他写着同时访问
 	spin_lock(&sl->lock);
 	do_write_seqcount_begin(&sl->seqcount.seqcount);
 }
@@ -947,6 +959,7 @@ static inline void write_seqlock(seqlock_t *sl)
  */
 static inline void write_sequnlock(seqlock_t *sl)
 {
+	// 再次增加顺序锁计数器的值
 	do_write_seqcount_end(&sl->seqcount.seqcount);
 	spin_unlock(&sl->lock);
 }
@@ -984,6 +997,7 @@ static inline void write_sequnlock_bh(seqlock_t *sl)
  *
  * _irq variant of write_seqlock(). Use only if the read side section, or
  * other write sections, can be invoked from hardirq contexts.
+ * 中断处理程序或软中断中安全使用顺序锁的宏/函数
  */
 static inline void write_seqlock_irq(seqlock_t *sl)
 {
@@ -1057,6 +1071,8 @@ write_sequnlock_irqrestore(seqlock_t *sl, unsigned long flags)
  * variant of this function instead.
  *
  * The opened read section must be closed with read_sequnlock_excl().
+ * 第二类读者会加锁，这将导致写者被阻塞，直到这些读者释放它们持有的锁
+ * 无论是读者（读线程）还是写者（写线程）都不能访问受保护的数据
  */
 static inline void read_seqlock_excl(seqlock_t *sl)
 {

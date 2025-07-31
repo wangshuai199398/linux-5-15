@@ -92,8 +92,9 @@ enum fixed_addresses {
 
 	__end_of_fixed_addresses
 };
-
+// 使用 __end_of_permanent_fixed_addresses 来获取固定映射区域尺寸
 #define FIXADDR_SIZE	(__end_of_permanent_fixed_addresses << PAGE_SHIFT)
+// 从固定映射区域的末地址减去了固定映射区域的尺寸，这样就可以获得它的基虚拟地址
 #define FIXADDR_START	(FIXADDR_TOP - FIXADDR_SIZE)
 
 #define FIXMAP_PAGE_IO     __pgprot(PROT_DEVICE_nGnRE)

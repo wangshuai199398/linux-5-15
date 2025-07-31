@@ -59,6 +59,7 @@ static inline bool __list_del_entry_valid(struct list_head *entry)
  *
  * This is only for internal list manipulation where we know
  * the prev/next entries already!
+ * 在 prev 和 next 之间添加一个新项
  */
 static inline void __list_add(struct list_head *new,
 			      struct list_head *prev,
@@ -512,9 +513,9 @@ static inline void list_splice_tail_init(struct list_head *list,
 
 /**
  * list_entry - get the struct for this entry
- * @ptr:	the &struct list_head pointer.
- * @type:	the type of the struct this is embedded in.
- * @member:	the name of the list_head within the struct.
+ * @ptr:	指向链表头的指针
+ * @type:	结构体类型
+ * @member:	在结构体内类型为 list_head 的变量的名字
  */
 #define list_entry(ptr, type, member) \
 	container_of(ptr, type, member)

@@ -15,15 +15,18 @@
 #include <linux/minmax.h>
 #include <linux/types.h>
 /*
- * Resources are tree-like, allowing
- * nesting etc..
+ * Resources are tree-like, allowing nesting etc..
+ * resource 结构体是对系统资源的树状子集的抽象
  */
 struct resource {
+	// 起止地址
 	resource_size_t start;
 	resource_size_t end;
+	// 名字
 	const char *name;
 	unsigned long flags;
 	unsigned long desc;
+	// 父节点和子节点
 	struct resource *parent, *sibling, *child;
 };
 
@@ -258,9 +261,11 @@ resource_union(struct resource *r1, struct resource *r2, struct resource *r)
 }
 
 /* Convenience shorthand with allocation */
+// 分配 I/O 端口区域, 注册一个内存区域
 #define request_region(start,n,name)		__request_region(&ioport_resource, (start), (n), (name), 0)
 #define request_muxed_region(start,n,name)	__request_region(&ioport_resource, (start), (n), (name), IORESOURCE_MUXED)
 #define __request_mem_region(start,n,name, excl) __request_region(&iomem_resource, (start), (n), (name), excl)
+// 分配一个内存区域, 注册一个内存区域
 #define request_mem_region(start,n,name) __request_region(&iomem_resource, (start), (n), (name), 0)
 #define request_mem_region_muxed(start, n, name) \
 	__request_region(&iomem_resource, (start), (n), (name), IORESOURCE_MUXED)
@@ -274,6 +279,7 @@ extern struct resource * __request_region(struct resource *,
 					const char *name, int flags);
 
 /* Compatibility cruft */
+// 释放这个内存区域
 #define release_region(start,n)	__release_region(&ioport_resource, (start), (n))
 #define release_mem_region(start,n)	__release_region(&iomem_resource, (start), (n))
 

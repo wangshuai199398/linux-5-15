@@ -151,6 +151,7 @@ void tick_handle_periodic(struct clock_event_device *dev)
  */
 void tick_setup_periodic(struct clock_event_device *dev, int broadcast)
 {
+	// 为给定的 clock event 设备设置广播处理程序（broadcast handler）
 	tick_set_periodic_handler(dev, broadcast);
 
 	/* Broadcast setup ? */
@@ -159,6 +160,7 @@ void tick_setup_periodic(struct clock_event_device *dev, int broadcast)
 
 	if ((dev->features & CLOCK_EVT_FEAT_PERIODIC) &&
 	    !tick_broadcast_oneshot_active()) {
+		// 改变时钟事件设备的状态
 		clockevents_switch_state(dev, CLOCK_EVT_STATE_PERIODIC);
 	} else {
 		unsigned int seq;
@@ -172,6 +174,7 @@ void tick_setup_periodic(struct clock_event_device *dev, int broadcast)
 		clockevents_switch_state(dev, CLOCK_EVT_STATE_ONESHOT);
 
 		for (;;) {
+			// 根据当前时间与下一事件时间之间的最大和最小时间差（delta）设置下一个事件
 			if (!clockevents_program_event(dev, next, false))
 				return;
 			next = ktime_add_ns(next, TICK_NSEC);
@@ -180,7 +183,8 @@ void tick_setup_periodic(struct clock_event_device *dev, int broadcast)
 }
 
 /*
- * Setup the tick device
+ * Setup the tick device 
+ * 会检查新注册的时钟事件设备的模式，并根据设备的模式调用 tick_setup_periodic 或 tick_setup_oneshot 函数来完成相应的设置
  */
 static void tick_setup_device(struct tick_device *td,
 			      struct clock_event_device *newdev, int cpu,
@@ -322,6 +326,8 @@ bool tick_check_replacement(struct clock_event_device *curdev,
 /*
  * Check, if the new registered device should be used. Called with
  * clockevents_lock held and interrupts disabled.
+ * 检查传入的 clock_event_device，获取当前已注册的 tick 设备（由 tick_device 结构体表示），并比较它们的评分（rating）和功能特性（features）。
+ * 实际上，系统更倾向于使用支持 CLOCK_EVT_STATE_ONESHOT 的设备
  */
 void tick_check_new_device(struct clock_event_device *newdev)
 {
@@ -348,7 +354,9 @@ void tick_check_new_device(struct clock_event_device *newdev)
 		clockevents_shutdown(curdev);
 		curdev = NULL;
 	}
+	// 如果新注册的时钟事件设备比旧的 tick 设备更优先，就会交换旧设备和新注册设备的位置，并安装新设备
 	clockevents_exchange_device(curdev, newdev);
+	// 设置新的 tick 设备
 	tick_setup_device(td, newdev, cpu, cpumask_of(cpu));
 	if (newdev->features & CLOCK_EVT_FEAT_ONESHOT)
 		tick_oneshot_notify();
@@ -559,6 +567,7 @@ void tick_unfreeze(void)
  */
 void __init tick_init(void)
 {
+	// 初始化 tick 广播框架
 	tick_broadcast_init();
 	tick_nohz_init();
 }

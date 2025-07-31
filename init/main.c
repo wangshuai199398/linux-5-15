@@ -124,6 +124,7 @@ extern void radix_tree_init(void);
  * two things - IRQ must not be enabled before the flag is cleared and some
  * operations which are not allowed with IRQ disabled are allowed while the
  * flag is set.
+ * 在 kernel/smp.c 中的 smp_call_function_many 函数中，通过这个变量来检查当前是否由于中断禁用而处于死锁状态
  */
 bool early_boot_irqs_disabled __read_mostly;
 
@@ -689,12 +690,17 @@ static void __init setup_command_line(char *command_line)
  */
 
 static __initdata DECLARE_COMPLETION(kthreadd_done);
-
+/*
+rest_init 函数的主要作用是：
+	启动 kernel_init 线程和 kthreadd 线程；
+	调用 schedule 函数，开始任务调度；
+	进入休眠状态
+*/
 noinline void __ref rest_init(void)
 {
 	struct task_struct *tsk;
 	int pid;
-
+	//激活 RCU 调度器
 	rcu_scheduler_starting();
 	/* 创建 init 进程，1号进程
 	 * 如果我们在创建 kthreadd 之前调度执行 init，将会导致内核崩溃（OOPS）
@@ -711,9 +717,12 @@ noinline void __ref rest_init(void)
 	rcu_read_unlock();
 
 	numa_default_policy();
+	//特殊的内核线程，用于管理并协助内核中的各个部分创建其他内核线程
 	pid = kernel_thread(kthreadd, NULL, CLONE_FS | CLONE_FILES);
+	//RCU 读端临界区的开始, 为了保护对 find_task_by_pid_ns 函数的调用，因为在并发环境下，必须使用 RCU 来安全地读取共享数据
 	rcu_read_lock();
 	kthreadd_task = find_task_by_pid_ns(pid, &init_pid_ns);
+	//RCU 读端临界区的结束
 	rcu_read_unlock();
 
 	/*
@@ -722,7 +731,7 @@ noinline void __ref rest_init(void)
 	 * init 任务可能已经发生了调度，但此时它仍然阻塞在 kthreadd_done 的 completion 上
 	 */
 	system_state = SYSTEM_SCHEDULING;
-
+	//通知等待线程: init 线程会等待直到 kthreadd 线程准备就绪才继续执行初始化逻辑
 	complete(&kthreadd_done);//kthreadd 线程已初始化完成，并唤醒所有等待这个事件的线程（如 kernel_init）
 
 	/* 引导阶段的 idle 线程必须至少执行一次 schedule()，才能让系统运行起来 */
@@ -834,21 +843,29 @@ static void __init mm_init(void)
 	 * page_ext requires contiguous pages,
 	 * bigger than MAX_ORDER unless SPARSEMEM.
 	 */
+	//初始化每页扩展数据的处理
 	page_ext_init_flatmem();
 	init_mem_debugging_and_hardening();
 	kfence_alloc_pool();
 	report_meminit();
 	stack_depot_init();
+	//释放所有的引导内存bootmem
 	mem_init();
 	mem_init_print_info();
 	/* page_owner must be initialized after buddy is ready */
 	page_ext_init_flatmem_late();
+	//初始化内核缓存机制
 	kmem_cache_init();
+	//初始化 内核内存泄漏检测器
 	kmemleak_init();
+	//初始化 page->ptl 的内核缓存
 	pgtable_init();
+	//初始化 调试对象的动态分配机制
 	debug_objects_mem_init();
+	//初始化 vmalloc 机制
 	vmalloc_init();
 	/* Should be run before the first non-init thread is created */
+	//在从 64 位内核返回到 16 位栈时，防止 ESP 寄存器的高 16 位（31:16）泄漏
 	init_espfix_bsp();
 	/* Should be run after espfix64 is set up. */
 	pti_init();
@@ -929,7 +946,12 @@ static void __init print_unknown_bootoptions(void)
 		&unknown_options[1]);
 	memblock_free_ptr(unknown_options, len);
 }
-// x86_64_start_kernel ->
+/*
+x86_64_start_kernel -> start_kernel
+完成内核初始化并启动祖先进程(1号进程)。
+在祖先进程启动之前start_kernel函数做了很多事情，如锁验证器,根据处理器标识ID初始化处理器，开启cgroups子系统，设置每CPU区域环境，初始化VFS Cache机制，
+  初始化内存管理，rcu,vmalloc,scheduler(调度器),IRQs(中断向量表),ACPI(中断可编程控制器)以及其它很多子系统
+*/
 asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 {
 	char *command_line;
@@ -940,7 +962,7 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 	init_vmlinux_build_id();//设置构建 ID（调试用）
 
 	cgroup_init_early();
-
+	//关闭当前cpu中断
 	local_irq_disable();
 	early_boot_irqs_disabled = true;
 
@@ -949,20 +971,27 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 	page_address_init();
 	pr_notice("%s", linux_banner);//Linux version 5.15.178+ (root@yusur) (gcc (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0, GNU ld (GNU Binutils for Ubuntu) 2.38) #114 SMP Tue Jun 17 02:10:48 UTC 2025 (Ubuntu 5.15.0-138.148-generic 5.15.178)
 	early_security_init();
+	//架构启动
 	setup_arch(&command_line);
+	//
 	setup_boot_config();
+	//接收内核命令行指针，存储命令行
 	setup_command_line(command_line);
+	//根据 cpu_possible_mask 的最后一位来设置 nr_cpu_ids（CPU 的数量）
 	setup_nr_cpu_ids();
 	setup_per_cpu_areas();//为每个 CPU 分配私有空间
 	smp_prepare_boot_cpu();	/* arch-specific boot-cpu hooks */
 	boot_cpu_hotplug_init();
-
+	//设置了分配内存时优先选择的zone顺序，物理内存被分为若干个 nodes，node 被分为多个 zone
+	//如ZONE_DMA 0-16M,ZONE_DMA32 32位机器,ZONE_NORMAL 从 4GB 开始的 ZONE_MOVABLE 可移动页
 	build_all_zonelists(NULL);
+	//为cpu热插拔状态设置了启动（startup）和拆卸（teardown）回调函数
 	page_alloc_init();
 
 	pr_notice("Kernel command line: %s\n", saved_command_line);//BOOT_IMAGE=/vmlinuz-5.15.178+ root=/dev/mapper/ubuntu--vg-ubuntu--lv ro debug systemd.log_level=debug systemd.log_target=console
 	/* parameters may set static keys */
 	jump_label_init();
+	//处理 Linux 内核的命令行参数
 	parse_early_param();
 	after_dashes = parse_args("Booting kernel",
 				  static_command_line, __start___param,
@@ -976,26 +1005,30 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 		parse_args("Setting extra init args", extra_init_args,
 			   NULL, 0, -1, -1, NULL, set_init_arg);
 
-	/* 这些（哈希表等）使用了较大的 bootmem 分配，因此必须在 kmem_cache_init() 之前执行 */
+	/* 设置 printk 的日志缓冲区，这些（哈希表等）使用了较大的 bootmem 分配，因此必须在 kmem_cache_init() 之前执行 */
 	setup_log_buf(0);
+	//虚拟文件系统的早期初始化
 	vfs_caches_init_early();
+	//对内核内建的异常表条目进行排序
 	sort_main_extable();
+	//初始化陷阱处理程序
 	trap_init();
+	//初始化内存管理器
 	mm_init();
 	poking_init();
+	//初始化 ftrace 跟踪机制
 	ftrace_init();
 
 	/* trace_printk can be enabled here */
 	early_trace_init();
 
-	/*
-	 * 在启动任何中断（例如定时器中断）之前设置调度器。完整的拓扑结构会在 smp_init() 阶段完成——但在此期间，我们已经拥有一个functioning调度器
-	 */
+	/* 在启动任何中断（例如定时器中断）之前设置调度器。完整的拓扑结构会在 smp_init() 阶段完成——但在此期间，我们已经拥有一个functioning调度器 */
 	sched_init();
 
 	if (WARN(!irqs_disabled(),
 		 "Interrupts were enabled *very* early, fixing it\n"))
 		local_irq_disable();
+	//基数树初始化
 	radix_tree_init();
 
 	/* 在设置 workqueue 之前先设置 housekeeping，以便 unbound workqueue 能够考虑非 housekeeping CPU
@@ -1007,7 +1040,7 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 
 	rcu_init();
 
-	/* Trace events are available after this */
+	/* Trace events are available after this 初始化 跟踪（tracing）子系统 */
 	trace_init();
 
 	if (initcall_debug)
@@ -1018,6 +1051,7 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 	early_irq_init();
 	//初始化32之后的设备中断
 	init_IRQ();
+	// 初始化 tick 广播框架
 	tick_init();
 	rcu_init_nohz();
 	init_timers();
@@ -1034,6 +1068,7 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 	 * - time_init() 使某些平台上的 random_get_entropy() 可以正常工作
 	 * - random_init() 从早期熵源中初始化随机数生成器（RNG）*/
 	random_init(command_line);
+	//通过设置canary值来防止中断栈溢出
 	boot_init_stack_canary();
 
 	perf_event_init();
@@ -1042,12 +1077,14 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 	WARN(!irqs_disabled(), "Interrupts were enabled early\n");
 
 	early_boot_irqs_disabled = false;
+	//启用中断
 	local_irq_enable();
-
+	//对 SLAB 进行后期初始化
 	kmem_cache_init_late();
 
 	/* 这段注释是 Linux 内核启动早期的 “黑客式紧急处理（HACK ALERT）”，用于解释 为何在非常早的阶段就初始化控制台（console）
 	   为了能看到早期阶段的错误信息，如内存映射错误、EFI/ACPI 失败、内核崩溃（panic）发生在 start_kernel() 初期 */
+	//初始化控制台
 	console_init();
 	if (panic_later)
 		panic("Too many boot %s vars at `%s'", panic_later,
@@ -1067,41 +1104,56 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 		initrd_start = 0;
 	}
 #endif
+	//设置 per-CPU 页面集
 	setup_per_cpu_pageset();
+	//设置 NUMA 策略
 	numa_policy_init();
-	acpi_early_init();//
+	//执行 ACPI（高级配置与电源接口） 的早期初始化
+	acpi_early_init();
 	if (late_time_init)
 		late_time_init();
-	//初始化 调度时钟（scheduler clock） 
+	//初始化 调度时钟（scheduler clock） 为调度器设置时间源
 	sched_clock_init();
 	calibrate_delay();
 
 	arch_cpu_finalize_init();
 
 	pid_idr_init();
+	//创建匿名虚拟内存区域（私有 VMA）所需的缓存
 	anon_vma_init();
 #ifdef CONFIG_X86
 	if (efi_enabled(EFI_RUNTIME_SERVICES))
 		efi_enter_virtual_mode();
 #endif
+	//如果 THREAD_SIZE 小于一个页面大小（PAGE_SIZE），则为 thread_info 分配一个缓存
 	thread_stack_cache_init();
+	//为内核中的凭据（如 UID、GID 等）分配缓存空间
 	cred_init();
+	//为 task_struct 分配缓存（cache）
 	fork_init();
+	//为内存描述符（即 mm_struct 结构体）分配缓存（SLAB caches）
 	proc_caches_init();
 	uts_ns_init();
+	//初始化各种安全机制
 	key_init();
 	security_init();
 	dbg_late_init();
 	net_ns_init();
+	//为 VFS（虚拟文件系统） 的各类缓存分配 SLAB 缓存和哈希表
 	vfs_caches_init();
 	pagecache_init();
+	//为 sigqueue 结构分配缓存，sigqueue 表示实时信号队列中的每一个待处理信号
 	signals_init();
 	seq_file_init();
+	//创建 procfs（进程文件系统）的根目录
 	proc_root_init();
 	nsfs_init();
 	cpuset_init();
+	//完成剩余的 cgroup 子系统初始化
 	cgroup_init();
+	//将每个任务的统计信息导出到用户空间
 	taskstats_init_early();
+	//初始化每个任务的延迟统计
 	delayacct_init();
 
 	acpi_subsystem_init();
@@ -1109,7 +1161,8 @@ asmlinkage __visible void __init __no_sanitize_address start_kernel(void)
 	kcsan_init();
 
 	/* Do the rest non-__init'ed, we're now alive */
-	arch_call_rest_init();//
+	// start_kernel 函数调用了 rest_init 函数，rest_init 启动了一个 init（即 kernel_init 函数）进程，而 start_kernel 本身则变成了 idle 进程
+	arch_call_rest_init();
 	//禁止尾调用优化，保留当前函数栈帧，mb: 之前的内存操作都完成并对其他CPU可见，然后执行之后的内存操作
 	prevent_tail_call_optimization();
 }
@@ -1184,7 +1237,7 @@ static bool __init_or_module initcall_blacklisted(initcall_t fn)
 	 * displayed for built-in init functions.  Strip off the [module_name].
 	 */
 	strreplace(fn_name, ' ', '\0');
-
+	// 遍历包含了 initcalls 黑名单的 blacklisted_initcalls 链表，如果 initcall 在黑名单里就返回 true
 	list_for_each_entry(entry, &blacklisted_initcalls, next) {
 		if (!strcmp(fn_name, entry->buf)) {
 			pr_debug("initcall %s blacklisted\n", fn_name);
@@ -1275,11 +1328,14 @@ int __init_or_module do_one_initcall(initcall_t fn)
 	do_trace_initcall_finish(fn, ret);
 
 	msgbuf[0] = 0;
-
+	/* 在initcall执行内部 __preempt_count_add 和 __preempt_count_sub 可能的执行次数，如果这个值和之前的可抢占计数不相等，
+	   就把 preemption imbalance 字符串添加到消息缓冲区，并设置正确的可抢占计数 */
 	if (preempt_count() != count) {
 		sprintf(msgbuf, "preemption imbalance ");
 		preempt_count_set(count);
 	}
+	/* 检查本地 IRQs 的状态，如果它们被禁用了，我们就将 disabled interrupts 字符串添加到我们的消息缓冲区，
+	   并为当前处理器使能 IRQs，以防出现 IRQs 被 initcall 禁用了但不再使能的情况出现 */
 	if (irqs_disabled()) {
 		strlcat(msgbuf, "disabled interrupts ", sizeof(msgbuf));
 		local_irq_enable();
@@ -1356,6 +1412,7 @@ static void __init do_initcall_level(int level, char *command_line)
    fs_initcall        .initcall5.init
    device_initcall    .initcall6.init
    late_initcall      .initcall7.init
+   initcalls_wangs
 */
 static void __init do_initcalls(void)
 {
@@ -1382,7 +1439,9 @@ static void __init do_initcalls(void)
  * 但 CPU 子系统已经启动，内存和进程管理功能也已就绪
  *
  * 现在我们终于可以开始做一些真正的“实质性工作”了
- * setup_wangs
+ * 重新初始化 cpuset 以匹配当前激活的 CPU，初始化 khelper —— 这是一个用于从内核内部调用用户空间的内核线程，
+ * 初始化 tmpfs（临时文件系统），初始化驱动子系统，启用用户态 helper 的工作队列，并执行 initcalls 的后期初始化（post-early）
+ * init_wangs
  */
 static void __init do_basic_setup(void)
 {
@@ -1390,6 +1449,7 @@ static void __init do_basic_setup(void)
 	driver_init();
 	init_irq_proc();
 	do_ctors();
+	// 各个init的调用
 	do_initcalls();
 }
 
@@ -1456,6 +1516,7 @@ static void mark_readonly(void)
 		 * insecure pages which are W+X.
 		 */
 		flush_module_init_free_work();
+		//保护 .rodata 段（只读数据段）
 		mark_rodata_ro();
 		rodata_test();
 	} else
@@ -1482,9 +1543,7 @@ void __weak free_initmem(void)
 static int __ref kernel_init(void *unused)
 {
 	int ret;
-	/*
-	 * 等待 kthreadd 内核线程完全初始化完成后，才会继续执行
-	 */
+	/* 等待 kthreadd 内核线程完全初始化完成后，才会继续执行 */
 	wait_for_completion(&kthreadd_done);
 	//完成内核启动后期任务，清理初始化内存，并启动用户空间进程
 	kernel_init_freeable();
@@ -1496,22 +1555,23 @@ static int __ref kernel_init(void *unused)
 	kgdb_free_init_mem();//KGDB 调试器用到的初始化内容
 	//处理并清理内核启动时加载的 boot 配置参数（来自早期启动阶段）；一旦 init 启动完成，就不再需要这些数据
 	exit_boot_config();
-	//释放所有使用了 __init 标记的初始化代码和数据段，内核启动后这些就不再需要，释放它们可以节省内存
+	//释放所有使用了 __init 标记的初始化代码和数据段，内核启动后这些就不再需要,这些内存位于 __init_begin 和 __init_end 之间
 	free_initmem();
 	//将一些关键内核内存区域（如只读数据段）标记为只读，防止后续运行中被意外或恶意修改，提高内核安全性
 	mark_readonly();
 
 	/* 内核映射现在已经确定 —— 更新用户空间页表，以完成 PTI 的最终设置 */
 	pti_finalize();
-
+	//将系统状态从 SYSTEM_BOOTING 更新为 SYSTEM_RUNNING
 	system_state = SYSTEM_RUNNING;
 	numa_default_policy();
 
 	rcu_end_inkernel_boot();
 
 	do_sysctl_args();
-	//如果有 init=/earlyinit 参数，执行
+	//尝试运行 init 进程, 如果有 init=/earlyinit 参数，执行
 	if (ramdisk_execute_command) {
+		//填充 argv_init 数组的第一个元素
 		ret = run_init_process(ramdisk_execute_command);
 		if (!ret)
 			return 0;
@@ -1519,9 +1579,9 @@ static int __ref kernel_init(void *unused)
 		       ramdisk_execute_command, ret);
 	}
 
-	/*
-	 * 我们会依次尝试下面这些（init 程序路径），直到其中一个成功为止
+	/* 我们会依次尝试下面这些（init 程序路径），直到其中一个成功为止
 	 * 如果系统损坏严重、无法启动常规的 init 程序，可以使用 Bourne shell 来代替 init 进行恢复
+	 * 如果我们没有向内核命令行传递 rdinit= 选项，内核将会检查 execute_command，该变量的值等于内核命令行参数 init= 的值
 	 */
 	if (execute_command) {
 		ret = run_init_process(execute_command);
@@ -1539,7 +1599,8 @@ static int __ref kernel_init(void *unused)
 		else
 			return 0;
 	}
-
+	//如果我们也没有传递 init= 内核命令行参数，那么内核会尝试依次运行以下可执行文件中的一个
+	//这些是内核在启动时默认尝试作为 init 进程执行的路径，直到找到第一个存在且可执行的程序。这个 init 进程将成为用户空间的第一个进程，其进程号为 PID 1，负责初始化用户空间环境
 	if (!try_to_run_init_process("/sbin/init") ||
 	    !try_to_run_init_process("/etc/init") ||
 	    !try_to_run_init_process("/bin/init") ||
@@ -1550,7 +1611,10 @@ static int __ref kernel_init(void *unused)
 	      "See Linux Documentation/admin-guide/init.rst for guidance.");
 }
 
-/* Open /dev/console, for stdin/stdout/stderr, this should never fail */
+/* Open /dev/console, for stdin/stdout/stderr, this should never fail 
+对 /dev/console 的打开操作，
+并且将文件描述符 0 到 2（即 stdin、stdout、stderr）进行复制
+*/
 void __init console_on_rootfs(void)
 {
 	struct file *file = filp_open("/dev/console", O_RDWR, 0);
@@ -1567,14 +1631,14 @@ void __init console_on_rootfs(void)
 
 static noinline void __init kernel_init_freeable(void)
 {
-	/* 调度器已经完全初始化，可以执行可能阻塞的内存分配了（比如等待 I/O） */
+	/* 表示系统已经开始运行, 调度器已经完全初始化，可以执行可能阻塞的内存分配了（比如等待 I/O） */
 	gfp_allowed_mask = __GFP_BITS_MASK;
 
-	/* 允许 init 任务在所有可用 NUMA 内存节点上分配页（恢复默认内存节点掩码）*/
+	/* 将允许的 CPU 和 NUMA 节点设置为全部, 允许 init 任务在所有可用 NUMA 内存节点上分配页（恢复默认内存节点掩码）*/
 	set_mems_allowed(node_states[N_MEMORY]);
 
 	cad_pid = get_pid(task_pid(current));
-	//准备所有可能上线的 CPU，主要涉及多核支持
+	//做好启动其他 CPU 的准备工作
 	smp_prepare_cpus(setup_max_cpus);
 	//初始化内核中的 workqueue 子系统（延迟任务调度机制）
 	workqueue_init();
@@ -1585,10 +1649,11 @@ static noinline void __init kernel_init_freeable(void)
 	//执行所有早于 SMP 初始化的内核初始化函数
 	//调用早期 initcall 函数（等级 < 0）
 	do_pre_smp_initcalls();
-	//初始化“死锁/锁死检测”机制，如 NMI watchdog，用于侦测系统软/硬卡死
+	//初始化死锁检测器，如 NMI watchdog，用于侦测系统软/硬卡死
 	lockup_detector_init();
 	//真正开始启用多核调度器支持
 	smp_init();
+	//初始化调度器的 SMP 支持
 	sched_init_smp();
 	//初始化 padata 子系统（用于并行数据处理，如加密算法）
 	padata_init();
@@ -1605,12 +1670,11 @@ static noinline void __init kernel_init_freeable(void)
 	//切换 console 到根文件系统环境下
 	console_on_rootfs();
 
-	/*
-	 * 检查是否提供了 early user-space init 程序（如 init=/bin/sh）
-	 * 若没有，则调用 prepare_namespace() 设置标准的根文件系统和挂载点
-	 */
+	/* 检查是否提供了 early user-space init 程序（如 init=/bin/sh）
+	 * 若没有，则调用 prepare_namespace() 设置标准的根文件系统和挂载点 */
 	if (init_eaccess(ramdisk_execute_command) != 0) {
 		ramdisk_execute_command = NULL;
+		//检查并挂载 initrd（初始内存盘）
 		prepare_namespace();
 	}
 

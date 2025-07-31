@@ -94,7 +94,7 @@ static void __kprobes handler_post(struct kprobe *p, struct pt_regs *regs,
 		p->symbol_name, p->addr, regs->flags);
 #endif
 }
-
+// kprobe_wangs
 static int __init kprobe_init(void)
 {
 	int ret;

@@ -44,19 +44,25 @@
  * containing structure should be moved further away from the rwsem to
  * reduce the chance that they will share the same cacheline causing
  * cacheline bouncing problem.
+ * rw_wangs
  */
 struct rw_semaphore {
+	// 可用资源的数量
 	atomic_long_t count;
 	/*
 	 * Write owner or one of the read owners as well flags regarding
 	 * the current state of the rwsem. Can be used as a speculative
 	 * check to see if the write owner is running on the cpu.
+	 * 表示当前持锁进程（owner）
 	 */
 	atomic_long_t owner;
 #ifdef CONFIG_RWSEM_SPIN_ON_OWNER
+	// 用于 乐观自旋（Optimistic Spinning） 的 MCS 队列锁
 	struct optimistic_spin_queue osq; /* spinner MCS lock */
 #endif
+	// 自旋锁，用于保护这个等待链表
 	raw_spinlock_t wait_lock;
+	// 正在等待获取锁的进程构成的双向链表
 	struct list_head wait_list;
 #ifdef CONFIG_DEBUG_RWSEMS
 	void *magic;
@@ -98,12 +104,14 @@ static inline int rwsem_is_locked(struct rw_semaphore *sem)
 	  __RWSEM_DEBUG_INIT(name)				\
 	  __RWSEM_DEP_MAP_INIT(name) }
 
+// 静态初始化
 #define DECLARE_RWSEM(name) \
 	struct rw_semaphore name = __RWSEM_INITIALIZER(name)
 
 extern void __init_rwsem(struct rw_semaphore *sem, const char *name,
 			 struct lock_class_key *key);
 
+// 动态初始化
 #define init_rwsem(sem)						\
 do {								\
 	static struct lock_class_key __key;			\

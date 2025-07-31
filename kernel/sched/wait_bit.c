@@ -6,7 +6,7 @@
 
 #define WAIT_TABLE_BITS 8
 #define WAIT_TABLE_SIZE (1 << WAIT_TABLE_BITS)
-
+//等待队列数组，用于根据特定位的值来决定进程是否需要进入等待或被唤醒
 static wait_queue_head_t bit_wait_table[WAIT_TABLE_SIZE] __cacheline_aligned;
 
 wait_queue_head_t *bit_waitqueue(void *word, int bit)

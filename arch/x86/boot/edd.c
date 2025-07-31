@@ -69,7 +69,11 @@ static u32 read_mbr_sig(u8 devno, struct edd_info *ei, u32 *mbrsig)
 	/* check for valid MBR magic */
 	return mbr_magic == 0xAA55 ? 0 : -1;
 }
-
+/*
+通过调用 0x13 中断调用（设置 ah = 0x41 ) 来检查EDD是否被硬盘支持。
+如果EDD被支持，代码将再次调用 0x13 中断，在这次调用中 ah = 0x48，并且 si 指向一个数据缓冲区地址。
+中断调用之后，EDD信息将被保存到 si 指向的缓冲区地址
+*/
 static int get_edd_info(u8 devno, struct edd_info *ei)
 {
 	struct biosregs ireg, oreg;
@@ -116,7 +120,7 @@ static int get_edd_info(u8 devno, struct edd_info *ei)
 
 	return 0;
 }
-
+//从BIOS中查询 Enhanced Disk Drive 信息
 void query_edd(void)
 {
 	char eddarg[8];
@@ -130,7 +134,7 @@ void query_edd(void)
 	int devno;
 	struct edd_info ei, *edp;
 	u32 *mbrptr;
-
+	//命令行是否设置edd选项
 	if (cmdline_find_option("edd", eddarg, sizeof(eddarg)) > 0) {
 		if (!strcmp(eddarg, "skipmbr") || !strcmp(eddarg, "skip")) {
 			do_edd = 1;
@@ -156,7 +160,7 @@ void query_edd(void)
 
 	if (!be_quiet)
 		printf("Probing EDD (edd=off to disable)... ");
-
+	//如果EDD被激活了，query_edd 遍历所有BIOS支持的硬盘，并获取相应硬盘的EDD信息，0x80是第一块硬盘
 	for (devno = 0x80; devno < 0x80+EDD_MBR_SIG_MAX; devno++) {
 		/*
 		 * Scan the BIOS-supported hard disks and query EDD

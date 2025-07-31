@@ -56,6 +56,7 @@ typedef void (bh_end_io_t)(struct buffer_head *bh, int uptodate);
  * mappings (via a get_block_t call), for tracking state within
  * a page (via a page_mapping) and for wrapping bio submission
  * for backward compatibility reasons (e.g. submit_bh).
+ * 用于管理块设备 I/O 的缓冲区（buffers）
  */
 struct buffer_head {
 	unsigned long b_state;		/* buffer state bitmap (see above) */

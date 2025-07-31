@@ -198,6 +198,7 @@ void account_system_time(struct task_struct *p, int hardirq_offset, u64 cputime)
 	if (hardirq_count() - hardirq_offset)
 		//如果当前处于硬中断上下文，统计到irq字段
 		index = CPUTIME_IRQ;
+	//判断当前是不是在执行软中断，是，则将时间累计到内核数组的 CPUTIME_SOFTIRQ 下标中，然后通过 top 命令的 si 列显示出来
 	else if (in_serving_softirq())
 		//如果当前处于软中断上下文，统计到softirq字段
 		index = CPUTIME_SOFTIRQ;

@@ -190,9 +190,10 @@ __ref void *alloc_low_pages(unsigned int num)
 RESERVE_BRK(early_pgt_alloc, INIT_PGT_BUF_SIZE);
 void  __init early_alloc_pgt_buf(void)
 {
+	//页表缓冲区的大小
 	unsigned long tables = INIT_PGT_BUF_SIZE;
 	phys_addr_t base;
-
+	//用 _pa 宏得到了新的 brk 区段的物理地址
 	base = __pa(extend_brk(tables, PAGE_SIZE));
 
 	pgt_buf_start = base >> PAGE_SHIFT;
@@ -752,7 +753,7 @@ static void __init init_trampoline(void)
 		init_trampoline_kaslr();
 #endif
 }
-
+//在 PAGE_OFFSET 处重建物理内存的直接映射
 void __init init_mem_mapping(void)
 {
 	unsigned long end;

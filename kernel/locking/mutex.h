@@ -12,6 +12,7 @@
  * on the blocked task's kernel stack:
  */
 struct mutex_waiter {
+	// 该互斥锁的等待队列 mutex_waiter
 	struct list_head	list;
 	struct task_struct	*task;
 	struct ww_acquire_ctx	*ww_ctx;

@@ -7332,7 +7332,7 @@ static int __napi_poll(struct napi_struct *n, bool *repoll)
 
 	return work;
 }
-//软中断触发->__do_softirq->net_rx_action->napi_poll->__napi_poll
+//软中断触发->handle_softirqs->net_rx_action->napi_poll->__napi_poll
 static int napi_poll(struct napi_struct *n, struct list_head *repoll)
 {
 	bool do_repoll = false;

@@ -33,17 +33,24 @@ struct module;
  *		    stopped.
  */
 enum clock_event_state {
+	// 时钟事件设备未被 clockevents 框架使用
 	CLOCK_EVT_STATE_DETACHED,
+	// 时钟事件设备已关闭电源
 	CLOCK_EVT_STATE_SHUTDOWN,
+	// 时钟事件设备被配置为周期性地产生事件
 	CLOCK_EVT_STATE_PERIODIC,
+	// 时钟事件设备被配置为仅产生一次事件
 	CLOCK_EVT_STATE_ONESHOT,
+	// 时钟事件设备原本配置为一次性事件，但目前被临时停止
 	CLOCK_EVT_STATE_ONESHOT_STOPPED,
 };
 
 /*
  * Clock event features
  */
+// 该设备可以被编程为周期性地产生事件
 # define CLOCK_EVT_FEAT_PERIODIC	0x000001
+// 该设备只能生成一次性事件
 # define CLOCK_EVT_FEAT_ONESHOT		0x000002
 # define CLOCK_EVT_FEAT_KTIME		0x000004
 
@@ -53,6 +60,7 @@ enum clock_event_state {
  * - Clockevent source stops in C3 State and needs broadcast support.
  * - Local APIC timer is used as a dummy device.
  */
+// 该时钟事件设备将在处理器进入 C3 低功耗状态时停止工作
 # define CLOCK_EVT_FEAT_C3STOP		0x000008
 # define CLOCK_EVT_FEAT_DUMMY		0x000010
 
@@ -96,16 +104,23 @@ enum clock_event_state {
  * @cpumask:		cpumask to indicate for which CPUs this device works
  * @list:		list head for the management code
  * @owner:		module reference
+ * 表示一个时钟事件设备的描述符
+ * 一个时钟事件设备允许注册将来某个时刻触发的事件
  */
 struct clock_event_device {
+	// 中断处理函数
 	void			(*event_handler)(struct clock_event_device *);
+	// 用于设置下一个事件的函数
 	int			(*set_next_event)(unsigned long evt, struct clock_event_device *);
 	int			(*set_next_ktime)(ktime_t expires, struct clock_event_device *);
+	// 用于本地存储下一个事件时间的字段
 	ktime_t			next_event;
 	u64			max_delta_ns;
 	u64			min_delta_ns;
+	// mult 和 shift 用于时间单位之间的转换
 	u32			mult;
 	u32			shift;
+	// 该时钟事件设备当前的状态
 	enum clock_event_state	state_use_accessors;
 	unsigned int		features;
 	unsigned long		retries;

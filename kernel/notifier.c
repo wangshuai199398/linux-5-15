@@ -17,6 +17,7 @@ BLOCKING_NOTIFIER_HEAD(reboot_notifier_list);
 /*
  *	Notifier chain core routines.  The exported routines below
  *	are layered on top of these, with appropriate locking added.
+ *  将一个新的 notifier_block（由希望接收通知的子系统提供）插入到通知链的链表中
  */
 
 static int notifier_chain_register(struct notifier_block **nl,
@@ -60,6 +61,7 @@ static int notifier_chain_unregister(struct notifier_block **nl,
  *			value of this field is NULL.
  *	@returns:	notifier_call_chain returns the value returned by the
  *			last notifier function called.
+ * 将异步事件通知给已注册的通知者
  */
 static int notifier_call_chain(struct notifier_block **nl,
 			       unsigned long val, void *v,
@@ -210,8 +212,8 @@ NOKPROBE_SYMBOL(atomic_notifier_call_chain);
 
 /**
  *	blocking_notifier_chain_register - Add notifier to a blocking notifier chain
- *	@nh: Pointer to head of the blocking notifier chain
- *	@n: New entry in notifier chain
+ *	@nh: 通知链的链表头
+ *	@n: 通知描述符（即回调函数的封装结构）
  *
  *	Adds a notifier to a blocking notifier chain.
  *	Must be called in process context.
@@ -227,10 +229,11 @@ int blocking_notifier_chain_register(struct blocking_notifier_head *nh,
 	 * This code gets used during boot-up, when task switching is
 	 * not yet working and interrupts must remain disabled.  At
 	 * such times we must not call down_write().
+	 * 如果系统处于重启（rebooting）状态，那么就直接调用 notifier_chain_register
 	 */
 	if (unlikely(system_state == SYSTEM_BOOTING))
 		return notifier_chain_register(&nh->head, n);
-
+	// 被读写信号量（read/write semaphore）所保护
 	down_write(&nh->rwsem);
 	ret = notifier_chain_register(&nh->head, n);
 	up_write(&nh->rwsem);
@@ -289,9 +292,9 @@ EXPORT_SYMBOL_GPL(blocking_notifier_call_chain_robust);
 
 /**
  *	blocking_notifier_call_chain - Call functions in a blocking notifier chain
- *	@nh: Pointer to head of the blocking notifier chain
- *	@val: Value passed unmodified to notifier function
- *	@v: Pointer passed unmodified to notifier function
+ *	@nh: 通知链表的头部
+ *	@val: 通知的类型
+ *	@v: 一个输入参数，可能会被回调处理函数使用
  *
  *	Calls each function in a notifier chain in turn.  The functions
  *	run in a process context, so they are allowed to block.
@@ -314,6 +317,7 @@ int blocking_notifier_call_chain(struct blocking_notifier_head *nh,
 	 * is, we re-check the list after having taken the lock anyway:
 	 */
 	if (rcu_access_pointer(nh->head)) {
+		// 使用读写信号量进行了保护
 		down_read(&nh->rwsem);
 		ret = notifier_call_chain(&nh->head, val, v, -1, NULL);
 		up_read(&nh->rwsem);

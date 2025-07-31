@@ -572,6 +572,7 @@ ssize_t kernel_write(struct file *file, const void *buf, size_t count,
 }
 EXPORT_SYMBOL(kernel_write);
 
+// 向指定文件的指定位置写入指定缓冲中的数据
 ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_t *pos)
 {
 	ssize_t ret;
@@ -651,6 +652,7 @@ ssize_t ksys_write(unsigned int fd, const char __user *buf, size_t count)
 		ret = vfs_write(f.file, buf, count, ppos);
 		if (ret >= 0 && ppos)
 			f.file->f_pos = pos;
+		// 解锁在共享文件描述符的线程并发写文件时保护文件位置的互斥量 f_pos_lock
 		fdput_pos(f);
 	}
 

@@ -90,31 +90,42 @@ struct module;
  * The pointer to the clocksource itself is handed to the read
  * callback. If you need extra information there you can wrap struct
  * clocksource into your own struct. Depending on the amount of
- * information you need you should consider to cache line align that
- * structure.
+ * information you need you should consider to cache line align that structure.
+ * clocksource_wangs
  */
 struct clocksource {
+	// 用于返回由 clocksource 框架选定的最佳计数器的当前值 jiffies_read read_tsc
 	u64			(*read)(struct clocksource *cs);
+	// 确保在处理非 64 位计数器的值进行减法操作时，不需要额外的溢出处理逻辑
 	u64			mask;
+	// 这两个字段是与时钟源相关的数学计算的基础，用于将每个时钟源的时间值转换成通用单位。
+	// 换句话说，这两个字段帮助我们将抽象的机器时间单位转换为纳秒（nanoseconds）
 	u32			mult;
 	u32			shift;
+	// 当前时钟源允许的最大空闲时间（单位是纳秒）
 	u64			max_idle_ns;
+	// 允许对 mult 值的最大调整范围
 	u32			maxadj;
 	u32			uncertainty_margin;
 #ifdef CONFIG_ARCH_CLOCKSOURCE_DATA
 	struct arch_clocksource_data archdata;
 #endif
 	u64			max_cycles;
+	// 时钟源的名称
 	const char		*name;
 	struct list_head	list;
+	// 帮助内核选择最佳时钟源
 	int			rating;
 	enum clocksource_ids	id;
 	enum vdso_clock_mode	vdso_clock_mode;
 	unsigned long		flags;
-
+	// 启用时钟源
 	int			(*enable)(struct clocksource *cs);
+	// 禁用时钟源
 	void			(*disable)(struct clocksource *cs);
+	// 挂起时钟源
 	void			(*suspend)(struct clocksource *cs);
+	// 恢复时钟源
 	void			(*resume)(struct clocksource *cs);
 	void			(*mark_unstable)(struct clocksource *cs);
 	void			(*tick_stable)(struct clocksource *cs);
@@ -126,6 +137,7 @@ struct clocksource {
 	u64			cs_last;
 	u64			wd_last;
 #endif
+	// 该时钟源所属的内核模块引用
 	struct module		*owner;
 };
 

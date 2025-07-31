@@ -199,11 +199,13 @@ static u32 __init search_agp_bridge(u32 *order, int *valid_agp)
 	int bus, slot, func;
 
 	/* Poor man's PCI discovery */
+	//每个PCI域可以承载多达 256 条总线，并且每条总线可以承载多达32个设备
 	for (bus = 0; bus < 256; bus++) {
 		for (slot = 0; slot < 32; slot++) {
 			for (func = 0; func < 8; func++) {
 				u32 class, cap;
 				u8 type;
+				//读取 pci 配置
 				class = read_pci_config(bus, slot, func,
 							PCI_CLASS_REVISION);
 				if (class == 0xffffffff)

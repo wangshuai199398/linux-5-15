@@ -441,7 +441,7 @@ static __init int vdso_setup(char *s)
 	return 1;
 }
 __setup("vdso=", vdso_setup);
-
+// vdso_wangs
 static int __init init_vdso(void)
 {
 	BUILD_BUG_ON(VDSO_CLOCKMODE_MAX >= 32);

@@ -133,11 +133,11 @@ struct cgroup_file {
 };
 
 /*
- * Per-subsystem/per-cgroup state maintained by the system.  This is the
- * fundamental structural building block that controllers deal with.
+ * 由系统维护的 Per-subsystem/per-cgroup 状态. 这是控制器处理的基本结构构建块.
  *
- * Fields marked with "PI:" are public and immutable and may be accessed
- * directly without synchronization.
+ * 标记为 “PI:” 的字段是公共且不可变的，可以在不进行同步的情况下直接访问
+ * 各种资源的子结构 task_group、mem_group、cpuacct，
+ * 各个cgroup子系统统一对外暴露cgroup_subsys_state，其余部分不对外暴露，只在自己的子系统内部维护和使用
  */
 struct cgroup_subsys_state {
 	/* PI: the cgroup that this css is attached to */
@@ -195,12 +195,12 @@ struct cgroup_subsys_state {
  * object and speeds up fork()/exit(), since a single inc/dec and a
  * list_add()/del() can bump the reference count on the entire cgroup
  * set for a task.
+ * 可以通过 task_struct 的 css_set 字段访问 cgroup
  */
 struct css_set {
 	/*
-	 * Set of subsystem states, one for each subsystem. This array is
-	 * immutable after creation apart from the init_css_set during
-	 * subsystem registration (at boot time).
+	 * 子系统状态的集合，每个子系统对应一个状态。
+	 * 此数组在创建后是不可变的，除了在子系统注册（启动时）期间对 init_css_set 的修改
 	 */
 	struct cgroup_subsys_state *subsys[CGROUP_SUBSYS_COUNT];
 
@@ -357,7 +357,7 @@ struct cgroup_freezer_state {
 	 */
 	int nr_frozen_tasks;
 };
-
+//cgroup_wangs
 struct cgroup {
 	/* self css with NULL ->ss, points back to this cgroup */
 	struct cgroup_subsys_state self;
@@ -423,7 +423,8 @@ struct cgroup {
 	u16 old_subtree_control;
 	u16 old_subtree_ss_mask;
 
-	/* Private pointers for each registered subsystem */
+	/* 每个已注册子系统的私有指针 每一个元素代表的是一种资源控制，如cpu、cpuset、memory等 */
+	// cgroup v1 中的各种子系统都存在这里
 	struct cgroup_subsys_state __rcu *subsys[CGROUP_SUBSYS_COUNT];
 
 	struct cgroup_root *root;
@@ -454,11 +455,13 @@ struct cgroup {
 	struct cgroup *old_dom_cgrp;		/* used while enabling threaded */
 
 	/* per-cpu recursive resource statistics */
+	// cgroup v2 的 percpu 统计信息
 	struct cgroup_rstat_cpu __percpu *rstat_cpu;
 	struct list_head rstat_css_list;
 
 	/* cgroup basic resource statistics */
 	struct cgroup_base_stat last_bstat;
+	// cgroup v2 的汇总CPU统计信息
 	struct cgroup_base_stat bstat;
 	struct prev_cputime prev_cputime;	/* for printing out cputime */
 
@@ -648,7 +651,7 @@ struct cgroup_subsys {
 	void (*exit)(struct task_struct *task);
 	void (*release)(struct task_struct *task);
 	void (*bind)(struct cgroup_subsys_state *root_css);
-
+	// 标记子系统是否要提前初始化
 	bool early_init:1;
 
 	/*
@@ -676,14 +679,15 @@ struct cgroup_subsys {
 	 */
 	bool threaded:1;
 
-	/* the following two fields are initialized automatically during boot */
+	/* the following two fields are initialized automatically during boot 唯一标识 */
 	int id;
+	// 子系统的”名称“
 	const char *name;
 
 	/* optional, initialized automatically during boot if not set */
 	const char *legacy_name;
 
-	/* link to parent, protected by cgroup_lock() */
+	/* link to parent, protected by cgroup_lock() 指向 cgroup 层级结构的根 */
 	struct cgroup_root *root;
 
 	/* idr for css->id */

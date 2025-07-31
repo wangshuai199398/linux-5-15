@@ -1124,6 +1124,7 @@ SYSCALL_DEFINE2(clock_settime, const clockid_t, which_clock,
 	return kc->clock_set(which_clock, &new_tp);
 }
 
+// clock_gettime_wangs
 SYSCALL_DEFINE2(clock_gettime, const clockid_t, which_clock,
 		struct __kernel_timespec __user *, tp)
 {

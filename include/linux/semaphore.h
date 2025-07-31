@@ -11,10 +11,12 @@
 #include <linux/list.h>
 #include <linux/spinlock.h>
 
-/* Please don't access any members of this structure directly */
+/* Please don't access any members of this structure directly semaphore_wangs */
 struct semaphore {
 	raw_spinlock_t		lock;
+	// 现有资源数量
 	unsigned int		count;
+	// 等待获取此锁的进程序列
 	struct list_head	wait_list;
 };
 

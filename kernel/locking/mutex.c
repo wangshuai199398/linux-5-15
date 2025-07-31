@@ -39,6 +39,11 @@
 # define MUTEX_WARN_ON(cond)
 #endif
 
+/*
+lock - 互斥锁本身
+name - 调试用的互斥锁名称
+key - 锁验证器用的key
+*/
 void
 __mutex_init(struct mutex *lock, const char *name, struct lock_class_key *key)
 {
@@ -271,11 +276,12 @@ static void __sched __mutex_lock_slowpath(struct mutex *lock);
  * deadlock debugging)
  *
  * This function is similar to (but not equivalent to) down().
+ * mutex_wangs
  */
 void __sched mutex_lock(struct mutex *lock)
 {
 	might_sleep();
-
+	// 尝试使用快速路径获取锁
 	if (!__mutex_trylock_fast(lock))
 		__mutex_lock_slowpath(lock);
 }
@@ -412,23 +418,17 @@ static inline int mutex_can_spin_on_owner(struct mutex *lock)
 /*
  * Optimistic spinning.
  *
- * We try to spin for acquisition when we find that the lock owner
- * is currently running on a (different) CPU and while we don't
- * need to reschedule. The rationale is that if the lock owner is
- * running, it is likely to release the lock soon.
+ * 我们在发现锁的持有者当前正在（另一个）CPU 上运行且当前线程不需要被调度时，会尝试通过自旋来获取这把锁。
+ * 这样做的理由是：如果锁的持有者正在运行，它很可能会很快释放这把锁。
  *
- * The mutex spinners are queued up using MCS lock so that only one
- * spinner can compete for the mutex. However, if mutex spinning isn't
- * going to happen, there is no point in going through the lock/unlock
- * overhead.
+ * 互斥锁的自旋线程（spinners）会通过 MCS 锁（队列锁）进行排队，以保证同一时间只有一个线程在尝试竞争这把锁
  *
- * Returns true when the lock was taken, otherwise false, indicating
- * that we need to jump to the slowpath and sleep.
+ * 但是，如果判断出不会进入自旋阶段，就没有必要经历锁的加/解锁过程，因为这样会带来额外的开销。
+ * 
+ * 当函数成功获取锁时返回 true；否则返回 false，表示需要进入慢路径并进入睡眠等待
  *
- * The waiter flag is set to true if the spinner is a waiter in the wait
- * queue. The waiter-spinner will spin on the lock directly and concurrently
- * with the spinner at the head of the OSQ, if present, until the owner is
- * changed to itself.
+ * 如果 waiter 标志被设置为 true，表示该自旋线程已经在等待队列中。
+ * 此时，它会直接在锁上自旋，并且如果OSQ（优化自旋队列）中还有其他线程，它会与队首线程并发竞争，直到锁的拥有者变为它自己为止。
  */
 static __always_inline bool
 mutex_optimistic_spin(struct mutex *lock, struct ww_acquire_ctx *ww_ctx,
@@ -575,6 +575,7 @@ __mutex_lock_common(struct mutex *lock, unsigned int state, unsigned int subclas
 	MUTEX_WARN_ON(lock->magic != lock);
 
 	ww = container_of(lock, struct ww_mutex, base);
+	// 启用了 wound-wait 死锁规避机制（多资源加锁时的死锁预防策略）
 	if (ww_ctx) {
 		if (unlikely(ww_ctx == READ_ONCE(ww->ctx)))
 			return -EALREADY;
@@ -591,12 +592,11 @@ __mutex_lock_common(struct mutex *lock, unsigned int state, unsigned int subclas
 		nest_lock = &ww_ctx->dep_map;
 #endif
 	}
-
+	// 禁用抢占
 	preempt_disable();
 	mutex_acquire_nest(&lock->dep_map, subclass, 0, nest_lock, ip);
-
-	if (__mutex_trylock(lock) ||
-	    mutex_optimistic_spin(lock, ww_ctx, NULL)) {
+	// 尝试加锁（无需休眠）
+	if (__mutex_trylock(lock) || mutex_optimistic_spin(lock, ww_ctx, NULL)) {
 		/* got the lock, yay! */
 		lock_acquired(&lock->dep_map, ip);
 		if (ww_ctx)
@@ -604,10 +604,11 @@ __mutex_lock_common(struct mutex *lock, unsigned int state, unsigned int subclas
 		preempt_enable();
 		return 0;
 	}
-
+	// 保护等待队列
 	raw_spin_lock(&lock->wait_lock);
 	/*
 	 * After waiting to acquire the wait_lock, try again.
+	 * 再次尝试加锁
 	 */
 	if (__mutex_trylock(lock)) {
 		if (ww_ctx)
@@ -615,7 +616,7 @@ __mutex_lock_common(struct mutex *lock, unsigned int state, unsigned int subclas
 
 		goto skip_wait;
 	}
-
+	// 加锁失败，则设置 waiter，并加入等待队列
 	debug_mutex_lock_common(lock, &waiter);
 	waiter.task = current;
 	if (use_ww_ctx)
@@ -637,6 +638,7 @@ __mutex_lock_common(struct mutex *lock, unsigned int state, unsigned int subclas
 	}
 
 	set_current_state(state);
+	// 睡眠等待获取锁（主循环）
 	for (;;) {
 		bool first;
 
@@ -653,21 +655,23 @@ __mutex_lock_common(struct mutex *lock, unsigned int state, unsigned int subclas
 		 * Check for signals and kill conditions while holding
 		 * wait_lock. This ensures the lock cancellation is ordered
 		 * against mutex_unlock() and wake-ups do not go missing.
+		 * 如果当前线程被信号中断（如 SIGINT），退出等待流程，返回 -EINTR
 		 */
 		if (signal_pending_state(state, current)) {
 			ret = -EINTR;
 			goto err;
 		}
-
+		// 检查当前线程是否应被“wound”（被更高优先级线程踢出）
 		if (ww_ctx) {
 			ret = __ww_mutex_check_kill(lock, &waiter, ww_ctx);
 			if (ret)
 				goto err;
 		}
-
+		// 当前线程没有机会加锁，只能释放等待队列锁并休眠（调度器不会抢占）
 		raw_spin_unlock(&lock->wait_lock);
+		// 此处线程挂起，直到被唤醒（例如其他线程 mutex_unlock()）
 		schedule_preempt_disabled();
-
+		// 检查自己是不是等待队列中的“队头”，队头线程会拥有“更多加锁权重”，可能获得 handoff 或优先抢锁
 		first = __mutex_waiter_is_first(lock, &waiter);
 
 		set_current_state(state);
@@ -675,11 +679,15 @@ __mutex_lock_common(struct mutex *lock, unsigned int state, unsigned int subclas
 		 * Here we order against unlock; we must either see it change
 		 * state back to RUNNING and fall through the next schedule(),
 		 * or we must see its unlock and acquire.
+		 * 路径 1：trylock or handoff
+		 *   尝试立即加锁，或者在队首线程被指定为“handoff 目标”时接收锁，如果加锁成功，break 跳出循环
+		 * 路径 2：乐观自旋
+		 *   如果我是等待队列的第一个线程，并且目标锁是“短期竞争型”，可以做一次 乐观自旋
+		 *   mutex_optimistic_spin 会在短时间内自旋几次，若锁很快释放，可以避免休眠开销
 		 */
-		if (__mutex_trylock_or_handoff(lock, first) ||
-		    (first && mutex_optimistic_spin(lock, ww_ctx, &waiter)))
+		if (__mutex_trylock_or_handoff(lock, first) || (first && mutex_optimistic_spin(lock, ww_ctx, &waiter)))
 			break;
-
+		// 再次尝试获取等待队列锁；重复整个流程（尝试加锁、检查信号、挂起……）
 		raw_spin_lock(&lock->wait_lock);
 	}
 	raw_spin_lock(&lock->wait_lock);
@@ -695,7 +703,7 @@ acquired:
 		    !__mutex_waiter_is_first(lock, &waiter))
 			__ww_mutex_check_waiters(lock, ww_ctx);
 	}
-
+	// 从等待队列中移除自己
 	__mutex_remove_waiter(lock, &waiter);
 
 	debug_mutex_free_waiter(&waiter);

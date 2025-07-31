@@ -148,7 +148,7 @@ static inline void update_load_sub(struct load_weight *lw, unsigned long dec)
 	lw->weight -= dec;
 	lw->inv_weight = 0;
 }
-
+//把权重记录到调度实体，这样后面就可以通过调度实体 se->load->weight 找到进程或容器的权重信息了
 static inline void update_load_set(struct load_weight *lw, unsigned long w)
 {
 	lw->weight = w;
@@ -233,6 +233,8 @@ static void __update_inv_weight(struct load_weight *lw)
  *
  * Or, weight =< lw.weight (because lw.weight is the runqueue weight), thus
  * weight/lw.weight <= 1, and therefore our shift will also be positive.
+ * 如果weight较高，同样的实际运行时间算出来的vruntime就会偏小，这样它会在调度中获得更多的CPU
+ * 如果weight较低，那算出来的vruntime就会比实际的运行时间大，这样它在调度的过程中获得的CPU时间就会较少
  * 将实际的运行时间进行缩放
  */
 static u64 __calc_delta(u64 delta_exec, unsigned long weight, struct load_weight *lw)
@@ -647,6 +649,7 @@ static inline u64 calc_delta_fair(u64 delta, struct sched_entity *se)
 {
 	//先判断当前进程的权重是不是nice为0的进程所对应的权重
 	if (unlikely(se->load.weight != NICE_0_LOAD))
+		//根据权重和实际运行时间折算一个vruntime增量
 		delta = __calc_delta(delta, NICE_0_LOAD, &se->load);
 	//如果相等则直接返回实际运行时间
 	return delta;
@@ -865,7 +868,7 @@ static void update_curr(struct cfs_rq *cfs_rq)
 		cgroup_account_cputime(curtask, delta_exec);
 		account_group_exec_runtime(curtask, delta_exec);
 	}
-
+	//更新带宽限制
 	account_cfs_rq_runtime(cfs_rq, delta_exec);
 }
 
@@ -4779,10 +4782,11 @@ static void put_prev_entity(struct cfs_rq *cfs_rq, struct sched_entity *prev)
 	 * If still on the runqueue then deactivate_task()
 	 * was not called and update_curr() has to be done:
 	 */
+	// 运行队列带宽的更新与申请
 	if (prev->on_rq)
 		update_curr(cfs_rq);
 
-	/* throttle cfs_rqs exceeding runtime */
+	/* throttle cfs_rqs exceeding runtime 判断是否需要将容器挂起 */
 	check_cfs_rq_runtime(cfs_rq);
 
 	check_spread(cfs_rq, prev);
@@ -4791,7 +4795,7 @@ static void put_prev_entity(struct cfs_rq *cfs_rq, struct sched_entity *prev)
 		update_stats_wait_start(cfs_rq, prev);
 		/* Put 'current' back into the tree. */
 		__enqueue_entity(cfs_rq, prev);
-		/* in !on_rq case, update occurred at dequeue */
+		/* in !on_rq case, update occurred at dequeue 更新负载数据 */
 		update_load_avg(cfs_rq, prev, 0);
 	}
 	cfs_rq->curr = NULL;
@@ -4873,7 +4877,7 @@ static inline u64 default_cfs_period(void)
 {
 	return 100000000ULL;
 }
-
+//获取后面要留多长时间
 static inline u64 sched_cfs_bandwidth_slice(void)
 {
 	return (u64)sysctl_sched_cfs_bandwidth_slice * NSEC_PER_USEC;
@@ -4890,8 +4894,9 @@ void __refill_cfs_bandwidth_runtime(struct cfs_bandwidth *cfs_b)
 {
 	if (unlikely(cfs_b->quota == RUNTIME_INF))
 		return;
-
+	//充值，cfs_b->quata 是 cpu.cfs_quota_us 或 cpu.max 文件中的第一个值
 	cfs_b->runtime += cfs_b->quota;
+	//不超过cfs_b->quota 时间，即充值时间不能累计
 	cfs_b->runtime = min(cfs_b->runtime, cfs_b->quota + cfs_b->burst);
 }
 
@@ -4909,15 +4914,19 @@ static int __assign_cfs_rq_runtime(struct cfs_bandwidth *cfs_b,
 	lockdep_assert_held(&cfs_b->lock);
 
 	/* note: this is a positive sum as runtime_remaining <= 0 */
+	//申请时间数量
 	min_amount = target_runtime - cfs_rq->runtime_remaining;
-
+	//如果没有限制，则要多少给多少
 	if (cfs_b->quota == RUNTIME_INF)
 		amount = min_amount;
 	else {
+		//保证定时器是打开的，保证周期性地为任务组重置带宽时间
 		start_cfs_bandwidth(cfs_b);
-
+		//如果本周期内还有时间，则可以分配
 		if (cfs_b->runtime > 0) {
+			//确保不要透支
 			amount = min(cfs_b->runtime, min_amount);
+			//计算出min_amount后，直接向自己所属的task_group下的cfs_bandwidth申请时间，整个 task_group 下可用的时间保存在cfs_b->runtime中
 			cfs_b->runtime -= amount;
 			cfs_b->idle = 0;
 		}
@@ -4945,7 +4954,7 @@ static void __account_cfs_rq_runtime(struct cfs_rq *cfs_rq, u64 delta_exec)
 {
 	/* dock delta_exec before expiring quota (as it could span periods) */
 	cfs_rq->runtime_remaining -= delta_exec;
-
+	//如果还有剩余时间，则函数返回
 	if (likely(cfs_rq->runtime_remaining > 0))
 		return;
 
@@ -4954,9 +4963,10 @@ static void __account_cfs_rq_runtime(struct cfs_rq *cfs_rq, u64 delta_exec)
 	/*
 	 * if we're unable to extend our runtime we resched so that the active
 	 * hierarchy can be throttled
+	 * 调用assign_cfs_rq_runtime申请时间余额
 	 */
 	if (!assign_cfs_rq_runtime(cfs_rq) && likely(cfs_rq->curr))
-		resched_curr(rq_of(cfs_rq));
+		resched_curr(rq_of(cfs_rq));//没申请成功，将其调度出去
 }
 
 static __always_inline
@@ -5056,7 +5066,7 @@ static bool throttle_cfs_rq(struct cfs_rq *cfs_rq)
 
 	if (!dequeue)
 		return false;  /* Throttle no longer required. */
-
+	// 1. 查找所属的 task_group 下的 se
 	se = cfs_rq->tg->se[cpu_of(rq_of(cfs_rq))];
 
 	/* freeze hierarchy runnable averages while throttled */
@@ -5066,6 +5076,7 @@ static bool throttle_cfs_rq(struct cfs_rq *cfs_rq)
 
 	task_delta = cfs_rq->h_nr_running;
 	idle_task_delta = cfs_rq->idle_h_nr_running;
+	// 2. 遍历每一个可调度实体，并从隶属的 cfs_rq 中删除
 	for_each_sched_entity(se) {
 		struct cfs_rq *qcfs_rq = cfs_rq_of(se);
 		/* throttled entity or throttle-on-deactivate */
@@ -5111,6 +5122,7 @@ done:
 	 * Note: distribution will already see us throttled via the
 	 * throttled-list.  rq->lock protects completion.
 	 */
+	// 3. 设置一些 throttled 信息
 	cfs_rq->throttled = 1;
 	cfs_rq->throttled_clock = rq_clock(rq);
 	return true;
@@ -5270,6 +5282,7 @@ static int do_sched_cfs_period_timer(struct cfs_bandwidth *cfs_b, int overrun, u
 	cfs_b->nr_periods += overrun;
 
 	/* Refill extra burst quota even if cfs_b->idle */
+	//分配带宽时间
 	__refill_cfs_bandwidth_runtime(cfs_b);
 
 	/*
@@ -5345,6 +5358,7 @@ static int runtime_refresh_within(struct cfs_bandwidth *cfs_b, u64 min_expire)
 	return 0;
 }
 
+//启动 slack_timer
 static void start_cfs_slack_bandwidth(struct cfs_bandwidth *cfs_b)
 {
 	u64 min_left = cfs_bandwidth_slack_period + min_bandwidth_expiration;
@@ -5356,27 +5370,32 @@ static void start_cfs_slack_bandwidth(struct cfs_bandwidth *cfs_b)
 	/* don't push forwards an existing deferred unthrottle */
 	if (cfs_b->slack_started)
 		return;
+	//启动 slack_timer
 	cfs_b->slack_started = true;
-
+	//slack_timer 的延迟回调时间是 cfs_bandwidth_slack_period，值是5ms，这就比 period_timer 实时多了
 	hrtimer_start(&cfs_b->slack_timer,
 			ns_to_ktime(cfs_bandwidth_slack_period),
 			HRTIMER_MODE_REL);
 }
 
 /* we know any runtime found here is valid as update_curr() precedes return */
+//将申请但没用完的时间返还给task_group的全局时间池
 static void __return_cfs_rq_runtime(struct cfs_rq *cfs_rq)
 {
 	struct cfs_bandwidth *cfs_b = tg_cfs_bandwidth(cfs_rq->tg);
+	//给自己留一点，min_cfs_rq_runtime是1ms，至少保留1ms时间给自己
 	s64 slack_runtime = cfs_rq->runtime_remaining - min_cfs_rq_runtime;
 
 	if (slack_runtime <= 0)
 		return;
 
 	raw_spin_lock(&cfs_b->lock);
+	//剩下的 slack_runtime 时间返还到全局时间池cfs_b->runtime
 	if (cfs_b->quota != RUNTIME_INF) {
 		cfs_b->runtime += slack_runtime;
 
 		/* we are under rq->lock, defer unthrottling using a timer */
+		//如果时间又足够多了，并且还有进程被限制则调用start_cfs_slack_bandwidth来开启slack_timer，尝试解除进程CPU限制
 		if (cfs_b->runtime > sched_cfs_bandwidth_slice() &&
 		    !list_empty(&cfs_b->throttled_cfs_rq))
 			start_cfs_slack_bandwidth(cfs_b);
@@ -5469,11 +5488,12 @@ static void sync_throttle(struct task_group *tg, int cpu)
 }
 
 /* conditionally throttle active cfs_rq's from put_prev_entity() */
+//检测task_group的带宽是否已经耗尽，如果是调用throttle_cfs_rq将进程从运行队列中拿下来
 static bool check_cfs_rq_runtime(struct cfs_rq *cfs_rq)
 {
 	if (!cfs_bandwidth_used())
 		return false;
-
+	//判断时间余额是不是已经用完了
 	if (likely(!cfs_rq->runtime_enabled || cfs_rq->runtime_remaining > 0))
 		return false;
 
@@ -5487,6 +5507,7 @@ static bool check_cfs_rq_runtime(struct cfs_rq *cfs_rq)
 	return throttle_cfs_rq(cfs_rq);
 }
 
+// 对cgroup解除CPU限制，把cgroup重新放回其父cgroup的运行队列中
 static enum hrtimer_restart sched_cfs_slack_timer(struct hrtimer *timer)
 {
 	struct cfs_bandwidth *cfs_b =
@@ -5499,6 +5520,7 @@ static enum hrtimer_restart sched_cfs_slack_timer(struct hrtimer *timer)
 
 extern const u64 max_cfs_quota_period;
 
+// 周期性地为任务组分配带宽时间，并且解挂当前任务组中所有挂起的队列
 static enum hrtimer_restart sched_cfs_period_timer(struct hrtimer *timer)
 {
 	struct cfs_bandwidth *cfs_b =
@@ -5553,7 +5575,7 @@ static enum hrtimer_restart sched_cfs_period_timer(struct hrtimer *timer)
 
 	return idle ? HRTIMER_NORESTART : HRTIMER_RESTART;
 }
-
+// cgroup_wangs
 void init_cfs_bandwidth(struct cfs_bandwidth *cfs_b)
 {
 	raw_spin_lock_init(&cfs_b->lock);
@@ -5563,8 +5585,10 @@ void init_cfs_bandwidth(struct cfs_bandwidth *cfs_b)
 	cfs_b->burst = 0;
 
 	INIT_LIST_HEAD(&cfs_b->throttled_cfs_rq);
+	// 初始化period_timer并设置回调函数
 	hrtimer_init(&cfs_b->period_timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS_PINNED);
 	cfs_b->period_timer.function = sched_cfs_period_timer;
+	// 初始化slack_timer并设置回调函数
 	hrtimer_init(&cfs_b->slack_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	cfs_b->slack_timer.function = sched_cfs_slack_timer;
 	cfs_b->slack_started = false;
@@ -5575,7 +5599,7 @@ static void init_cfs_rq_runtime(struct cfs_rq *cfs_rq)
 	cfs_rq->runtime_enabled = 0;
 	INIT_LIST_HEAD(&cfs_rq->throttled_list);
 }
-
+// 打开 period_timer 定时器 进行充值的
 void start_cfs_bandwidth(struct cfs_bandwidth *cfs_b)
 {
 	lockdep_assert_held(&cfs_b->lock);
@@ -5584,6 +5608,7 @@ void start_cfs_bandwidth(struct cfs_bandwidth *cfs_b)
 		return;
 
 	cfs_b->period_active = 1;
+	//cfs_b->period表示触发的延迟时间，也就是在cgroup中设置的period，一般为100ms
 	hrtimer_forward_now(&cfs_b->period_timer, cfs_b->period);
 	hrtimer_start_expires(&cfs_b->period_timer, HRTIMER_MODE_ABS_PINNED);
 }
@@ -5931,6 +5956,7 @@ static void set_next_buddy(struct sched_entity *se);
  * The dequeue_task method is called before nr_running is
  * decreased. We remove the task from the rbtree and
  * update the fair scheduling stats:
+ * 任务阻塞时的调用链
  * 删除任务队列
  */
 static void dequeue_task_fair(struct rq *rq, struct task_struct *p, int flags)
@@ -7547,7 +7573,7 @@ again:
 	 * Therefore attempt to avoid putting and setting the entire cgroup
 	 * hierarchy, only change the part that actually changes.
 	 */
-
+	//选择下一个调度的进程
 	do {
 		//取出当前正在运行的任务 curr
 		struct sched_entity *curr = cfs_rq->curr;
@@ -7592,7 +7618,7 @@ again:
 	 * Since we haven't yet done put_prev_entity and if the selected task
 	 * is a different task than we started out with, try and touch the
 	 * least amount of cfs_rqs.
-	 * uct，如果发现继任和前任不一样，这就说明有一个更需要运行的进程了，就需要更新红黑树
+	 * uct，如果选出的进程和上一个进程不同，这就说明有一个更需要运行的进程了，就需要更新红黑树
 	 */
 	if (prev != p) {
 		struct sched_entity *pse = &prev->se;
@@ -7602,7 +7628,7 @@ again:
 			int pse_depth = pse->depth;
 
 			if (se_depth <= pse_depth) {
-				//放回红黑树，会找到相应的位置
+				//对要放弃CPU的进程执行一些处理，放回红黑树，会找到相应的位置
 				put_prev_entity(cfs_rq_of(pse), pse);
 				pse = parent_entity(pse);
 			}
@@ -11418,6 +11444,7 @@ out:
 /*
  * run_rebalance_domains is triggered when needed from the scheduler tick.
  * Also triggered for nohz idle balancing (with nohz_balancing_kick set).
+ * 重新平衡当前 CPU 上的运行队列（run queue）
  */
 static __latent_entropy void run_rebalance_domains(struct softirq_action *h)
 {
@@ -12051,6 +12078,7 @@ static int __sched_group_set_shares(struct task_group *tg, unsigned long shares)
 		update_rq_clock(rq);
 		for_each_sched_entity(se) {
 			update_load_avg(cfs_rq_of(se), se, UPDATE_TG);
+			//把权重记录到 se 上
 			update_cfs_group(se);
 		}
 		rq_unlock_irqrestore(rq, &rf);
@@ -12059,9 +12087,8 @@ static int __sched_group_set_shares(struct task_group *tg, unsigned long shares)
 	return 0;
 }
 /*
-但是这个时候别忘了，我们还没有将 CPU 的文件夹下面的 tasks 文件写入进程号呢。
+把权重信息 shares 记录到调度实体 se 上去
 写入一个进程号到 tasks 文件里面，按照 cgroup1_base_files 里面的定义，我们应该调用 cgroup1_tasks_write
-
 */
 int sched_group_set_shares(struct task_group *tg, unsigned long shares)
 {
@@ -12261,6 +12288,7 @@ void show_numa_stats(struct task_struct *p, struct seq_file *m)
 __init void init_sched_fair_class(void)
 {
 #ifdef CONFIG_SMP
+	//softirq_wangs 注册软中断 重新平衡当前CPU上的运行队列
 	open_softirq(SCHED_SOFTIRQ, run_rebalance_domains);
 
 #ifdef CONFIG_NO_HZ_COMMON

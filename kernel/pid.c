@@ -71,11 +71,14 @@ int pid_max_max = PID_MAX_LIMIT;
  * first use and are never deallocated. This way a low pid_max
  * value does not cause lots of bitmaps to be allocated, but
  * the scheme scales to up to 4 million PIDs, runtime.
+ * pid_wangs
  */
 struct pid_namespace init_pid_ns = {
 	.ns.count = REFCOUNT_INIT(2),
+	//记录pid分配情况的基数树
 	.idr = IDR_INIT(init_pid_ns.idr),
 	.pid_allocated = PIDNS_ADDING,
+	//pid命名空间层级
 	.level = 0,
 	.child_reaper = &init_task,
 	.user_ns = &init_user_ns,
@@ -330,6 +333,7 @@ static struct pid **task_pid_ptr(struct task_struct *task, enum pid_type type)
 
 /*
  * attach_pid() must be called with the tasklist_lock write-held.
+ * 将某个进程（task_struct）与其对应的 PID（进程 ID）进行绑定
  */
 void attach_pid(struct task_struct *task, enum pid_type type)
 {
@@ -413,6 +417,7 @@ EXPORT_SYMBOL(pid_task);
 /*
  * Must be called under rcu_read_lock().
  * 根据 PID 和命名空间找到对应进程（task_struct） 的函数
+ * 根据传入的 PID，返回对应进程的 task_struct 指针
  */
 struct task_struct *find_task_by_pid_ns(pid_t nr, struct pid_namespace *ns)
 {
@@ -472,7 +477,11 @@ struct pid *find_get_pid(pid_t nr)
 	return pid;
 }
 EXPORT_SYMBOL_GPL(find_get_pid);
-
+/*
+pid: 进程中记录的pid对象（保存了各个层次申请到的pid号）
+ns:  指定的PID命名空间（通过task_active_pid_ns获取）
+  根据PID命名空间里记录的层次level取得容器进程的当前pid了
+*/
 pid_t pid_nr_ns(struct pid *pid, struct pid_namespace *ns)
 {
 	struct upid *upid;
@@ -486,7 +495,7 @@ pid_t pid_nr_ns(struct pid *pid, struct pid_namespace *ns)
 	return nr;
 }
 EXPORT_SYMBOL_GPL(pid_nr_ns);
-//获取一个 struct pid 在特定命名空间中的虚拟 PID（vpid），通常用于查看一个任务在其进程命名空间（PID namespace）中的编号
+//获取一个任务在特定命名空间（PID namespace）中的进程号
 pid_t pid_vnr(struct pid *pid)
 {
 	return pid_nr_ns(pid, task_active_pid_ns(current));

@@ -432,7 +432,7 @@ void __init cleanup_highmap(void)
 	 */
 	if (max_pfn_mapped)
 		vaddr_end = __START_KERNEL_map + (max_pfn_mapped << PAGE_SHIFT);
-
+	//现在，因为我们已经定义了内核映射的开始和结束位置，所以我们在循环中遍历所有内核页中间目录条目, 并且清除不在 _text 和 end 区段中的条目
 	for (; vaddr + PMD_SIZE - 1 < vaddr_end; pmd++, vaddr += PMD_SIZE) {
 		if (pmd_none(*pmd))
 			continue;

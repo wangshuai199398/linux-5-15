@@ -84,8 +84,11 @@ struct x86_init_paging {
  * @wallclock_init:		init the wallclock device
  */
 struct x86_init_timers {
+	// 为启动 CPU 设置每个 CPU 的时钟事件设备
 	void (*setup_percpu_clockev)(void);
+	// 初始化平台定时器
 	void (*timer_init)(void);
+	// 初始化实时时钟（wallclock）设备
 	void (*wallclock_init)(void);
 };
 

@@ -30,7 +30,7 @@ static __always_inline u16 old_encode_dev(dev_t dev)
 {
 	return (MAJOR(dev) << 8) | MINOR(dev);
 }
-
+//后面 initrd 会通过 do_mount_root 函数挂载到这个根设备上。其中主设备号用来识别和这个设备有关的驱动。 次设备号用来表示使用该驱动的各设备
 static __always_inline dev_t old_decode_dev(u16 val)
 {
 	return MKDEV((val >> 8) & 255, val & 255);

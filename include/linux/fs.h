@@ -623,11 +623,15 @@ struct fsnotify_mark_connector;
  * Keep mostly read-only and often accessed (especially for
  * the RCU path lookup and 'stat' data) fields at the beginning
  * of the 'struct inode'
+ * inode_wangs
  */
 struct inode {
+	// inode 的权限
 	umode_t			i_mode;
 	unsigned short		i_opflags;
+	// inode 拥有者的id
 	kuid_t			i_uid;
+	// inode 所属的群组id
 	kgid_t			i_gid;
 	unsigned int		i_flags;
 
@@ -657,15 +661,21 @@ struct inode {
 		const unsigned int i_nlink;
 		unsigned int __i_nlink;
 	};
+	// 若是设备文件，此字段将记录设备的设备号
 	dev_t			i_rdev;
+	// inode 所代表的文件大小
 	loff_t			i_size;
+	// inode 最近一次的存取时间
 	struct timespec64	i_atime;
+	// inode 最近一次的修改时间
 	struct timespec64	i_mtime;
+	// inode 的产生时间
 	struct timespec64	i_ctime;
 	spinlock_t		i_lock;	/* i_blocks, i_bytes, maybe i_size */
 	unsigned short          i_bytes;
 	u8			i_blkbits;
 	u8			i_write_hint;
+	// inode 所使用的block数，一个block为512字节
 	blkcnt_t		i_blocks;
 
 #ifdef __NEED_I_SIZE_ORDERED
@@ -713,6 +723,7 @@ struct inode {
 	struct list_head	i_devices;
 	union {
 		struct pipe_inode_info	*i_pipe;
+		// 若是字符设备，为其对应的cdev结构体指针，若是块设备，为其对应的cdev结构体指针
 		struct cdev		*i_cdev;
 		char			*i_link;
 		unsigned		i_dir_seq;
@@ -920,12 +931,12 @@ static inline void i_size_write(struct inode *inode, loff_t i_size)
 	inode->i_size = i_size;
 #endif
 }
-
+// 获取次设备号
 static inline unsigned iminor(const struct inode *inode)
 {
 	return MINOR(inode->i_rdev);
 }
-
+// 获取主设备号
 static inline unsigned imajor(const struct inode *inode)
 {
 	return MAJOR(inode->i_rdev);
@@ -965,7 +976,9 @@ static inline int ra_has_index(struct file_ra_state *ra, pgoff_t index)
 	return (index >= ra->start &&
 		index <  ra->start + ra->size);
 }
-
+/*
+file 结构体描述一个程序里已打开的文件 file_wangs
+*/
 struct file {
 	union {
 		struct llist_node	fu_llist;
@@ -973,6 +986,7 @@ struct file {
 	} f_u;
 	struct path		f_path;
 	struct inode		*f_inode;	/* cached value */
+	// 和文件关联的操作
 	const struct file_operations	*f_op;
 
 	/*
@@ -982,9 +996,12 @@ struct file {
 	spinlock_t		f_lock;
 	enum rw_hint		f_write_hint;
 	atomic_long_t		f_count;
+	// 文件标志，如 O_RDONLY、O_NONBLOCK、O_SYNC
 	unsigned int 		f_flags;
+	// 文件读写方式，FMODE_READ 和 FMODE_WRITE
 	fmode_t			f_mode;
 	struct mutex		f_pos_lock;
+	// 当前读写位置
 	loff_t			f_pos;
 	struct fown_struct	f_owner;
 	const struct cred	*f_cred;
@@ -994,7 +1011,7 @@ struct file {
 #ifdef CONFIG_SECURITY
 	void			*f_security;
 #endif
-	/* needed for tty driver, and maybe others */
+	/* needed for tty driver, and maybe others 文件私有数据 */
 	void			*private_data;
 
 #ifdef CONFIG_EPOLL
@@ -2741,10 +2758,15 @@ static inline int break_layout(struct inode *inode, bool wait)
 /* fs/open.c */
 struct audit_names;
 struct filename {
+	// 指向内核空间的文件路径指针
 	const char		*name;	/* pointer to actual string */
+	// 用户空间的原始指针
 	const __user char	*uptr;	/* original userland pointer */
+	// 引用计数
 	int			refcnt;
+	// 来自 audit 上下文的文件名
 	struct audit_names	*aname;
+	// 文件名，长度小于 PATH_MAX
 	const char		iname[];
 };
 static_assert(offsetof(struct filename, iname) % sizeof(long) == 0);

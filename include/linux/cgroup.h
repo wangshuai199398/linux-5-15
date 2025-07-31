@@ -803,10 +803,11 @@ static inline void cgroup_account_cputime_field(struct task_struct *task,
 						u64 delta_exec)
 {
 	struct cgroup *cgrp;
-
+	//容器cpu利用率统计 cgroup v1在这里统计
 	cpuacct_account_field(task, index, delta_exec);
 
 	rcu_read_lock();
+	//cgroup v2在这里统计
 	cgrp = task_dfl_cgroup(task);
 	if (cgroup_parent(cgrp))
 		__cgroup_account_cputime_field(cgrp, index, delta_exec);

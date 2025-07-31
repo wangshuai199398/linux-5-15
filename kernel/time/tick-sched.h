@@ -3,7 +3,7 @@
 #define _TICK_SCHED_H
 
 #include <linux/hrtimer.h>
-
+// 当前所处的 工作模式
 enum tick_device_mode {
 	TICKDEV_MODE_PERIODIC,
 	TICKDEV_MODE_ONESHOT,

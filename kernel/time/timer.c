@@ -197,6 +197,7 @@ EXPORT_SYMBOL(jiffies_64);
 
 struct timer_base {
 	raw_spinlock_t		lock;
+	// 指向当前正在运行的定时器
 	struct timer_list	*running_timer;
 #ifdef CONFIG_PREEMPT_RT
 	spinlock_t		expiry_lock;
@@ -1949,7 +1950,7 @@ static inline void __run_timers(struct timer_base *base)
 
 	timer_base_lock_expiry(base);
 	raw_spin_lock_irq(&base->lock);
-
+	// 进入一个循环，直到 timer_jiffies 大于当前的 jiffies 值为止
 	while (time_after_eq(jiffies, base->clk) &&
 	       time_after_eq(jiffies, base->next_expiry)) {
 		levels = collect_expired_timers(base, heads);
@@ -1974,9 +1975,11 @@ static inline void __run_timers(struct timer_base *base)
 
 /*
  * This function runs timers and the timer-tq in bottom half context.
+ * 处理软件动态定时器。Linux 内核不会在处理硬件定时器中断时直接执行这些操作，因为这是一个耗时的过程
  */
 static __latent_entropy void run_timer_softirq(struct softirq_action *h)
 {
+	// 获取当前处理器上的动态定时器结构
 	struct timer_base *base = this_cpu_ptr(&timer_bases[BASE_STD]);
 
 	__run_timers(base);
@@ -2048,35 +2051,22 @@ static void process_timeout(struct timer_list *t)
 }
 
 /**
- * schedule_timeout - sleep until timeout
- * @timeout: timeout value in jiffies
+ * 休眠直到超时
+ * @timeout: 以 jiffies 为单位的超时时间
  *
- * Make the current task sleep until @timeout jiffies have elapsed.
- * The function behavior depends on the current task state
- * (see also set_current_state() description):
+ * 让当前任务休眠，直到指定的 @timeout jiffies 时间过去。该函数的行为依赖于当前任务的状态（参见 set_current_state() 的描述）：
  *
- * %TASK_RUNNING - the scheduler is called, but the task does not sleep
- * at all. That happens because sched_submit_work() does nothing for
- * tasks in %TASK_RUNNING state.
+ * %TASK_RUNNING - 调度器会被调用，但任务根本不会进入休眠，这是因为对于处于 %TASK_RUNNING 状态的任务，sched_submit_work() 不会执行任何操作
  *
- * %TASK_UNINTERRUPTIBLE - at least @timeout jiffies are guaranteed to
- * pass before the routine returns unless the current task is explicitly
- * woken up, (e.g. by wake_up_process()).
+ * %TASK_UNINTERRUPTIBLE 不可中断睡眠 - 除非当前任务被显式唤醒（例如通过 wake_up_process()），否则该函数至少会等待 @timeout 指定的时间后才返回
  *
- * %TASK_INTERRUPTIBLE - the routine may return early if a signal is
- * delivered to the current task or the current task is explicitly woken
- * up.
+ * %TASK_INTERRUPTIBLE - 如果当前任务收到信号或被显式唤醒，该函数可能会提前返回
  *
- * The current task state is guaranteed to be %TASK_RUNNING when this
- * routine returns.
+ * 调用该函数返回时，当前任务的状态保证为 %TASK_RUNNING
  *
- * Specifying a @timeout value of %MAX_SCHEDULE_TIMEOUT will schedule
- * the CPU away without a bound on the timeout. In this case the return
- * value will be %MAX_SCHEDULE_TIMEOUT.
+ * 如果 @timeout 的值为 %MAX_SCHEDULE_TIMEOUT，那么会将 CPU 调度出去，但不会设置超时时间限制。在这种情况下，返回值将是 %MAX_SCHEDULE_TIMEOUT
  *
- * Returns 0 when the timer has expired otherwise the remaining time in
- * jiffies will be returned. In all cases the return value is guaranteed
- * to be non-negative.
+ * 返回值：若定时器已超时，则返回 0；若提前返回，则返回 剩余的 jiffies 时间；所有情况下，返回值保证为非负数。
  */
 signed long __sched schedule_timeout(signed long timeout)
 {
@@ -2232,6 +2222,7 @@ int timers_dead_cpu(unsigned int cpu)
 
 #endif /* CONFIG_HOTPLUG_CPU */
 
+// 为每个处理器初始化  结构
 static void __init init_timer_cpu(int cpu)
 {
 	struct timer_base *base;
@@ -2257,9 +2248,10 @@ static void __init init_timer_cpus(void)
 
 void __init init_timers(void)
 {
+	// 对系统中每一个可能的处理器调用一次 init_timer_cpu 函数
 	init_timer_cpus();
 	posix_cputimers_init_work();
-	//这行代码将 run_timer_softirq 注册为 TIMER_SOFTIRQ 类型软中断的处理函数
+	//这行代码将 run_timer_softirq 注册为 TIMER_SOFTIRQ 类型软中断的处理函数 softirq_wangs
 	open_softirq(TIMER_SOFTIRQ, run_timer_softirq);
 }
 

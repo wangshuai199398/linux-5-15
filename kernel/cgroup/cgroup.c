@@ -125,7 +125,12 @@ DEFINE_PERCPU_RWSEM(cgroup_threadgroup_rwsem);
  */
 static struct workqueue_struct *cgroup_destroy_wq;
 
-/* generate an array of cgroup subsystem pointers */
+/* generate an array of cgroup subsystem pointers 
+接受一个参数(子系统名称)，并定义了 cgroup 子系统的 cgroup_subsys数组
+来看看 &_x ## _cgrp_subsys 表达式，在 C 语言的宏定义中，## 操作符连接左右两边的表达式，
+所以当我们把 cpuset、cpu 等参数传给 SUBSYS 宏时，其实是在定义 cpuset_cgrp_subsys、cp_cgrp_subsys
+在 kernel/cpuset.c 源文件中你可以看到这些结构体的定义,如 cpuset_cgrp_subsys
+*/
 #define SUBSYS(_x) [_x ## _cgrp_id] = &_x ## _cgrp_subsys,
 struct cgroup_subsys *cgroup_subsys[] = {
 #include <linux/cgroup_subsys.h>
@@ -3182,6 +3187,7 @@ static int cgroup_apply_control_enable(struct cgroup *cgrp)
 	int ssid, ret;
 
 	cgroup_for_each_live_descendant_pre(dsct, d_css, cgrp) {
+		//遍历每一种cgroup子系统
 		for_each_subsys(ss, ssid) {
 			struct cgroup_subsys_state *css = cgroup_css(dsct, ss);
 
@@ -3189,6 +3195,7 @@ static int cgroup_apply_control_enable(struct cgroup *cgrp)
 				continue;
 
 			if (!css) {
+				//创建相应的对象
 				css = css_create(dsct, ss);
 				if (IS_ERR(css))
 					return PTR_ERR(css);
@@ -3660,7 +3667,7 @@ static int __maybe_unused cgroup_extra_stat_show(struct seq_file *seq,
 	css_put(css);
 	return ret;
 }
-
+// 查看 cpu.stat
 static int cpu_stat_show(struct seq_file *seq, void *v)
 {
 	struct cgroup __maybe_unused *cgrp = seq_css(seq)->cgroup;
@@ -5047,7 +5054,7 @@ static ssize_t cgroup_threads_write(struct kernfs_open_file *of,
 	return __cgroup_procs_write(of, buf, false) ?: nbytes;
 }
 
-/* cgroup core interface files for the default hierarchy */
+/* cgroup core interface files for the default hierarchy cgroup_wangs */
 static struct cftype cgroup_base_files[] = {
 	{
 		.name = "cgroup.type",
@@ -5368,7 +5375,7 @@ static struct cgroup_subsys_state *css_create(struct cgroup *cgrp,
 	int err;
 
 	lockdep_assert_held(&cgroup_mutex);
-
+	// cpu_cgroup_css_alloc mem_cgroup_css_alloc
 	css = ss->css_alloc(parent_css);
 	if (!css)
 		css = ERR_PTR(-ENOMEM);
@@ -5559,7 +5566,7 @@ int cgroup_mkdir(struct kernfs_node *parent_kn, const char *name, umode_t mode)
 	/* do not accept '\n' to prevent making /proc/<pid>/cgroup unparsable */
 	if (strchr(name, '\n'))
 		return -EINVAL;
-
+	//查找父cgroup
 	parent = cgroup_kn_lock_live(parent_kn, false);
 	if (!parent)
 		return -ENODEV;
@@ -5568,7 +5575,7 @@ int cgroup_mkdir(struct kernfs_node *parent_kn, const char *name, umode_t mode)
 		ret = -EAGAIN;
 		goto out_unlock;
 	}
-
+	//创建cgroup内核对象
 	cgrp = cgroup_create(parent, name, mode);
 	if (IS_ERR(cgrp)) {
 		ret = PTR_ERR(cgrp);
@@ -5588,7 +5595,7 @@ int cgroup_mkdir(struct kernfs_node *parent_kn, const char *name, umode_t mode)
 	ret = css_populate_dir(&cgrp->self);
 	if (ret)
 		goto out_destroy;
-
+	//执行子系统对象的创建
 	ret = cgroup_apply_control_enable(cgrp);
 	if (ret)
 		goto out_destroy;
@@ -5798,7 +5805,7 @@ int cgroup_rmdir(struct kernfs_node *kn)
 	cgroup_kn_unlock(kn);
 	return ret;
 }
-
+//cgroup_wangs
 static struct kernfs_syscall_ops cgroup_kf_syscall_ops = {
 	.show_options		= cgroup_show_options,
 	.mkdir			= cgroup_mkdir,
@@ -5806,6 +5813,10 @@ static struct kernfs_syscall_ops cgroup_kf_syscall_ops = {
 	.show_path		= cgroup_show_path,
 };
 
+/*
+使用缺省值对指定的子系统进行初始化。比如，设置层级结构的根，使用 css_alloc 回调函数为指定的子系统分配空间，
+将一个子系统链接到一个已经存在的子系统，为初始进程分配子系统等
+*/
 static void __init cgroup_init_subsys(struct cgroup_subsys *ss, bool early)
 {
 	struct cgroup_subsys_state *css;
@@ -5873,11 +5884,13 @@ int __init cgroup_init_early(void)
 	int i;
 
 	ctx.root = &cgrp_dfl_root;
+	//使用缺省的层级结构进行初始化
 	init_cgroup_root(&ctx);
+	//禁止这个 css 的引用计数
 	cgrp_dfl_root.cgrp.self.flags |= CSS_NO_REF;
-
+	// 把初始化的 css_set 分配给 init_task，它表示系统中的第一个进程
 	RCU_INIT_POINTER(init_task.cgroups, &init_css_set);
-
+	// 遍历所有已注册的子系统，给子系统分配一个唯一的标识号和名称，并且对标记为早期的子系统调用 cgroup_init_subsys 函数
 	for_each_subsys(ss, i) {
 		WARN(!ss->css_alloc || !ss->css_free || ss->name || ss->id,
 		     "invalid cgroup_subsys %d:%s css_alloc=%p css_free=%p id:name=%d:%s\n",
@@ -5890,7 +5903,7 @@ int __init cgroup_init_early(void)
 		ss->name = cgroup_subsys_name[i];
 		if (!ss->legacy_name)
 			ss->legacy_name = cgroup_subsys_name[i];
-
+		// 完成早期子系统的初始化，如 cpuset、cpu、cpuacct
 		if (ss->early_init)
 			cgroup_init_subsys(ss, true);
 	}

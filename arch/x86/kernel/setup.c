@@ -187,7 +187,7 @@ static inline void __init copy_edd(void)
 {
 }
 #endif
-
+//扩展 brk 区段
 void * __init extend_brk(size_t size, size_t align)
 {
 	size_t mask = align - 1;
@@ -219,8 +219,8 @@ static void __init reserve_brk(void)
 		memblock_reserve(__pa_symbol(_brk_start),
 				 _brk_end - _brk_start);
 
-	/* Mark brk area as locked down and no longer taking any
-	   new allocations */
+	/* Mark brk area as locked down and no longer taking any new allocations */
+	//因为在这之后我们不会再为 brk 分配内存了，我们需要使用 cleanup_highmap 函数来释放内核映射中越界的内存区域
 	_brk_start = 0;
 }
 
@@ -278,9 +278,11 @@ static void __init relocate_initrd(void)
 		relocated_ramdisk, relocated_ramdisk + ramdisk_size - 1);
 }
 
+//保留替换内核的text和data段用来初始化initrd
 static void __init early_reserve_initrd(void)
 {
 	/* Assume only end is not page aligned */
+	//获取RAM DISK的基地址、RAM DISK的大小以及RAM DISK的结束地址
 	u64 ramdisk_image = get_ramdisk_image();
 	u64 ramdisk_size  = get_ramdisk_size();
 	u64 ramdisk_end   = PAGE_ALIGN(ramdisk_image + ramdisk_size);
@@ -288,10 +290,10 @@ static void __init early_reserve_initrd(void)
 	if (!boot_params.hdr.type_of_loader ||
 	    !ramdisk_image || !ramdisk_size)
 		return;		/* No initrd provided by bootloader */
-
+	//并保留内存块将ramdisk传输到最终的内存地址，然后进行初始化
 	memblock_reserve(ramdisk_image, ramdisk_end - ramdisk_image);
 }
-
+//首先确定 initrd 的基地址和结束地址，并检查 bootloader 是否提供了 initrd
 static void __init reserve_initrd(void)
 {
 	/* Assume only end is not page aligned */
@@ -317,7 +319,7 @@ static void __init reserve_initrd(void)
 	}
 
 	relocate_initrd();
-
+	//释放原 RAM 磁盘占用的 memblock 内存
 	memblock_free(ramdisk_image, ramdisk_end - ramdisk_image);
 }
 
@@ -728,7 +730,7 @@ static void __init early_reserve_memory(void)
 	memblock_reserve(0, SZ_64K);
 
 	early_reserve_initrd();
-
+	//为 setup_data 重新映射内存并保留内存块
 	memblock_x86_reserve_range_setup_data();
 
 	reserve_ibft_region();
@@ -813,7 +815,7 @@ void __init setup_arch(char **cmdline_p)
 	early_ioremap_init();
 
 	setup_olpc_ofw_pgd();
-
+	//获取根设备的主次设备号
 	ROOT_DEV = old_decode_dev(boot_params.hdr.root_dev);
 	screen_info = boot_params.screen_info;
 	edid_info = boot_params.edid_info;
@@ -867,15 +869,16 @@ void __init setup_arch(char **cmdline_p)
 	iomem_resource.end = (1ULL << boot_cpu_data.x86_phys_bits) - 1;
 	//保存物理内存检测结果
 	e820__memory_setup();
+	//解析 setup_data，并且把 BIOS 的 EDD 信息复制到安全的地方
 	parse_setup_data();
-
+	//从 boot_params 结构中复制我们在 arch/x86/boot/edd.c 中 BIOS 的 EDD 信息到 edd 结构中
 	copy_edd();
 
 	if (!boot_params.hdr.root_flags)
 		root_mountflags &= ~MS_RDONLY;
 	//初始化init_mm
 	setup_initial_init_mm(_text, _etext, _edata, (void *)_brk_end);
-
+	//代码/数据/bss 资源的初始化
 	code_resource.start = __pa_symbol(_text);
 	code_resource.end = __pa_symbol(_etext)-1;
 	rodata_resource.start = __pa_symbol(__start_rodata);
@@ -907,7 +910,7 @@ void __init setup_arch(char **cmdline_p)
 	 * 后续在解析 early 参数期间，x86_configure_nx() 可能会再次被调用，这次是在 noexec_setup() 中，根据命令行参数中的相关选项进行设置。
 	 */
 	x86_configure_nx();
-
+	//解析内核命令行并且基于给定的参数创建不同的服务
 	parse_early_param();
 
 	if (efi_enabled(EFI_BOOT))
@@ -928,7 +931,7 @@ void __init setup_arch(char **cmdline_p)
 #endif
 
 	x86_report_nx();
-
+	//检查内置的 MPS 又称 多重处理器规范 表
 	if (acpi_mps_check()) {
 #ifdef CONFIG_X86_LOCAL_APIC
 		disable_apic = 1;
@@ -1002,25 +1005,26 @@ void __init setup_arch(char **cmdline_p)
 
 	/* How many end-of-memory variables you have, grandma! */
 	/* need this before calling reserve_initrd */
+	//计算 max_low_pfn ,这是 低端内存 或者低于第一个4GB中的最大页面帧
 	if (max_pfn > (1UL<<(32 - PAGE_SHIFT)))
 		max_low_pfn = e820__end_of_low_ram_pfn();
 	else
 		max_low_pfn = max_pfn;
-
+	//通过 __va 宏计算 高端内存 (有更高的内存直接映射上界)中的最大页帧号,并且这个宏会根据给定的物理内存返回一个虚拟地址
 	high_memory = (void *)__va(max_pfn * PAGE_SIZE - 1) + 1;
 #endif
 
 	/* 查找并保留可能存在的 启动时 SMP（对称多处理器）配置 */
 	find_smp_config();
-
+	//在早期阶段分配页表缓冲区。页表缓冲区将被放置在 brk 区段中
 	early_alloc_pgt_buf();
 
-	/* 需要在调用 e820__memblock_setup() 之前结束 brk 区域的使用（conclude brk），因为后者可能会调用 memblock_find_in_range()
-	   而这有可能会与 brk 区域发生重叠 */
+	/* 需要在调用 e820__memblock_setup() 之前结束 brk 区域的使用（conclude brk），因为后者可能会调用 memblock_find_in_range, 而这有可能会与 brk 区域发生重叠 */
+	//因为我们之前已经创建好了页面缓冲区，所以现在我们使用 reserve_brk 函数为 brk 区段保留内存块
 	reserve_brk();
 
 	cleanup_highmap();
-
+	//为 memblock 分配内存设置一个界限，这个界限可以是 ISA_END_ADDRESS 或者 0x100000
 	memblock_set_current_limit(ISA_END_ADDRESS);
 	//根据e820信息构建memblock内存分配器，开启调试和打印
 	e820__memblock_setup();
@@ -1079,7 +1083,7 @@ void __init setup_arch(char **cmdline_p)
 	if (init_ohci1394_dma_early)
 		init_ohci1394_dma_on_all_controllers();
 #endif
-	/* Allocate bigger log buffer */
+	/* Allocate bigger log buffer 设置内核循环缓冲区 */
 	setup_log_buf(1);
 
 	efi_set_secure_boot(boot_params.secure_boot);
@@ -1099,6 +1103,7 @@ void __init setup_arch(char **cmdline_p)
 	early_acpi_boot_init();
 	//内存初始化，包括numa机制初始化
 	initmem_init();
+	//为直接内存访问（DMA）分配专用区域 参数表示可保留内存的上限地址（将最大页帧号转换为字节地址）
 	dma_contiguous_reserve(max_pfn_mapped << PAGE_SHIFT);
 
 	if (boot_cpu_has(X86_FEATURE_GBPAGES))
@@ -1112,7 +1117,7 @@ void __init setup_arch(char **cmdline_p)
 
 	if (!early_xdbc_setup_hardware())
 		early_xdbc_register_console();
-
+	//初始化稀疏内存和内存区域大小
 	x86_init.paging.pagetable_init();// native_pagetable_init xen_pagetable_init 
 
 	kasan_init();
@@ -1124,7 +1129,7 @@ void __init setup_arch(char **cmdline_p)
 	sync_initial_page_table();
 
 	tboot_probe();
-
+	//为 vsyscalls 映射内存空间
 	map_vsyscall();
 
 	generic_apic_probe();
@@ -1138,7 +1143,7 @@ void __init setup_arch(char **cmdline_p)
 	/* 获取引导时的 SMP（对称多处理器）配置信息 */
 	get_smp_config();
 
-	/* 没有 ACPI 和 MP 表（mptables） 的系统，可能尚未映射本地 APIC（Local APIC），但 prefill_possible_map() 可能会需要访问它 */
+	/* 设置本地 APIC 的地址,没有 ACPI 和 MP 表（mptables） 的系统，可能尚未映射本地 APIC（Local APIC），但 prefill_possible_map() 可能会需要访问它 */
 	init_apic_mappings();
 
 	prefill_possible_map();
@@ -1152,7 +1157,7 @@ void __init setup_arch(char **cmdline_p)
 
 	e820__reserve_resources();
 	e820__register_nosave_regions(max_pfn);
-
+	//保留标准 I/O 资源（如 DMA、TIMER、FPU 等）
 	x86_init.resources.reserve_resources();// reserve_standard_io_resources
 
 	e820__setup_pci_gap();
@@ -1171,9 +1176,9 @@ void __init setup_arch(char **cmdline_p)
 	   而这会屏蔽（mask）热感中断（thermal LVT interrupt），从而在某些配置了 SMI（系统管理中断）方式的中断传送机制的机器上，导致 软死锁（soft lockups）。
 	 */
 	therm_lvt_init();
-
+	//初始化机器检查异常
 	mcheck_init();
-
+	//注册 jiffies 计时器
 	register_refined_jiffies(CLOCK_TICK_RATE);
 
 #ifdef CONFIG_EFI

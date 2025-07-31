@@ -1273,7 +1273,7 @@ int begin_new_exec(struct linux_binprm * bprm)
 	 */
 	io_uring_task_cancel();
 
-	/* 确保文件表不共享 */
+	/* 取消当前任务对文件描述符表的共享（即“解除文件共享”），确保文件表不共享，为了防止 execve 执行过程中可能出现的可执行文件文件描述符泄漏问题 */
 	retval = unshare_files();
 	if (retval)
 		goto out;
@@ -1536,6 +1536,7 @@ static struct linux_binprm *alloc_bprm(int fd, struct filename *filename)
 
 		bprm->filename = bprm->fdpath;
 	}
+	// 保存程序解释器（interpreter）的名称,当前阶段我们只是将二者设置为相同的名称，但稍后在根据程序的二进制格式加载时，interp 会被更新为实际的程序解释器名称（例如 /lib64/ld-linux-x86-64.so.2 之类）
 	bprm->interp = bprm->filename;
 	//申请一个全新的地址空间mm_struct对象，准备留给新进程使用
 	retval = bprm_mm_init(bprm);
@@ -1777,6 +1778,7 @@ static int exec_binprm(struct linux_binprm *bprm)
 	int ret, depth;
 
 	/* Need to fetch pid before load_binary changes it */
+	// 将当前任务的 PID 以及在其所属命名空间中可见的 PID 保存下来
 	old_pid = current->pid;
 	rcu_read_lock();
 	old_vpid = task_pid_nr_ns(current, task_active_pid_ns(current->parent));
@@ -1787,7 +1789,7 @@ static int exec_binprm(struct linux_binprm *bprm)
 		struct file *exec;
 		if (depth > 5)
 			return -ELOOP;
-
+		// 该函数会遍历一个包含各种二进制格式处理器的列表 支持格式: ELF, AOUT, FLAT 等
 		ret = search_binary_handler(bprm);
 		if (ret < 0)
 			return ret;
@@ -1836,7 +1838,7 @@ static int bprm_execve(struct linux_binprm *bprm,
 	retval = PTR_ERR(file);
 	if (IS_ERR(file))
 		goto out_unmark;
-
+	// 用于确定当前系统中负载最轻、可以执行新程序的处理器，并将当前进程迁移到该处理器上，以优化程序的运行效率
 	sched_exec();
 
 	bprm->file = file;

@@ -77,6 +77,7 @@
 /*
  *   gcc: https://gcc.gnu.org/onlinedocs/gcc/Common-Function-Attributes.html#index-cold-function-attribute
  *   gcc: https://gcc.gnu.org/onlinedocs/gcc/Label-Attributes.html#index-cold-label-attribute
+ *   标记此函数很少使用所以编译器必须优化此函数的大小
  */
 #define __cold                          __attribute__((__cold__))
 
@@ -140,6 +141,7 @@
  * Optional: not supported by clang
  *
  *   gcc: https://gcc.gnu.org/onlinedocs/gcc/Common-Function-Attributes.html#index-externally_005fvisible-function-attribute
+ *   含有externally_visible意思就是告诉编译器有一些过程在使用该函数或者变量，为了防止标记这个函数/变量是unusable
  */
 #if __has_attribute(__externally_visible__)
 # define __visible                      __attribute__((__externally_visible__))

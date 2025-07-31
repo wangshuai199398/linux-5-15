@@ -59,14 +59,16 @@ struct upid {
 struct pid
 {
 	refcount_t count;
+	//层级
 	unsigned int level;
 	spinlock_t lock;
-	/* lists of tasks that use this pid */
+	/* lists of tasks that use this pid 哈希链表，用于跟踪某个 PID 类型的所有任务 */
 	struct hlist_head tasks[PIDTYPE_MAX];
 	struct hlist_head inodes;
 	/* wait queue for pidfd notifications */
 	wait_queue_head_t wait_pidfd;
 	struct rcu_head rcu;
+	//pid号数组
 	struct upid numbers[1];
 };
 

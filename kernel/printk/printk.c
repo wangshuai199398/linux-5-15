@@ -1090,13 +1090,13 @@ void __init setup_log_buf(int early)
 	 */
 	if (!early)
 		set_percpu_data_ready();
-
+	//检查当前缓冲区是否为空（因为缓冲区刚刚完成初始化，所以其必然为空）
 	if (log_buf != __log_buf)
 		return;
-
+	//检查是否为早期初始化阶段
 	if (!early && !new_log_buf_len)
-		log_buf_add_cpu();
-
+		log_buf_add_cpu();//会为每个 CPU 扩展缓冲区的大小
+	//该变量表示更新后的内核日志缓冲区长度
 	if (!new_log_buf_len)
 		return;
 

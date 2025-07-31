@@ -28,9 +28,13 @@
  * 内核页表 
  */
 struct mm_struct init_mm = {
+	//虚拟内存区域的红黑树结构
 	.mm_rb		= RB_ROOT,
+	//全局页目录的指针
 	.pgd		= swapper_pg_dir,
+	//使用该内存空间的进程数目
 	.mm_users	= ATOMIC_INIT(2),
+	//主引用计数
 	.mm_count	= ATOMIC_INIT(1),
 	.write_protect_seq = SEQCNT_ZERO(init_mm.write_protect_seq),
 	MMAP_LOCK_INITIALIZER(init_mm)

@@ -527,12 +527,15 @@ static int irq_expand_nr_irqs(unsigned int nr)
 //预先分配中断描述符（irq_desc）并建立中断号与描述符的映射
 int __init early_irq_init(void)
 {
+	//node 表示当前在线的 NUMA 节点，由 MAX_NUMNODES 决定（取决于 CONFIG_NODES_SHIFT 配置项）
+	//first_online_node 宏会返回第一个在线的节点
 	int i, initcnt, node = first_online_node;
+	//desc是中断描述符指针 irq_desc 是中断描述符数组
 	struct irq_desc *desc;
-
+	//初始化默认的 irq_default_affinity（中断与 CPU 的亲和性）
 	init_irq_default_affinity();
 
-	/* Let arch update nr_irqs and return the nr of preallocated irqs */
+	/* 探测预分配中断数量， 会处理 MSI/MSI-X 类型中断，为设备提前分配一定数量的中断号 */
 	initcnt = arch_probe_nr_irqs();
 	printk(KERN_INFO "NR_IRQS: %d, nr_irqs: %d, preallocated irqs: %d\n",
 	       NR_IRQS, nr_irqs, initcnt);//NR_IRQS: 524544, nr_irqs: 2152, preallocated irqs: 16
@@ -545,12 +548,13 @@ int __init early_irq_init(void)
 
 	if (initcnt > nr_irqs)
 		nr_irqs = initcnt;
-
+	//分配 descriptor 并初始化后插入到 irq_desc_tree 中
 	for (i = 0; i < initcnt; i++) {
 		desc = alloc_desc(i, node, 0, NULL, NULL);
 		set_bit(i, allocated_irqs);
 		irq_insert_desc(i, desc);
 	}
+	//进入 I/O APIC 的早期初始化过程
 	return arch_early_irq_init();
 }
 

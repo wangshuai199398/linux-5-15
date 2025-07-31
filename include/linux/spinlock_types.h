@@ -13,7 +13,7 @@
 
 #ifndef CONFIG_PREEMPT_RT
 
-/* Non PREEMPT_RT kernels map spinlock to raw_spinlock */
+/* 非 PREEMPT_RT 内核将自旋锁映射为 raw_spinlock spinlock_wangs */
 typedef struct spinlock {
 	union {
 		struct raw_spinlock rlock;
@@ -34,6 +34,7 @@ typedef struct spinlock {
 	SPIN_DEBUG_INIT(lockname)		\
 	SPIN_DEP_MAP_INIT(lockname) }
 
+// 给定的自旋锁将会初始化并且状态变为——解锁 (unlocked)
 #define __SPIN_LOCK_INITIALIZER(lockname) \
 	{ { .rlock = ___SPIN_LOCK_INITIALIZER(lockname) } }
 

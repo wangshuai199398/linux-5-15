@@ -62,11 +62,16 @@ static inline void __init __late_clear_fixmap(enum fixed_addresses idx)
 	BUG();
 }
 #endif
-
+// 包含了初期 ioremap 区域的地址
 static void __iomem *prev_map[FIX_BTMAPS_SLOTS] __initdata;
 static unsigned long prev_size[FIX_BTMAPS_SLOTS] __initdata;
+// 包含了固定映射区域的虚拟地址
 static unsigned long slot_virt[FIX_BTMAPS_SLOTS] __initdata;
-
+/*
+用初期固定映射的地址填充了 slot_virt 数组。所有初期固定映射地址在内存中都在 __end_of_permanent_fixed_addresses 后面，
+它们从 FIX_BITMAP_BEGIN 开始，到 FIX_BITMAP_END 结束。实际上初期 ioremap 会使用 512 个临时引导时映射
+填充512个临时的启动时固定映射表来完成无符号长整型矩阵 slot_virt 的初始化
+*/
 void __init early_ioremap_setup(void)
 {
 	int i;
@@ -97,6 +102,11 @@ static int __init check_early_ioremap_leak(void)
 }
 late_initcall(check_early_ioremap_leak);
 
+/*
+phys_addr - 要映射到虚拟地址上的 I/O 内存区域的基物理地址
+size - I/O 内存区域的尺寸；
+prot - 页表入口位
+*/
 static void __init __iomem *
 __early_ioremap(resource_size_t phys_addr, unsigned long size, pgprot_t prot)
 {
@@ -109,6 +119,7 @@ __early_ioremap(resource_size_t phys_addr, unsigned long size, pgprot_t prot)
 	WARN_ON(system_state >= SYSTEM_RUNNING);
 
 	slot = -1;
+	// 首先遍历了所有初期 ioremap 固定映射槽并检查 prev_map 数组中第一个空闲元素，然后将这个值存在了 slot 变量中，另外设置了尺寸
 	for (i = 0; i < FIX_BTMAPS_SLOTS; i++) {
 		if (!prev_map[i]) {
 			slot = i;
@@ -130,20 +141,21 @@ __early_ioremap(resource_size_t phys_addr, unsigned long size, pgprot_t prot)
 	 * Mappings have to be page-aligned
 	 */
 	offset = offset_in_page(phys_addr);
+	// 使用 PAGE_MASK 用于清空除低 12 位之外的整个 phys_addr
 	phys_addr &= PAGE_MASK;
+	// 获取这个区域的页对齐尺寸
 	size = PAGE_ALIGN(last_addr + 1) - phys_addr;
 
-	/*
-	 * Mappings have to fit in the FIX_BTMAP area.
-	 */
+	/* Mappings have to fit in the FIX_BTMAP area. */
+	// 
 	nrpages = size >> PAGE_SHIFT;
 	if (WARN_ON(nrpages > NR_FIX_BTMAPS))
 		return NULL;
 
-	/*
-	 * Ok, go for it..
-	 */
+	/* Ok, go for it.. */
+	// 获取新的 ioremap 区域所占用的页的数量然后计算固定映射下标
 	idx = FIX_BTMAP_BEGIN - NR_FIX_BTMAPS*slot;
+	//用给定的物理地址填充固定映射区域。循环中的每一次迭代，都调用 __early_set_fixmap 函数，为给定的物理地址加上页的大小 4096，然后更新下标和页的数量
 	while (nrpages > 0) {
 		if (after_paging_init)
 			__late_set_fixmap(idx, phys_addr, prot);
@@ -155,11 +167,17 @@ __early_ioremap(resource_size_t phys_addr, unsigned long size, pgprot_t prot)
 	}
 	WARN(early_ioremap_debug, "%s(%pa, %08lx) [%d] => %08lx + %08lx\n",
 	     __func__, &phys_addr, size, slot, offset, slot_virt[slot]);
-
+	// 因为我们为给定的地址设定了固定映射区域，我们需要将 I/O 重映射的区域的基虚拟地址用 slot 下标保存在 prev_map 数组中,然后返回它。
 	prev_map[slot] = (void __iomem *)(offset + slot_virt[slot]);
 	return prev_map[slot];
 }
 
+/*
+两个参数：基地址和 I/O 区域的大小
+解除对一个 I/O 内存区域的映射
+遍历了固定映射槽并寻找给定地址的槽,这样它就获得了这个固定映射槽的下标，然后通过判断 after_paging_init 的值决定是调用 __late_clear_fixmap 还是 __early_set_fixmap。
+当这个值是 0 时会调用 __early_set_fixmap。最终它会将 I/O 内存区域设为 NULL
+*/
 void __init early_iounmap(void __iomem *addr, unsigned long size)
 {
 	unsigned long virt_addr;
@@ -207,7 +225,7 @@ void __init early_iounmap(void __iomem *addr, unsigned long size)
 	prev_map[slot] = NULL;
 }
 
-/* Remap an IO device */
+/* Remap an IO device 从 IO 物理地址 映射/解除映射 到虚拟地址 */
 void __init __iomem *
 early_ioremap(resource_size_t phys_addr, unsigned long size)
 {

@@ -278,7 +278,7 @@ static int vga_probe(void)
 	video_vga.card_name = card_name[adapter];
 	return mode_count[adapter];
 }
-
+//对于每个支持的显示模式都是使用下面的代码进行定义
 static __videocard video_vga = {
 	.card_name	= "VGA",
 	.probe		= vga_probe,

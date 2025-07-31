@@ -13,7 +13,9 @@
 #include <linux/atomic.h>
 #include <linux/bug.h>
 
-/* Don't assign or return these: may not be this big! */
+/* Don't assign or return these: may not be this big!
+创建 cpumask cpumask_wangs
+*/
 typedef struct cpumask { DECLARE_BITMAP(bits, NR_CPUS); } cpumask_t;
 
 /**
@@ -34,6 +36,7 @@ typedef struct cpumask { DECLARE_BITMAP(bits, NR_CPUS); } cpumask_t;
 #define cpumask_pr_args(maskp)		nr_cpu_ids, cpumask_bits(maskp)
 
 #if NR_CPUS == 1
+//nr_cpu_ids 表示实际可用的 CPU 数量，而 NR_CPUS 表示在配置时可设置的最大 CPU 数量
 #define nr_cpu_ids		1U
 #else
 extern unsigned int nr_cpu_ids;
@@ -846,6 +849,7 @@ set_cpu_dying(unsigned int cpu, bool dying)
  * expose the definition of 'struct cpumask'.
  *
  * This does the conversion, and can be used as a constant initializer.
+ * cpumask_wangs
  */
 #define to_cpumask(bitmap)						\
 	((struct cpumask *)(1 ? (bitmap)				\

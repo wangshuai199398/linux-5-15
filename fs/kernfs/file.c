@@ -251,7 +251,7 @@ static ssize_t kernfs_fop_read_iter(struct kiocb *iocb, struct iov_iter *iter)
  * the first write.  Hint: if you're writing a value, first read the file,
  * modify only the the value you're changing, then write entire buffer
  * back.
- * 如果设置的是 cpu.shares，则调用 cpu_shares_write_u64。在这里面，task_group 的 shares 变量更新了，并且更新了 CPU 队列上的调度实体
+ * 如果设置的是 cpu.shares，则调用 cpu_shares_write_u64, 在这里面，task_group 的 shares 变量更新了，并且更新了 CPU 队列上的调度实体
  */
 static ssize_t kernfs_fop_write_iter(struct kiocb *iocb, struct iov_iter *iter)
 {

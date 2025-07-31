@@ -724,7 +724,7 @@ int arch_prepare_kprobe(struct kprobe *p)
 void arch_arm_kprobe(struct kprobe *p)
 {
 	u8 int3 = INT3_INSN_OPCODE;
-
+	// 完成指令替换 当后面内核再次运行到替换的指令后触发INT3中断，进而调用架构相关 kprobe_int3_handler, 在这里获取kprobe跟踪点,发现有pre_handler,那就跟踪它
 	text_poke(p->addr, &int3, 1);
 	text_poke_sync();
 	perf_event_text_poke(p->addr, &p->opcode, 1, &int3, 1);
@@ -941,6 +941,7 @@ int kprobe_int3_handler(struct pt_regs *regs)
 	 */
 
 	kcb = get_kprobe_ctlblk();
+	// 获取 kprobe
 	p = get_kprobe(addr);
 
 	if (p) {
@@ -958,6 +959,7 @@ int kprobe_int3_handler(struct pt_regs *regs)
 			 * user handler setup registers to exit to another
 			 * instruction, we must skip the single stepping.
 			 */
+			// 执行 pre_handler
 			if (!p->pre_handler || !p->pre_handler(p, regs))
 				setup_singlestep(p, regs, kcb, 0);
 			else

@@ -189,7 +189,11 @@ idt_setup_from_table(gate_desc *idt, const struct idt_data *t, int size, bool sy
 			set_bit(t->vector, system_vectors);
 	}
 }
-//将每个中断都设置了中断处理函数，放在中断向量表 idt_table 中
+/*
+将每个中断都设置了中断处理函数，放在中断向量表 idt_table 中
+n: 中断向量号
+addr: 中断处理函数的地址
+*/
 static __init void set_intr_gate(unsigned int n, const void *addr)
 {
 	struct idt_data data;
@@ -303,6 +307,8 @@ void __init idt_setup_apic_and_irq_gates(void)
 
 /**
  * idt_setup_early_handler - Initializes the idt table with early handlers
+ * 将中断服务程序入口地址填写到早期 Interrupt Descriptor Table中
+ * 中断服务程序入口点数组的名称 early_idt_handler_array
  */
 void __init idt_setup_early_handler(void)
 {

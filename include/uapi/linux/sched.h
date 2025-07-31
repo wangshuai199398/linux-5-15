@@ -26,9 +26,9 @@
 #define CLONE_UNTRACED		0x00800000	/* set if the tracing process can't force CLONE_PTRACE on this clone */
 #define CLONE_CHILD_SETTID	0x01000000	/* set the TID in the child */
 #define CLONE_NEWCGROUP		0x02000000	/* 如果有，会创建新的cgroup */
-#define CLONE_NEWUTS		0x04000000	/* New utsname namespace */
-#define CLONE_NEWIPC		0x08000000	/* New ipc namespace */
-#define CLONE_NEWUSER		0x10000000	/* 如果有，创建新的User命名空间 */
+#define CLONE_NEWUTS		0x04000000	/* 如果有，创建新的主机名与域名命名空间，以便在网络中独立标识自己 */
+#define CLONE_NEWIPC		0x08000000	/* 如果有，创建新的IPC命名空间，以便隔离信号量、消息队列和共享内存 */
+#define CLONE_NEWUSER		0x10000000	/* 如果有，创建新的User命名空间，用来隔离用户和用户组 */
 #define CLONE_NEWPID		0x20000000	/* 如果有，创建新的PID命名空间 */
 #define CLONE_NEWNET		0x40000000	/* 如果有，创建新的网络命名空间 */
 #define CLONE_IO		0x80000000	/* Clone io context */

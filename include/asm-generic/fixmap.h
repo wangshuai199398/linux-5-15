@@ -19,6 +19,7 @@
 #include <linux/mm_types.h>
 
 #define __fix_to_virt(x)	(FIXADDR_TOP - ((x) << PAGE_SHIFT))
+// 清空给定地址的低 12 位，然后用固定映射区域的末地址(FIXADDR_TOP)减去它并右移 PAGE_SHIFT 即 12 位
 #define __virt_to_fix(x)	((FIXADDR_TOP - ((x)&PAGE_MASK)) >> PAGE_SHIFT)
 
 #ifndef __ASSEMBLY__
@@ -32,7 +33,7 @@ static __always_inline unsigned long fix_to_virt(const unsigned int idx)
 	BUILD_BUG_ON(idx >= __end_of_fixed_addresses);
 	return __fix_to_virt(idx);
 }
-
+// 以虚拟地址为参数，检查了这个地址是否位于 FIXADDR_START 和 FIXADDR_TOP 之间，然后调用 __virt_to_fix
 static inline unsigned long virt_to_fix(const unsigned long vaddr)
 {
 	BUG_ON(vaddr >= FIXADDR_TOP || vaddr < FIXADDR_START);

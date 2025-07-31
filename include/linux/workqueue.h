@@ -95,9 +95,12 @@ enum {
 #define WORK_STRUCT_FLAG_MASK    ((1ul << WORK_STRUCT_FLAG_BITS) - 1)
 #define WORK_STRUCT_WQ_DATA_MASK (~WORK_STRUCT_FLAG_MASK)
 
+// work_wangs
 struct work_struct {
+	// 函数参数
 	atomic_long_t data;
 	struct list_head entry;
+	// 将被工作队列调度执行的函数
 	work_func_t func;
 #ifdef CONFIG_LOCKDEP
 	struct lockdep_map lockdep_map;
@@ -190,6 +193,8 @@ struct execute_work {
 				     (tflags) | TIMER_IRQSAFE),		\
 	}
 
+// 可以为一个工作队列创建一个新的工作线程。内核提供了如下宏静态创建一个队列任务
+// 需要两个参数：工作队列的名字和工作队列的函数 work_wangs
 #define DECLARE_WORK(n, f)						\
 	struct work_struct n = __WORK_INITIALIZER(n, f)
 
@@ -247,6 +252,8 @@ static inline unsigned int work_static(struct work_struct *work) { return 0; }
 		__INIT_WORK_KEY(_work, _func, _onstack, &__key);	\
 	} while (0)
 
+// 还可以在运行时动态创建：这个宏需要一个 work_struct 数据结构作为将要创建的队列任务，和一个将在这个任务里调度运行的函数
+// 通过这两个宏的其中一个创建一个 work 后，需要把它放到工作队列中去。可以通过 queue_work 或者 queue_delayed_work 来做到这一点
 #define INIT_WORK(_work, _func)						\
 	__INIT_WORK((_work), (_func), 0)
 
@@ -507,10 +514,12 @@ extern void wq_worker_comm(char *buf, size_t size, struct task_struct *task);
  * Forbids: r0 == true && r1 == 0
  * 
  * 将一个工作项（work_struct）提交给内核工作队列（workqueue）异步执行
+ * work_wangs
  */
 static inline bool queue_work(struct workqueue_struct *wq,
 			      struct work_struct *work)
 {
+	// WORK_CPU_UNBOUND 作为代表队列任务要绑定到哪一个处理器的枚举一员
 	return queue_work_on(WORK_CPU_UNBOUND, wq, work);
 }
 

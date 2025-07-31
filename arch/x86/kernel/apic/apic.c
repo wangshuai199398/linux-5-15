@@ -1383,12 +1383,13 @@ void __init init_bsp_APIC(void)
 		return;
 
 	/*
-	 * Do not trust the local APIC being empty at bootup.
+	 * Do not trust the local APIC being empty at bootup. 关闭本地 APIC
 	 */
 	clear_local_APIC();
 
 	/*
 	 * Enable APIC.
+	 * 设置一个无符号整数值为 APIC_SPIV_APIC_ENABLED 来启用第一个处理器的 APIC
 	 */
 	value = apic_read(APIC_SPIV);
 	value &= ~APIC_VECTOR_MASK;
@@ -1403,6 +1404,7 @@ void __init init_bsp_APIC(void)
 #endif
 		value |= APIC_SPIV_FOCUS_DISABLED;
 	value |= SPURIOUS_APIC_VECTOR;
+	//将其写入（寄存器）来实现该设置
 	apic_write(APIC_SPIV, value);
 
 	/*

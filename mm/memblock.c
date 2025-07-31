@@ -163,6 +163,7 @@ static enum memblock_flags __init_memblock choose_memblock_flags(void)
 }
 
 /* adjust *@size so that (@base + *@size) doesn't overflow, return new size */
+// 调整了 size 使 base + size 不会溢出
 static inline phys_addr_t memblock_cap_size(phys_addr_t base, phys_addr_t *size)
 {
 	return *size = min(*size, PHYS_ADDR_MAX - base);
@@ -400,6 +401,7 @@ void __init memblock_discard(void)
  *
  * Return:
  * 0 on success, -1 on failure.
+ * 将提供的区域数组长度加倍。然后将 insert 置为 true，接着跳转到 repeat 标签
  */
 static int __init_memblock memblock_double_array(struct memblock_type *type,
 						phys_addr_t new_area_start,
@@ -498,6 +500,9 @@ static int __init_memblock memblock_double_array(struct memblock_type *type,
  * @type: memblock type to scan
  *
  * Scan @type and merge neighboring compatible regions.
+ * 合并相邻的可合并区域
+ * 从给定的 memblock_type 遍历所有的内存区域，取出两个相邻区域 - type->regions[i] 和 type->regions[i + 1]，并检查他们是否拥有同样的标志，
+ * 是否属于同一个节点，第一个区域的末尾地址是否与第二个区域的基地址相同
  */
 static void __init_memblock memblock_merge_regions(struct memblock_type *type)
 {
@@ -516,10 +521,12 @@ static void __init_memblock memblock_merge_regions(struct memblock_type *type)
 			i++;
 			continue;
 		}
-
+		// 更新第一个区域的长度，将第二个区域的长度加上去
 		this->size += next->size;
 		/* move forward from next + 1, index of which is i + 2 */
+		// 将后面的所有区域向前移动一个下标
 		memmove(next, next + 1, (type->cnt - (i + 2)) * sizeof(*next));
+		// 将 memblock_type 中内存区域的数量减一
 		type->cnt--;
 	}
 }
@@ -542,9 +549,11 @@ static void __init_memblock memblock_insert_region(struct memblock_type *type,
 						   int nid,
 						   enum memblock_flags flags)
 {
+	// 获取最后一个内存区域
 	struct memblock_region *rgn = &type->regions[idx];
 
 	BUG_ON(type->cnt >= type->max);
+	// 拷贝这部分内存
 	memmove(rgn + 1, rgn, (type->cnt - idx) * sizeof(*rgn));
 	rgn->base = base;
 	rgn->size = size;
@@ -576,6 +585,7 @@ static int __init_memblock memblock_add_range(struct memblock_type *type,
 {
 	bool insert = false;
 	phys_addr_t obase = base;
+	// 获取内存区域的结束点
 	phys_addr_t end = base + memblock_cap_size(base, &size);
 	int idx, nr_new;
 	struct memblock_region *rgn;
@@ -584,6 +594,7 @@ static int __init_memblock memblock_add_range(struct memblock_type *type,
 		return 0;
 
 	/* special case for empty array */
+	// 检查 memblock 中的内存区域是否存在。如果不存在，我们就简单地用给定的值填充一个新的 memory_region 然后返回
 	if (type->regions[0].size == 0) {
 		WARN_ON(type->cnt != 1 || type->total_size);
 		type->regions[0].base = base;
@@ -593,6 +604,7 @@ static int __init_memblock memblock_add_range(struct memblock_type *type,
 		type->total_size = size;
 		return 0;
 	}
+	// 如果 memblock_type 不为空，我们就会使用提供的 memblock_type 将新的内存区域加到 memblock 中
 repeat:
 	/*
 	 * The following is executed twice.  Once with %false @insert and
@@ -601,7 +613,7 @@ repeat:
 	 */
 	base = obase;
 	nr_new = 0;
-
+	// 迭代所有的已存储内存区域来检查是否与新区域重叠
 	for_each_memblock_type(idx, type, rgn) {
 		phys_addr_t rbase = rgn->base;
 		phys_addr_t rend = rbase + rgn->size;
@@ -645,12 +657,15 @@ repeat:
 	 * insertions; otherwise, merge and return.
 	 */
 	if (!insert) {
+		// 检查这个新内存区域是否合适
 		while (type->cnt + nr_new > type->max)
 			if (memblock_double_array(type, obase, size) < 0)
 				return -ENOMEM;
 		insert = true;
+		// 从 repeat 标签开始，迭代同样的循环然后使用 memblock_insert_region 函数将当前内存区域插入内存块
 		goto repeat;
 	} else {
+		// 合并相邻可合并的内存区域
 		memblock_merge_regions(type);
 		return 0;
 	}
@@ -687,7 +702,9 @@ int __init_memblock memblock_add_node(phys_addr_t base, phys_addr_t size,
  *
  * Add new memblock region [@base, @base + @size) to the "memory"
  * type. See memblock_add_range() description for mode details
- *
+ * 
+ * 将内存块类型 - memory，内存基址和内存区域大小，MAX_NUMNODES和标志传进去
+ * 
  * Return:
  * 0 on success, -errno on failure.
  */
@@ -697,7 +714,7 @@ int __init_memblock memblock_add(phys_addr_t base, phys_addr_t size)
 
 	memblock_dbg("%s: [%pa-%pa] %pS\n", __func__,
 		     &base, &end, (void *)_RET_IP_);
-
+	// 将新的内存区域加到了内存块中
 	return memblock_add_range(&memblock.memory, base, size, MAX_NUMNODES, 0);
 }
 

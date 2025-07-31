@@ -183,6 +183,7 @@ do {									\
 #else
 static inline void do_raw_spin_lock(raw_spinlock_t *lock) __acquires(lock)
 {
+	// [稀疏(sparse)]相关宏
 	__acquire(lock);
 	arch_spin_lock(&lock->raw_lock);
 	mmiowb_spin_lock();
@@ -249,7 +250,9 @@ static inline void do_raw_spin_unlock(raw_spinlock_t *lock) __releases(lock)
 #endif
 
 #if defined(CONFIG_SMP) || defined(CONFIG_DEBUG_SPINLOCK)
-
+/*
+关闭本地 CPU 的中断，保存当前中断状态到 flags，防止中断上下文或其他 CPU 并发访问临界区
+*/
 #define raw_spin_lock_irqsave(lock, flags)			\
 	do {						\
 		typecheck(unsigned long, flags);	\
@@ -288,6 +291,9 @@ static inline void do_raw_spin_unlock(raw_spinlock_t *lock) __releases(lock)
 #define raw_spin_unlock(lock)		_raw_spin_unlock(lock)
 #define raw_spin_unlock_irq(lock)	_raw_spin_unlock_irq(lock)
 
+/*
+释放锁，恢复之前保存的中断状态（根据 flags），如果之前中断是打开的，就重新打开
+*/
 #define raw_spin_unlock_irqrestore(lock, flags)		\
 	do {							\
 		typecheck(unsigned long, flags);		\
@@ -349,7 +355,7 @@ do {								\
 } while (0)
 
 #else
-
+// 给定的自旋锁进行初始化
 # define spin_lock_init(_lock)			\
 do {						\
 	spinlock_check(_lock);			\
@@ -357,12 +363,12 @@ do {						\
 } while (0)
 
 #endif
-
+// 获取给定的自旋锁 spin_wangs
 static __always_inline void spin_lock(spinlock_t *lock)
 {
 	raw_spin_lock(&lock->rlock);
 }
-
+// 禁止软件中断并且获取给定的自旋锁
 static __always_inline void spin_lock_bh(spinlock_t *lock)
 {
 	raw_spin_lock_bh(&lock->rlock);
@@ -387,7 +393,7 @@ static __always_inline void spin_lock_irq(spinlock_t *lock)
 {
 	raw_spin_lock_irq(&lock->rlock);
 }
-
+// 禁止本地处理器上的中断，并且保存／不保存之前的中断状态的标识 (flag)
 #define spin_lock_irqsave(lock, flags)				\
 do {								\
 	raw_spin_lock_irqsave(spinlock_check(lock), flags);	\
@@ -397,12 +403,12 @@ do {								\
 do {									\
 	raw_spin_lock_irqsave_nested(spinlock_check(lock), flags, subclass); \
 } while (0)
-
+// 释放给定的自旋锁
 static __always_inline void spin_unlock(spinlock_t *lock)
 {
 	raw_spin_unlock(&lock->rlock);
 }
-
+// 释放给定的自旋锁并且启动软件中断
 static __always_inline void spin_unlock_bh(spinlock_t *lock)
 {
 	raw_spin_unlock_bh(&lock->rlock);
@@ -450,6 +456,7 @@ static __always_inline int spin_trylock_irq(spinlock_t *lock)
  * Further, on CONFIG_SMP=n builds with CONFIG_DEBUG_SPINLOCK=n,
  * the return value is always 0 (see include/linux/spinlock_up.h).
  * Therefore you should not rely heavily on the return value.
+ * 返回给定的自旋锁的状态
  */
 static __always_inline int spin_is_locked(spinlock_t *lock)
 {

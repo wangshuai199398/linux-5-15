@@ -588,7 +588,9 @@ static inline void hlist_add_head_rcu(struct hlist_node *n,
 
 	n->next = first;
 	WRITE_ONCE(n->pprev, &h->first);
+	//把新节点 n 设置为链表的第一个节点
 	rcu_assign_pointer(hlist_first_rcu(h), n);
+	//如果链表原本不为空，那么旧的第一个节点（first）的 pprev 现在应该指向新节点 n 的 next
 	if (first)
 		WRITE_ONCE(first->pprev, &n->next);
 }

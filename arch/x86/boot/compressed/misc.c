@@ -267,7 +267,10 @@ static inline void handle_relocations(void *output, unsigned long output_len,
 				      unsigned long virt_addr)
 { }
 #endif
-
+/*
+内核镜像是一个ELF可执行文件，所以parse_elf的主要目标是移动可加载的段到正确的地址
+parse_elf函数的目标是加载这些段到从choose_random_location函数得到的output地址
+*/
 static void parse_elf(void *output)
 {
 #ifdef CONFIG_X86_64
@@ -279,7 +282,7 @@ static void parse_elf(void *output)
 #endif
 	void *dest;
 	int i;
-
+	//检查ELF签名标志
 	memcpy(&ehdr, output, sizeof(ehdr));
 	if (ehdr.e_ident[EI_MAG0] != ELFMAG0 ||
 	   ehdr.e_ident[EI_MAG1] != ELFMAG1 ||
@@ -296,7 +299,7 @@ static void parse_elf(void *output)
 		error("Failed to allocate space for phdrs");
 
 	memcpy(phdrs, output + ehdr.e_phoff, sizeof(*phdrs) * ehdr.e_phnum);
-
+	//从给定的ELF文件遍历所有程序头，并用正确的地址复制所有可加载的段到输出缓冲区
 	for (i = 0; i < ehdr.e_phnum; i++) {
 		phdr = &phdrs[i];
 
@@ -317,6 +320,7 @@ static void parse_elf(void *output)
 		default: /* Ignore other PT_* */ break;
 		}
 	}
+	//从现在开始，所有可加载的段都在正确的位置
 
 	free(phdrs);
 }
@@ -336,7 +340,14 @@ static void parse_elf(void *output)
  *           VO__text      startup_32 of ZO          VO__end    ZO__end
  *             ^                                         ^
  *             |-------uncompressed kernel image---------|
- *
+ * 
+ * main_wangs
+ * rmode - 指向 boot_params 结构体的指针，boot_params被引导加载器填充或在早期内核初始化时填充
+ * heap - 指向早期启动堆的起始地址 boot_heap 的指针
+ * input_data - 指向压缩的内核，即 arch/x86/boot/compressed/vmlinux.bin.bz2 的指针
+ * input_len - 压缩的内核的大小
+ * output - 解压后内核的起始地址
+ * output_len - 解压后内核的大小
  */
 asmlinkage __visible void *extract_kernel(void *rmode, memptr heap,
 				  unsigned char *input_data,
@@ -409,13 +420,13 @@ asmlinkage __visible void *extract_kernel(void *rmode, memptr heap,
 	/* Report address of 32-bit trampoline */
 	debug_putaddr(trampoline_32bit);
 #endif
-
+	//选择内核镜像解压到的内存地址
 	choose_random_location((unsigned long)input_data, input_len,
 				(unsigned long *)&output,
 				needed_size,
 				&virt_addr);
 
-	/* Validate memory location choices. */
+	/* 获得内核镜像的地址后，需要有一些检查以确保获得的随机地址是正确对齐的，并且地址没有错误 */
 	if ((unsigned long)output & (MIN_KERNEL_ALIGN - 1))
 		error("Destination physical address inappropriately aligned");
 	if (virt_addr & (MIN_KERNEL_ALIGN - 1))
@@ -435,8 +446,10 @@ asmlinkage __visible void *extract_kernel(void *rmode, memptr heap,
 #endif
 
 	debug_putstr("\nDecompressing Linux... ");
+	//解压内核
 	__decompress(input_data, input_len, NULL, NULL, output, output_len,
 			NULL, error);
+	//把解压后的内核移动到正确的位置上
 	parse_elf(output);
 	handle_relocations(output, output_len, virt_addr);
 	debug_putstr("done.\nBooting the kernel.\n");

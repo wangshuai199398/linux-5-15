@@ -78,10 +78,10 @@ extern void queued_spin_lock_slowpath(struct qspinlock *lock, u32 val);
 static __always_inline void queued_spin_lock(struct qspinlock *lock)
 {
 	int val = 0;
-
+	// 向val写入1
 	if (likely(atomic_try_cmpxchg_acquire(&lock->val, &val, _Q_LOCKED_VAL)))
 		return;
-
+	// 第二个线程获取锁会执行这个
 	queued_spin_lock_slowpath(lock, val);
 }
 #endif

@@ -8,6 +8,7 @@
 /*
  * Constructor for a conventional segment GDT (or LDT) entry.
  * This is a macro so it can be used in initializers.
+ * 标志，基地址，段长度
  */
 #define GDT_ENTRY(flags, base, limit)			\
 	((((base)  & _AC(0xff000000,ULL)) << (56-24)) |	\
@@ -287,7 +288,7 @@ static inline void vdso_read_cpunode(unsigned *cpu, unsigned *node)
 #define XEN_EARLY_IDT_HANDLER_SIZE 8
 
 #ifndef __ASSEMBLY__
-
+//大小为 288 字节的数组，每一项为 9 个字节，其中2个字节的备用指令用于向栈中压入默认错误码（如果异常本身没有提供错误码的话），2个字节的指令用于向栈中压入向量号，剩余5个字节用于跳转到异常处理程序
 extern const char early_idt_handler_array[NUM_EXCEPTION_VECTORS][EARLY_IDT_HANDLER_SIZE];
 extern void early_ignore_irq(void);
 

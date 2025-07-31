@@ -70,6 +70,7 @@ static inline struct fd fdget_raw(unsigned int fd)
 	return __to_fd(__fdget_raw(fd));
 }
 
+// 将给定的只有数字的文件描述符转化为 fd 结构
 static inline struct fd fdget_pos(int fd)
 {
 	return __to_fd(__fdget_pos(fd));
