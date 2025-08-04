@@ -49,7 +49,7 @@
 #define neigh_dbg(level, fmt, ...)		\
 do {						\
 	if (level <= NEIGH_DEBUG)		\
-		pr_info(fmt, ##__VA_ARGS__);	\
+		pr_debug(fmt, ##__VA_ARGS__);	\
 } while (0)
 
 #define PNEIGH_HASHMASK		0xF

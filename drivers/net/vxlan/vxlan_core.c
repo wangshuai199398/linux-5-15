@@ -4428,6 +4428,7 @@ static int vxlan_newlink(struct net *src_net, struct net_device *dev,
 	struct vxlan_config conf;
 	int err;
 
+	netdev_dbg(dev, "%s: \n", __func__);
 	err = vxlan_nl2conf(tb, data, dev, &conf, false, extack);
 	if (err)
 		return err;
