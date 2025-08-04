@@ -3569,6 +3569,7 @@ static int rtnl_newlink(struct sk_buff *skb, struct nlmsghdr *nlh,
 		return -ENOMEM;
 
 	ret = __rtnl_newlink(skb, nlh, attr, extack);
+	printk(KERN_DEBUG "%s: called from pid %d, comm %s\n", __func__, current->pid, current->comm);
 	kfree(attr);
 	return ret;
 }
