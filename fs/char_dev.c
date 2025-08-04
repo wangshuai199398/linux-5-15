@@ -196,6 +196,7 @@ __unregister_chrdev_region(unsigned major, unsigned baseminor, int minorct)
  * @name: the name of the device or driver.
  *
  * Return value is zero on success, a negative error code on failure.
+ * 用于已知起始设备号，向系统申请设备号
  */
 int register_chrdev_region(dev_t from, unsigned count, const char *name)
 {
@@ -232,6 +233,7 @@ fail:
  * Allocates a range of char device numbers.  The major number will be
  * chosen dynamically, and returned (along with the first minor number)
  * in @dev.  Returns zero or a negative error code.
+ * 用于设备号未知，向系统动态申请未被占用的设备号，会避开设备号重复的冲突
  */
 int alloc_chrdev_region(dev_t *dev, unsigned baseminor, unsigned count,
 			const char *name)
@@ -632,6 +634,7 @@ static struct kobj_type ktype_cdev_dynamic = {
  * cdev_alloc() - allocate a cdev structure
  *
  * Allocates and returns a cdev structure, or NULL on failure.
+ * 动态申请一个 cdev 结构体
  */
 struct cdev *cdev_alloc(void)
 {
@@ -650,12 +653,15 @@ struct cdev *cdev_alloc(void)
  *
  * Initializes @cdev, remembering @fops, making it ready to add to the
  * system with cdev_add().
+ * 初始化 cdev 的成员，并建立 cdev 和 file_operations 之间的连接
+ * cdev_wangs
  */
 void cdev_init(struct cdev *cdev, const struct file_operations *fops)
 {
 	memset(cdev, 0, sizeof *cdev);
 	INIT_LIST_HEAD(&cdev->list);
 	kobject_init(&cdev->kobj, &ktype_cdev_default);
+	// 将传入的文件操作结构体指针赋值给 cdev 的 ops
 	cdev->ops = fops;
 }
 

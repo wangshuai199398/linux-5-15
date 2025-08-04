@@ -513,12 +513,8 @@ struct device {
 #ifdef CONFIG_DMA_OPS
 	const struct dma_map_ops *dma_ops;
 #endif
-	u64		*dma_mask;	/* dma mask (if dma'able device) */
-	u64		coherent_dma_mask;/* Like dma_mask, but for
-					     alloc_coherent mappings as
-					     not all hardware supports
-					     64 bit addresses for consistent
-					     allocations such descriptors. */
+	u64		*dma_mask;	/* 设备DMA可以寻址的范围 */
+	u64		coherent_dma_mask;/* 作用于申请一致性的DMA缓冲区 */
 	u64		bus_dma_limit;	/* upstream dma constraint */
 	const struct bus_dma_region *dma_range_map;
 

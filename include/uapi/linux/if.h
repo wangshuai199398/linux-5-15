@@ -109,20 +109,28 @@ enum net_device_flags {
 
 /* for compatibility with glibc net/if.h */
 #if __UAPI_DEF_IF_NET_DEVICE_FLAGS
+// 当设备被激活并可以开始发送数据包时设置该标志
 #define IFF_UP				IFF_UP
+// 允许广播
 #define IFF_BROADCAST			IFF_BROADCAST
+// 调试模式，可用于控制printk调用的详细程度
 #define IFF_DEBUG			IFF_DEBUG
+// 回环
 #define IFF_LOOPBACK			IFF_LOOPBACK
+// 接口连接到点到点链路
 #define IFF_POINTOPOINT			IFF_POINTOPOINT
 #define IFF_NOTRAILERS			IFF_NOTRAILERS
 #define IFF_RUNNING			IFF_RUNNING
+// 接口不能执行ARP
 #define IFF_NOARP			IFF_NOARP
 #define IFF_PROMISC			IFF_PROMISC
 #define IFF_ALLMULTI			IFF_ALLMULTI
 #define IFF_MASTER			IFF_MASTER
 #define IFF_SLAVE			IFF_SLAVE
+// 允许组播
 #define IFF_MULTICAST			IFF_MULTICAST
 #define IFF_PORTSEL			IFF_PORTSEL
+// 设备可在多种媒介间切换
 #define IFF_AUTOMEDIA			IFF_AUTOMEDIA
 #define IFF_DYNAMIC			IFF_DYNAMIC
 #endif /* __UAPI_DEF_IF_NET_DEVICE_FLAGS */
@@ -193,6 +201,9 @@ enum {
 
 /* for compatibility with glibc net/if.h */
 #if __UAPI_DEF_IF_IFMAP
+/*
+主要包含用户想要设置的设备要使用的I/O地址、中断等信息
+*/
 struct ifmap {
 	unsigned long mem_start;
 	unsigned long mem_end;

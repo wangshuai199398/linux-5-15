@@ -281,6 +281,7 @@ struct hh_cache {
 	((((dev)->hard_header_len + READ_ONCE((dev)->needed_headroom) + (extra)) \
 	  & ~(HH_DATA_MOD - 1)) + HH_DATA_MOD)
 
+// 对应于硬件头部操作，主要是完成创建硬件头部和从给定的 skb 分析出硬件头部等操作
 struct header_ops {
 	int	(*create) (struct sk_buff *skb, struct net_device *dev,
 			   unsigned short type, const void *daddr,
@@ -453,11 +454,11 @@ static inline bool napi_prefer_busy_poll(struct napi_struct *n)
 bool napi_schedule_prep(struct napi_struct *n);
 
 /**
- *	napi_schedule - schedule NAPI poll
+ *	用于调度轮训实例的运行
  *	@n: NAPI context
  *
- * Schedule NAPI poll routine to be called if it is not already
- * running.
+ * Schedule NAPI poll routine to be called if it is not already running.
+ * 将设备的 poll 函数添加到网络层的 poll 处理队列中，排队并且准备接收数据包，最终触发一个 NET_RX_SOFTIRQ 软中断，从而通知网络层接收数据包
  */
 static inline void napi_schedule(struct napi_struct *n)
 {
@@ -489,7 +490,7 @@ static inline bool napi_reschedule(struct napi_struct *napi)
 
 bool napi_complete_done(struct napi_struct *n, int work_done);
 /**
- *	napi_complete - NAPI processing complete
+ *	NAPI 处理完成的时候调用
  *	@n: NAPI context
  *
  * Mark NAPI processing as complete.
@@ -614,9 +615,7 @@ struct netdev_queue {
  */
 	spinlock_t		_xmit_lock ____cacheline_aligned_in_smp;
 	int			xmit_lock_owner;
-	/*
-	 * Time (in jiffies) of last Tx
-	 */
+	// 记录最后的数据包开始发送时的时间戳
 	unsigned long		trans_start;
 
 	unsigned long		state;
@@ -1318,10 +1317,11 @@ struct net_device_ops {
 						    struct net_device *sb_dev);
 	void			(*ndo_change_rx_flags)(struct net_device *dev,
 						       int flags);
-	void			(*ndo_set_rx_mode)(struct net_device *dev);
-	int			(*ndo_set_mac_address)(struct net_device *dev,
-						       void *addr);
+	void			(*ndo_set_rx_mode)(struct net_device *dev);、
+	// 设置设备的 MAC 地址
+	int			(*ndo_set_mac_address)(struct net_device *dev, void *addr);
 	int			(*ndo_validate_addr)(struct net_device *dev);
+	// 进行设备特定的 I/O 控制
 	int			(*ndo_do_ioctl)(struct net_device *dev,
 					        struct ifreq *ifr, int cmd);
 	int			(*ndo_eth_ioctl)(struct net_device *dev,
@@ -1330,24 +1330,21 @@ struct net_device_ops {
 						struct ifreq *ifr, int cmd);
 	int			(*ndo_siocwandev)(struct net_device *dev,
 						  struct if_settings *ifs);
-	int			(*ndo_siocdevprivate)(struct net_device *dev,
-						      struct ifreq *ifr,
-						      void __user *data, int cmd);
+	int			(*ndo_siocdevprivate)(struct net_device *dev, struct ifreq *ifr, void __user *data, int cmd);
+	// 配置接口，也可用于改变设备的I/O地址和中断号
 	int			(*ndo_set_config)(struct net_device *dev,
 					          struct ifmap *map);
 	int			(*ndo_change_mtu)(struct net_device *dev,
 						  int new_mtu);
-	int			(*ndo_neigh_setup)(struct net_device *dev,
-						   struct neigh_parms *);
-	void			(*ndo_tx_timeout) (struct net_device *dev,
-						   unsigned int txqueue);
+	int			(*ndo_neigh_setup)(struct net_device *dev, struct neigh_parms *);
+	// 当数据包发送超时时调用，该函数需采取重新启动数据包发送过程或重新启动硬件等措施来恢复网络设备到正常状态
+	void		(*ndo_tx_timeout) (struct net_device *dev, unsigned int txqueue);
 
 	void			(*ndo_get_stats64)(struct net_device *dev,
 						   struct rtnl_link_stats64 *storage);
 	bool			(*ndo_has_offload_stats)(const struct net_device *dev, int attr_id);
-	int			(*ndo_get_offload_stats)(int attr_id,
-							 const struct net_device *dev,
-							 void *attr_data);
+	int			(*ndo_get_offload_stats)(int attr_id, const struct net_device *dev, void *attr_data);
+	// 获取网络设备的状态信息
 	struct net_device_stats* (*ndo_get_stats)(struct net_device *dev);
 
 	int			(*ndo_vlan_rx_add_vid)(struct net_device *dev,
@@ -1646,7 +1643,7 @@ enum netdev_ml_priv_type {
 };
 
 /**
- *	网络设备结构体
+ *	网络设备结构体 net_device_wangs
  *
  *	实际上，这整个结构体设计得并不理想。
  *  它将 I/O 相关的数据 与纯粹的高层数据混合在一起，
@@ -1911,9 +1908,11 @@ struct net_device {
 	/*
 	 *	I/O specific fields
 	 *	FIXME: Merge these and struct ifmap into one
+	 *  硬件信息，mem_start 和 mem_end 分别定义了设备所使用的共享内存的起始和结束地址
 	 */
 	unsigned long		mem_end;
 	unsigned long		mem_start;
+	// 网络设备 I/O 基地址
 	unsigned long		base_addr;
 
 	/*
@@ -1937,12 +1936,13 @@ struct net_device {
 		struct list_head lower;
 	} adj_list;
 
-	/* Read-mostly cache-line for fast-path access */
+	/* Read-mostly cache-line for fast-path access 网络接口标志 */
 	unsigned int		flags;
 	unsigned int		priv_flags;
 	const struct net_device_ops *netdev_ops;
 	int			ifindex;
 	unsigned short		gflags;
+	// 网络设备的硬件头长度 以太网设备为14
 	unsigned short		hard_header_len;
 
 	/* Note : dev->mtu is often read without holding a lock.
@@ -1964,6 +1964,7 @@ struct net_device {
 
 	unsigned int		min_mtu;
 	unsigned int		max_mtu;
+	// 接口的硬件类型
 	unsigned short		type;
 	unsigned char		min_header_len;
 	unsigned char		name_assign_type;
@@ -2004,8 +2005,9 @@ struct net_device {
 
 	unsigned char		operstate;
 	unsigned char		link_mode;
-
+	// 该字段仅针对多端口设备，指定多端口设备使用哪一个端口
 	unsigned char		if_port;
+	// 指定分配给设备的DMA通道
 	unsigned char		dma;
 
 	/* Interface address info. */
@@ -2021,6 +2023,7 @@ struct net_device {
 	unsigned short		padded;
 
 	spinlock_t		addr_list_lock;
+	// 设备使用的中断号
 	int			irq;
 
 	struct netdev_hw_addr_list	uc;
@@ -3415,6 +3418,7 @@ void netif_tx_wake_queue(struct netdev_queue *dev_queue);
  *
  *	Allow upper layers to call the device hard_start_xmit routine.
  *	Used for flow control when transmit resources are available.
+ * 当忙于发送的数据包被发送完成后，在以TX结束的中断处理中，调用 netif_wake_queue 唤醒被阻塞的上层，以启动它继续向网络设备驱动传递数据包
  */
 static inline void netif_wake_queue(struct net_device *dev)
 {
@@ -3442,6 +3446,7 @@ static __always_inline void netif_tx_stop_queue(struct netdev_queue *dev_queue)
  *
  *	Stop upper layers calling the device hard_start_xmit routine.
  *	Used for flow control when transmit resources are unavailable.
+ * 当发送队列为满或因其他原因来不及发送当前上层传下来的数据包时，调用该函数阻止上层继续向网络设备驱动传递数据包
  */
 static inline void netif_stop_queue(struct net_device *dev)
 {
@@ -3677,6 +3682,7 @@ static inline u16 netdev_cap_txqueue(struct net_device *dev, u16 queue_index)
  *	@dev: network device
  *
  *	Test if the device has been brought up.
+ * 判断设备是否正在运行
  */
 static inline bool netif_running(const struct net_device *dev)
 {
@@ -3937,6 +3943,7 @@ void __dev_kfree_skb_any(struct sk_buff *skb, enum skb_free_reason reason);
  *
  * dev_consume_skb_any(skb) when caller doesn't know its current irq context,
  *  and consumed a packet. Used in place of consume_skb(skb)
+ * 用于中断上下文
  */
 static inline void dev_kfree_skb_irq(struct sk_buff *skb)
 {
@@ -3947,7 +3954,7 @@ static inline void dev_consume_skb_irq(struct sk_buff *skb)
 {
 	__dev_kfree_skb_irq(skb, SKB_REASON_CONSUMED);
 }
-
+// 在中断和非中断上下文皆可采用
 static inline void dev_kfree_skb_any(struct sk_buff *skb)
 {
 	__dev_kfree_skb_any(skb, SKB_REASON_DROPPED);

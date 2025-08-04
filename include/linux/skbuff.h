@@ -655,7 +655,7 @@ typedef unsigned int sk_buff_data_t;
 typedef unsigned char *sk_buff_data_t;
 #endif
 
-/**
+/** skb_wangs
  *	struct sk_buff - socket buffer
  *	@next: Next buffer in list
  *	@prev: Previous buffer in list
@@ -759,6 +759,7 @@ typedef unsigned char *sk_buff_data_t;
  *	@truesize: Buffer size
  *	@users: User count - see {datagram,tcp}.c
  *	@extensions: allocated extensions, valid if active_extensions is nonzero
+ * head和data之间填充协议头，data和tail指向实际数据的头部和尾部，tail和end之间添加新的协议数据
  */
 
 struct sk_buff {
@@ -1166,6 +1167,7 @@ struct sk_buff *napi_build_skb(void *data, unsigned int frag_size);
  * @priority: allocation mask
  *
  * This function is a convenient wrapper around __alloc_skb().
+ * 分配一个套接字缓冲区和一个数据缓冲区
  */
 static inline struct sk_buff *alloc_skb(unsigned int size,
 					gfp_t priority)
@@ -1265,6 +1267,7 @@ static inline int skb_pad(struct sk_buff *skb, int pad)
 {
 	return __skb_pad(skb, pad, true);
 }
+// 用于非中断上下文
 #define dev_kfree_skb(a)	consume_skb(a)
 
 int skb_append_pagefrags(struct sk_buff *skb, struct page *page,
@@ -2523,7 +2526,8 @@ static inline int skb_availroom(const struct sk_buff *skb)
  *	@len: 要移动的字节数
  *
  *	通过减少 tailroom（尾部可用空间），来增加一个空的 &sk_buff 的 headroom
- *	仅允许在 skb 为空（即 data 还未写入）的情况下调用此函数。
+ *	仅允许在 skb 为空（即 data 还未写入）的情况下调用此函数
+ *  对于一个空的缓冲区，可以调整缓冲区的头部
  */
 static inline void skb_reserve(struct sk_buff *skb, int len)
 {
@@ -3019,7 +3023,9 @@ static inline struct sk_buff *__dev_alloc_skb(unsigned int length,
 	return __netdev_alloc_skb(NULL, length, gfp_mask);
 }
 
-/* legacy helper around netdev_alloc_skb() */
+/* legacy helper around netdev_alloc_skb() 
+  以 GFP_ATOMIC 优先级进行skb的分配，原因是该函数经常在设备驱动的接收中断里被调用
+*/
 static inline struct sk_buff *dev_alloc_skb(unsigned int length)
 {
 	return netdev_alloc_skb(NULL, length);

@@ -105,6 +105,9 @@ struct blk_integrity {
 	unsigned char				tag_size;
 };
 
+/*
+表示一个独立的磁盘设备或分区
+*/
 struct gendisk {
 	/* major, first_minor and minors are input parameters only,
 	 * don't use directly.  Use disk_devt() and disk_max_parts().
@@ -202,6 +205,7 @@ void disk_uevent(struct gendisk *disk, enum kobject_action action);
 /* block/genhd.c */
 int device_add_disk(struct device *parent, struct gendisk *disk,
 		const struct attribute_group **groups);
+// 增加 gendisk
 static inline int add_disk(struct gendisk *disk)
 {
 	return device_add_disk(NULL, disk, NULL);

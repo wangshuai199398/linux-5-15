@@ -11,11 +11,16 @@ struct file_operations;
 struct inode;
 struct module;
 
+// cdev_wangs
 struct cdev {
+	// 内嵌的 kobject 对象
 	struct kobject kobj;
+	// 所属模块
 	struct module *owner;
+	// 文件操作结构体
 	const struct file_operations *ops;
 	struct list_head list;
+	// 设备号
 	dev_t dev;
 	unsigned int count;
 } __randomize_layout;

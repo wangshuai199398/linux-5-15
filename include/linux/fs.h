@@ -2102,6 +2102,7 @@ struct iov_iter;
 //文件系统的接口操作，如果想要通过文件系统访问设备，被文件系统的接口操作，需要定义这样一个结构
 struct file_operations {
 	struct module *owner;
+	// 修改一个文件的当前读写位置并将新位置返回
 	loff_t (*llseek) (struct file *, loff_t, int);
 	ssize_t (*read) (struct file *, char __user *, size_t, loff_t *);
 	ssize_t (*write) (struct file *, const char __user *, size_t, loff_t *);
@@ -2110,9 +2111,12 @@ struct file_operations {
 	int (*iopoll)(struct kiocb *kiocb, bool spin);
 	int (*iterate) (struct file *, struct dir_context *);
 	int (*iterate_shared) (struct file *, struct dir_context *);
+	// 询问设备是否可被非阻塞的立即读写，当询问条件未触发时，用户空间进行 select 和 poll 系统调用将引起进程的阻塞
 	__poll_t (*poll) (struct file *, struct poll_table_struct *);
+	// 提供设备相关控制命令的实现，对应用户空间的 fcntl 和 ioctl
 	long (*unlocked_ioctl) (struct file *, unsigned int, unsigned long);
 	long (*compat_ioctl) (struct file *, unsigned int, unsigned long);
+	// 将设备内存映射到进程的虚拟地址空间中，与用户空间的 mmap 对应
 	int (*mmap) (struct file *, struct vm_area_struct *);
 	unsigned long mmap_supported_flags;
 	int (*open) (struct inode *, struct file *);

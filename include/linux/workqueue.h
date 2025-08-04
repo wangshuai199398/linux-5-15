@@ -575,6 +575,7 @@ static inline bool schedule_work_on(int cpu, struct work_struct *work)
  * 如果该任务尚未排队，则将其加入内核全局工作队列；如果已排队，则保持其原有位置不变。
  *
  * 它具有与 queue_work() 相同的内存排序特性；详见 queue_work() 的 DocBook 头部注释。
+ * 调度工作队列执行
  */
 static inline bool schedule_work(struct work_struct *work)
 {

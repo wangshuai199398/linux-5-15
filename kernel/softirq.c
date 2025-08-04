@@ -693,7 +693,7 @@ inline void raise_softirq_irqoff(unsigned int nr)
 	if (!in_interrupt() && should_wake_ksoftirqd())
 		wakeup_softirqd();
 }
-// softirq_wangs
+// 触发软中断 softirq_wangs
 void raise_softirq(unsigned int nr)
 {
 	unsigned long flags;
@@ -712,7 +712,7 @@ void __raise_softirq_irqoff(unsigned int nr)
 	or_softirq_pending(1UL << nr);
 }
 
-//软中断处理 softirq_wangs
+//注册软中断对呀的处理函数 softirq_wangs
 void open_softirq(int nr, void (*action)(struct softirq_action *))
 {
 	softirq_vec[nr].action = action;

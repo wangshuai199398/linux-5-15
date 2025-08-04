@@ -2036,7 +2036,7 @@ void *pskb_put(struct sk_buff *skb, struct sk_buff *tail, int len)
 EXPORT_SYMBOL_GPL(pskb_put);
 
 /**
- *	向缓冲区添加数据
+ *	在缓冲区尾部添加数据
  *	@skb: buffer to use
  *	@len: amount of data to add
  *
@@ -2056,7 +2056,7 @@ void *skb_put(struct sk_buff *skb, unsigned int len)
 EXPORT_SYMBOL(skb_put);
 
 /**
- *	skb_push - add data to the start of a buffer
+ *	在缓冲区头部添加数据
  *	@skb: buffer to use
  *	@len: amount of data to add
  *
@@ -2075,7 +2075,7 @@ void *skb_push(struct sk_buff *skb, unsigned int len)
 EXPORT_SYMBOL(skb_push);
 
 /**
- *	skb_pull - remove data from the start of a buffer
+ *	在缓冲区开头移除数据
  *	@skb: buffer to use
  *	@len: amount of data to remove
  *

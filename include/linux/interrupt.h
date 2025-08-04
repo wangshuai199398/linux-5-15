@@ -78,6 +78,7 @@
 #define IRQF_NOBALANCING	0x00000800
 // 此中断用于轮询
 #define IRQF_IRQPOLL		0x00001000
+// 在中断上下文中会屏蔽该中断号，在thread_fn执行完后，重新使能该中断号
 #define IRQF_ONESHOT		0x00002000
 #define IRQF_NO_SUSPEND		0x00004000
 #define IRQF_FORCE_RESUME	0x00008000
@@ -610,7 +611,7 @@ struct tasklet_struct
 	unsigned long data;
 };
 
-// 如下两个宏可以静态地初始化一个 tasklet
+// 如下两个宏可以静态地初始化一个 tasklet，与处理函数关联
 #define DECLARE_TASKLET(name, _callback)		\
 struct tasklet_struct name = {				\
 	.count = ATOMIC_INIT(0),			\
@@ -665,7 +666,8 @@ static inline void tasklet_unlock_spin_wait(struct tasklet_struct *t) { }
 
 extern void __tasklet_schedule(struct tasklet_struct *t);
 
-// tasklet_wangs 提供2个函数标记一个 tasklet 已经准备就绪
+// 调度tasklet，系统在适当的时候进行调度运行 tasklet_wangs 
+// 提供2个函数标记一个 tasklet 已经准备就绪
 // 使用普通优先级调度一个 tasklet
 static inline void tasklet_schedule(struct tasklet_struct *t)
 {

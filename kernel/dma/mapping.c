@@ -730,6 +730,7 @@ void arch_dma_set_mask(struct device *dev, u64 mask);
 #define arch_dma_set_mask(dev, mask)	do { } while (0)
 #endif
 
+// DMA 地址掩码，用于设置设备可以执行 DMA 操作的地址范围
 int dma_set_mask(struct device *dev, u64 mask)
 {
 	/*

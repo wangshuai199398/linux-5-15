@@ -525,6 +525,7 @@ static void dev_watchdog_down(struct net_device *dev)
  *	@dev: network device
  *
  * Device has detected acquisition of carrier.
+ * 通知内核链路正常
  */
 void netif_carrier_on(struct net_device *dev)
 {
@@ -544,7 +545,7 @@ EXPORT_SYMBOL(netif_carrier_on);
  *	@dev: network device
  *
  * Device has detected loss of carrier.
- * 失去物理链路连接
+ * 通知内核链路失去物理链路连接
  */
 void netif_carrier_off(struct net_device *dev)
 {

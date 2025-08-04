@@ -22,7 +22,9 @@
 #include <asm/bitsperlong.h>
 #include <asm/sockios.h>
 
-/* Linux-specific socket ioctls */
+/* Linux-specific socket ioctls 
+用户调用 ioctl 函数，并执行 SIO_ 命令
+*/
 #define SIOCINQ		FIONREAD
 #define SIOCOUTQ	TIOCOUTQ        /* output queue size (not sent + not acked) */
 
@@ -74,7 +76,7 @@
 #define SIOCGIFMTU	0x8921		/* get MTU size			*/
 #define SIOCSIFMTU	0x8922		/* set MTU size			*/
 #define SIOCSIFNAME	0x8923		/* set interface name */
-#define	SIOCSIFHWADDR	0x8924		/* set hardware address 	*/
+#define	SIOCSIFHWADDR	0x8924		/* 设置设备 MAC 地址，-> set_mac_address */
 #define SIOCGIFENCAP	0x8925		/* get/set encapsulations       */
 #define SIOCSIFENCAP	0x8926		
 #define SIOCGIFHWADDR	0x8927		/* Get hardware address		*/
@@ -124,7 +126,7 @@
 /* Driver configuration calls */
 
 #define SIOCGIFMAP	0x8970		/* Get device parameters	*/
-#define SIOCSIFMAP	0x8971		/* Set device parameters	*/
+#define SIOCSIFMAP	0x8971		/* 设置参数，ifconfig 配置时，-> set_config */
 
 /* DLCI configuration calls */
 
@@ -162,6 +164,7 @@
  *	_NOT_ to issue them to random objects and hope.
  *
  *	THESE IOCTLS ARE _DEPRECATED_ AND WILL DISAPPEAR IN 2.5.X -DaveM
+ * SIOCDEVPRIVATE 到 SIOCDEVPRIVATE + 15 之间，会调用 do_ioctl，进行设备专用数据的设置
  */
  
 #define SIOCDEVPRIVATE	0x89F0	/* to 89FF */

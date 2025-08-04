@@ -2469,14 +2469,15 @@ int remap_pfn_range_notrack(struct vm_area_struct *vma, unsigned long addr,
 /**
  * remap_pfn_range - remap kernel memory to userspace
  * @vma: user vma to map to
- * @addr: target page aligned user address to start at
- * @pfn: page frame number of kernel physical memory address
+ * @addr: 内存映射开始处的虚拟地址
+ * @pfn: 虚拟地址应该映射到的物理地址的页帧号，实际上就是物理地址右移 PAGE_SHIFT 位
  * @size: size of mapping area
- * @prot: page protection flags for this mapping
+ * @prot: 新页所要求的保护属性
  *
  * Note: this is only safe if the mm semaphore is held when called.
  *
  * Return: %0 on success, negative error code otherwise.
+ * 创建页表项，为 addr - addr+size 的虚拟地址构造页表
  */
 int remap_pfn_range(struct vm_area_struct *vma, unsigned long addr,
 		    unsigned long pfn, unsigned long size, pgprot_t prot)

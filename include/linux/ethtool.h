@@ -592,6 +592,7 @@ struct ethtool_module_eeprom {
  *
  * See &struct net_device and &struct net_device_ops for documentation
  * of the generic netdev features interface.
+ * 提供了网卡及网卡驱动管理能力，能够为Linux网络开发人员和管理人员提供对网卡硬件、驱动程序和网络协议栈的设置、查看以及调试等功能
  */
 struct ethtool_ops {
 	u32     cap_link_lanes_supported:1;

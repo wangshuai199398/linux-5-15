@@ -418,6 +418,11 @@ static inline void dma_sync_sgtable_for_device(struct device *dev,
 #define dma_get_sgtable(d, t, v, h, s) dma_get_sgtable_attrs(d, t, v, h, s, 0)
 #define dma_mmap_coherent(d, v, c, h, s) dma_mmap_attrs(d, v, c, h, s, 0)
 
+/*
+申请 DMA 缓冲区，以进行地址映射并保证该缓存区的 Cache 一致性
+dma_handle: 返回DMA缓冲区的总线地址
+返回值：申请到的DMA缓冲区的虚拟地址
+*/
 static inline void *dma_alloc_coherent(struct device *dev, size_t size,
 		dma_addr_t *dma_handle, gfp_t gfp)
 {

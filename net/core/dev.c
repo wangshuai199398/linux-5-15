@@ -4365,6 +4365,9 @@ out:
 	return rc;
 }
 
+/*
+网络协议接口层
+*/
 int dev_queue_xmit(struct sk_buff *skb)
 {
 	return __dev_queue_xmit(skb, NULL);
@@ -5060,7 +5063,7 @@ static int netif_rx_internal(struct sk_buff *skb)
  *	return values:
  *	NET_RX_SUCCESS	(no congestion)
  *	NET_RX_DROP     (packet was dropped)
- *
+ * 网络协议接口层
  */
 
 int netif_rx(struct sk_buff *skb)
@@ -5923,6 +5926,8 @@ static void netif_receive_skb_list_internal(struct list_head *head)
  *	Return values (usually ignored):
  *	NET_RX_SUCCESS: no congestion
  *	NET_RX_DROP: packet was dropped
+ * 中断：使用 netif_rx 将数据包交给上层
+ * 轮训：使用 netif_receive_skb 将数据包交给上层
  */
 int netif_receive_skb(struct sk_buff *skb)
 {
