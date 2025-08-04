@@ -1317,7 +1317,7 @@ struct net_device_ops {
 						    struct net_device *sb_dev);
 	void			(*ndo_change_rx_flags)(struct net_device *dev,
 						       int flags);
-	void			(*ndo_set_rx_mode)(struct net_device *dev);、
+	void			(*ndo_set_rx_mode)(struct net_device *dev);
 	// 设置设备的 MAC 地址
 	int			(*ndo_set_mac_address)(struct net_device *dev, void *addr);
 	int			(*ndo_validate_addr)(struct net_device *dev);
