@@ -4672,7 +4672,7 @@ static struct net *vxlan_get_link_net(const struct net_device *dev)
 
 	return vxlan->net;
 }
-
+// vxlan_wangs
 static struct rtnl_link_ops vxlan_link_ops __read_mostly = {
 	.kind		= "vxlan",
 	.maxtype	= IFLA_VXLAN_MAX,
@@ -4697,7 +4697,7 @@ struct net_device *vxlan_dev_create(struct net *net, const char *name,
 	int err;
 
 	memset(&tb, 0, sizeof(tb));
-
+	printk(KERN_DEBUG "%s \n", __func__);
 	dev = rtnl_create_link(net, name, name_assign_type,
 			       &vxlan_link_ops, tb, NULL);
 	if (IS_ERR(dev))
@@ -5012,7 +5012,7 @@ static struct pernet_operations vxlan_net_ops = {
 	.id   = &vxlan_net_id,
 	.size = sizeof(struct vxlan_net),
 };
-
+// vxlan_wangs
 static int __init vxlan_init_module(void)
 {
 	int rc;
