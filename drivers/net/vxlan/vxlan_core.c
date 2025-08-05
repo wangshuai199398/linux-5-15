@@ -568,6 +568,9 @@ static void vxlan_fdb_switchdev_notifier_info(const struct vxlan_dev *vxlan,
 	fdb_info->added_by_user = fdb->flags & NTF_VXLAN_ADDED_BY_USER;
 }
 
+/*
+向内核的 switchdev 子系统发出 VXLAN FDB 表项的添加或删除事件通知，以便硬件交换芯片或驱动同步该条目
+*/
 static int vxlan_fdb_switchdev_call_notifiers(struct vxlan_dev *vxlan,
 					      struct vxlan_fdb *fdb,
 					      struct vxlan_rdst *rd,
@@ -4055,13 +4058,14 @@ static int __vxlan_dev_create(struct net *net, struct net_device *dev,
 	int err;
 
 	dst = &vxlan->default_dst;
+	// 根据 conf 初始化 vxlan_dev
 	err = vxlan_dev_configure(net, dev, conf, false, extack);
 	if (err)
 		return err;
 
 	dev->ethtool_ops = &vxlan_ethtool_ops;
 
-	/* create an fdb entry for a valid default destination */
+	/* 如果配置了默认远端地址（remote_ip），就创建一条默认的转发表项（FDB），用于封装时查找 */
 	if (!vxlan_addr_any(&dst->remote_ip)) {
 		err = vxlan_fdb_create(vxlan, all_zeros_mac,
 				       &dst->remote_ip,
@@ -4074,12 +4078,12 @@ static int __vxlan_dev_create(struct net *net, struct net_device *dev,
 		if (err)
 			return err;
 	}
-
+	// 正式向内核注册该网络设备，使其在 ip link 中可见，一旦注册，dev 就变成活动设备
 	err = register_netdevice(dev);
 	if (err)
 		goto errout;
 	unregister = true;
-
+	// 如果指定了远程接口索引，则获取对应设备并建立上层-下层链路关系；用于链路追踪、通知等。
 	if (dst->remote_ifindex) {
 		remote_dev = __dev_get_by_index(net, dst->remote_ifindex);
 		if (!remote_dev) {
@@ -4091,11 +4095,11 @@ static int __vxlan_dev_create(struct net *net, struct net_device *dev,
 		if (err)
 			goto errout;
 	}
-
+	// 调用 rtnl 子系统，设置设备参数，比如 MTU、组、状态等
 	err = rtnl_configure_link(dev, NULL);
 	if (err < 0)
 		goto unlink;
-
+	// 插入默认远端的 FDB 条目；通过 Netlink 广播通知用户空间（如 ip monitor）新的邻居项。
 	if (f) {
 		vxlan_fdb_insert(vxlan, all_zeros_mac, dst->remote_vni, f);
 
@@ -4109,7 +4113,7 @@ static int __vxlan_dev_create(struct net *net, struct net_device *dev,
 			goto unregister;
 		}
 	}
-
+	// 将设备加入全局 VXLAN 列表
 	list_add(&vxlan->next, &vn->vxlan_list);
 	if (remote_dev)
 		dst->remote_dev = remote_dev;
@@ -4158,6 +4162,7 @@ static int vxlan_nl2flag(struct vxlan_config *conf, struct nlattr *tb[],
 	return 0;
 }
 
+// 将 Netlink 消息中的属性解析成 VXLAN 的内部配置结构 conf，并验证是否合法
 static int vxlan_nl2conf(struct nlattr *tb[], struct nlattr *data[],
 			 struct net_device *dev, struct vxlan_config *conf,
 			 bool changelink, struct netlink_ext_ack *extack)
@@ -4167,10 +4172,10 @@ static int vxlan_nl2conf(struct nlattr *tb[], struct nlattr *data[],
 
 	memset(conf, 0, sizeof(*conf));
 
-	/* if changelink operation, start with old existing cfg */
+	/* 如果是修改，先用旧配置初始化 */
 	if (changelink)
 		memcpy(conf, &vxlan->cfg, sizeof(*conf));
-
+	// 设置 VNI
 	if (data[IFLA_VXLAN_ID]) {
 		__be32 vni = cpu_to_be32(nla_get_u32(data[IFLA_VXLAN_ID]));
 
@@ -4180,7 +4185,7 @@ static int vxlan_nl2conf(struct nlattr *tb[], struct nlattr *data[],
 		}
 		conf->vni = cpu_to_be32(nla_get_u32(data[IFLA_VXLAN_ID]));
 	}
-
+	// 设置组播地址（IPv4/IPv6）
 	if (data[IFLA_VXLAN_GROUP]) {
 		if (changelink && (conf->remote_ip.sa.sa_family != AF_INET)) {
 			NL_SET_ERR_MSG_ATTR(extack, tb[IFLA_VXLAN_GROUP], "New group address family does not match old group");
@@ -4203,13 +4208,13 @@ static int vxlan_nl2conf(struct nlattr *tb[], struct nlattr *data[],
 		conf->remote_ip.sin6.sin6_addr = nla_get_in6_addr(data[IFLA_VXLAN_GROUP6]);
 		conf->remote_ip.sa.sa_family = AF_INET6;
 	}
-
+	// 配置 VXLAN 接口的 FAN 映射表
 	if (data[IFLA_VXLAN_FAN_MAP]) {
 		err = vxlan_parse_fan_map(data, vxlan);
 		if (err)
 			return err;
 	}
-
+	// 设置本地 IP 地址（LOCAL / LOCAL6）
 	if (data[IFLA_VXLAN_LOCAL]) {
 		if (changelink && (conf->saddr.sa.sa_family != AF_INET)) {
 			NL_SET_ERR_MSG_ATTR(extack, tb[IFLA_VXLAN_LOCAL], "New local address family does not match old");
@@ -4233,7 +4238,7 @@ static int vxlan_nl2conf(struct nlattr *tb[], struct nlattr *data[],
 		conf->saddr.sin6.sin6_addr = nla_get_in6_addr(data[IFLA_VXLAN_LOCAL6]);
 		conf->saddr.sa.sa_family = AF_INET6;
 	}
-
+	// 设置接口索引、TOS、TTL 等常规字段
 	if (data[IFLA_VXLAN_LINK])
 		conf->remote_ifindex = nla_get_u32(data[IFLA_VXLAN_LINK]);
 
@@ -4242,7 +4247,7 @@ static int vxlan_nl2conf(struct nlattr *tb[], struct nlattr *data[],
 
 	if (data[IFLA_VXLAN_TTL])
 		conf->ttl = nla_get_u8(data[IFLA_VXLAN_TTL]);
-
+	// 处理 VXLAN 标志包括
 	if (data[IFLA_VXLAN_TTL_INHERIT]) {
 		err = vxlan_nl2flag(conf, data, IFLA_VXLAN_TTL_INHERIT,
 				    VXLAN_F_TTL_INHERIT, changelink, false,
@@ -4251,11 +4256,11 @@ static int vxlan_nl2conf(struct nlattr *tb[], struct nlattr *data[],
 			return err;
 
 	}
-
+	// 设置 IPv6 flow label（流标签）,它是 VXLAN 的一个可选字段，主要用于支持：基于 IPv6 的 ECMP（等价多路径转发）和流分类
 	if (data[IFLA_VXLAN_LABEL])
 		conf->label = nla_get_be32(data[IFLA_VXLAN_LABEL]) &
 			     IPV6_FLOWLABEL_MASK;
-
+	// 设置 MAC 学习
 	if (data[IFLA_VXLAN_LEARNING]) {
 		err = vxlan_nl2flag(conf, data, IFLA_VXLAN_LEARNING,
 				    VXLAN_F_LEARN, changelink, true,
@@ -4266,10 +4271,10 @@ static int vxlan_nl2conf(struct nlattr *tb[], struct nlattr *data[],
 		/* default to learn on a new device */
 		conf->flags |= VXLAN_F_LEARN;
 	}
-
+	// 老化时间
 	if (data[IFLA_VXLAN_AGEING])
 		conf->age_interval = nla_get_u32(data[IFLA_VXLAN_AGEING]);
-
+	// ARP/NDP Proxy（代理应答）功能
 	if (data[IFLA_VXLAN_PROXY]) {
 		err = vxlan_nl2flag(conf, data, IFLA_VXLAN_PROXY,
 				    VXLAN_F_PROXY, changelink, false,
@@ -4277,7 +4282,7 @@ static int vxlan_nl2conf(struct nlattr *tb[], struct nlattr *data[],
 		if (err)
 			return err;
 	}
-
+	// Remote Source Check（远程源地址检查）功能
 	if (data[IFLA_VXLAN_RSC]) {
 		err = vxlan_nl2flag(conf, data, IFLA_VXLAN_RSC,
 				    VXLAN_F_RSC, changelink, false,
@@ -4285,7 +4290,7 @@ static int vxlan_nl2conf(struct nlattr *tb[], struct nlattr *data[],
 		if (err)
 			return err;
 	}
-
+	// L2MISS 通知功能（Layer 2 Miss notifications）
 	if (data[IFLA_VXLAN_L2MISS]) {
 		err = vxlan_nl2flag(conf, data, IFLA_VXLAN_L2MISS,
 				    VXLAN_F_L2MISS, changelink, false,
@@ -4293,7 +4298,7 @@ static int vxlan_nl2conf(struct nlattr *tb[], struct nlattr *data[],
 		if (err)
 			return err;
 	}
-
+	// L3MISS 通知功能（Layer 3 Miss notifications）
 	if (data[IFLA_VXLAN_L3MISS]) {
 		err = vxlan_nl2flag(conf, data, IFLA_VXLAN_L3MISS,
 				    VXLAN_F_L3MISS, changelink, false,
@@ -4301,7 +4306,7 @@ static int vxlan_nl2conf(struct nlattr *tb[], struct nlattr *data[],
 		if (err)
 			return err;
 	}
-
+	// VXLAN 接口中最多可学习的 MAC 地址数量限制（也叫 FDB 限制）
 	if (data[IFLA_VXLAN_LIMIT]) {
 		if (changelink) {
 			NL_SET_ERR_MSG_ATTR(extack, tb[IFLA_VXLAN_LIMIT],
@@ -4310,7 +4315,7 @@ static int vxlan_nl2conf(struct nlattr *tb[], struct nlattr *data[],
 		}
 		conf->addrmax = nla_get_u32(data[IFLA_VXLAN_LIMIT]);
 	}
-
+	// “metadata 模式” 的 VXLAN 接口，即接口不固定某个 VNI、远端地址等参数，而是从外部（如 TC BPF、XDP、Flow API 等）动态收集 VXLAN 封装信息
 	if (data[IFLA_VXLAN_COLLECT_METADATA]) {
 		err = vxlan_nl2flag(conf, data, IFLA_VXLAN_COLLECT_METADATA,
 				    VXLAN_F_COLLECT_METADATA, changelink, false,
@@ -4318,7 +4323,7 @@ static int vxlan_nl2conf(struct nlattr *tb[], struct nlattr *data[],
 		if (err)
 			return err;
 	}
-
+	// VXLAN 隧道使用的 UDP 源端口范围（Port Range）
 	if (data[IFLA_VXLAN_PORT_RANGE]) {
 		if (!changelink) {
 			const struct ifla_vxlan_port_range *p
@@ -4331,7 +4336,7 @@ static int vxlan_nl2conf(struct nlattr *tb[], struct nlattr *data[],
 			return -EOPNOTSUPP;
 		}
 	}
-
+	// VXLAN 隧道使用的 UDP 目标端口（destination port）
 	if (data[IFLA_VXLAN_PORT]) {
 		if (changelink) {
 			NL_SET_ERR_MSG_ATTR(extack, tb[IFLA_VXLAN_PORT],
@@ -4340,7 +4345,7 @@ static int vxlan_nl2conf(struct nlattr *tb[], struct nlattr *data[],
 		}
 		conf->dst_port = nla_get_be16(data[IFLA_VXLAN_PORT]);
 	}
-
+	// 是否启用 VXLAN 封装 UDP 数据包的校验和（UDP Checksum）功能
 	if (data[IFLA_VXLAN_UDP_CSUM]) {
 		if (changelink) {
 			NL_SET_ERR_MSG_ATTR(extack, tb[IFLA_VXLAN_UDP_CSUM],
@@ -4350,7 +4355,7 @@ static int vxlan_nl2conf(struct nlattr *tb[], struct nlattr *data[],
 		if (!nla_get_u8(data[IFLA_VXLAN_UDP_CSUM]))
 			conf->flags |= VXLAN_F_UDP_ZERO_CSUM_TX;
 	}
-
+	// VXLAN 封装为 IPv6 的 UDP 数据包时，是否允许在发送方向使用“零校验和（0 checksum）”
 	if (data[IFLA_VXLAN_UDP_ZERO_CSUM6_TX]) {
 		err = vxlan_nl2flag(conf, data, IFLA_VXLAN_UDP_ZERO_CSUM6_TX,
 				    VXLAN_F_UDP_ZERO_CSUM6_TX, changelink,
@@ -4358,7 +4363,7 @@ static int vxlan_nl2conf(struct nlattr *tb[], struct nlattr *data[],
 		if (err)
 			return err;
 	}
-
+	// 在 VXLAN 使用 IPv6 进行封装通信时，是否允许接收带有 Zero UDP Checksum 的数据包
 	if (data[IFLA_VXLAN_UDP_ZERO_CSUM6_RX]) {
 		err = vxlan_nl2flag(conf, data, IFLA_VXLAN_UDP_ZERO_CSUM6_RX,
 				    VXLAN_F_UDP_ZERO_CSUM6_RX, changelink,
@@ -4366,7 +4371,7 @@ static int vxlan_nl2conf(struct nlattr *tb[], struct nlattr *data[],
 		if (err)
 			return err;
 	}
-
+	// 在 VXLAN 发送方向是否启用 Remote Checksum Offload（远端校验和卸载）功能
 	if (data[IFLA_VXLAN_REMCSUM_TX]) {
 		err = vxlan_nl2flag(conf, data, IFLA_VXLAN_REMCSUM_TX,
 				    VXLAN_F_REMCSUM_TX, changelink, false,
@@ -4374,7 +4379,7 @@ static int vxlan_nl2conf(struct nlattr *tb[], struct nlattr *data[],
 		if (err)
 			return err;
 	}
-
+	// 是否在接收 VXLAN 数据包时启用 Remote Checksum Offload（远端校验和卸载）的支持
 	if (data[IFLA_VXLAN_REMCSUM_RX]) {
 		err = vxlan_nl2flag(conf, data, IFLA_VXLAN_REMCSUM_RX,
 				    VXLAN_F_REMCSUM_RX, changelink, false,
@@ -4382,14 +4387,14 @@ static int vxlan_nl2conf(struct nlattr *tb[], struct nlattr *data[],
 		if (err)
 			return err;
 	}
-
+	// 是否启用 VXLAN 的 GBP（Group Based Policy）功能扩展
 	if (data[IFLA_VXLAN_GBP]) {
 		err = vxlan_nl2flag(conf, data, IFLA_VXLAN_GBP,
 				    VXLAN_F_GBP, changelink, false, extack);
 		if (err)
 			return err;
 	}
-
+	// 是否启用 VXLAN-GPE（Generic Protocol Extension）扩展协议支持
 	if (data[IFLA_VXLAN_GPE]) {
 		err = vxlan_nl2flag(conf, data, IFLA_VXLAN_GPE,
 				    VXLAN_F_GPE, changelink, false,
@@ -4397,7 +4402,7 @@ static int vxlan_nl2conf(struct nlattr *tb[], struct nlattr *data[],
 		if (err)
 			return err;
 	}
-
+	// 在启用 Remote Checksum Offload（REMCSUM）功能时，是否禁用“partial checksum” 模式
 	if (data[IFLA_VXLAN_REMCSUM_NOPARTIAL]) {
 		err = vxlan_nl2flag(conf, data, IFLA_VXLAN_REMCSUM_NOPARTIAL,
 				    VXLAN_F_REMCSUM_NOPARTIAL, changelink,
@@ -4405,7 +4410,7 @@ static int vxlan_nl2conf(struct nlattr *tb[], struct nlattr *data[],
 		if (err)
 			return err;
 	}
-
+	// 设置 MTU 和 DF 标志
 	if (tb[IFLA_MTU]) {
 		if (changelink) {
 			NL_SET_ERR_MSG_ATTR(extack, tb[IFLA_MTU],

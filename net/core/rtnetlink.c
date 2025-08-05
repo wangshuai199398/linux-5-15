@@ -64,7 +64,7 @@ struct rtnl_link {
 	unsigned int		flags;
 	struct rcu_head		rcu;
 };
-
+// 全局网络配置锁
 static DEFINE_MUTEX(rtnl_mutex);
 
 void rtnl_lock(void)
@@ -88,7 +88,7 @@ void rtnl_kfree_skbs(struct sk_buff *head, struct sk_buff *tail)
 	}
 }
 EXPORT_SYMBOL(rtnl_kfree_skbs);
-
+// 加载模块期间不能持有该锁，避免死锁
 void __rtnl_unlock(void)
 {
 	struct sk_buff *head = defer_kfree_skb_list;
@@ -567,7 +567,7 @@ static size_t rtnl_link_get_size(const struct net_device *dev)
 }
 
 static LIST_HEAD(rtnl_af_ops);
-
+// 查找是否存在对应的处理函数集（rtnl_af_ops）
 static const struct rtnl_af_ops *rtnl_af_lookup(const int family)
 {
 	const struct rtnl_af_ops *ops;
@@ -751,6 +751,15 @@ int rtnl_unicast(struct sk_buff *skb, struct net *net, u32 pid)
 }
 EXPORT_SYMBOL(rtnl_unicast);
 
+/*
+向用户空间发送一个 Netlink 通知消息（如网络设备变动、邻居表变更等），通过 rtnetlink 通道广播或单播出去
+@skb: 要发送的 Netlink 消息缓冲区（消息内容）
+@net: 网络命名空间（如 init_net）
+@pid: 目标进程 PID（为 0 表示广播）
+@group: 发送到的 Netlink 多播组（如 RTNLGRP_LINK）
+@nlh: 原始的 Netlink 消息头，用于确认是否请求回执
+@flags: 分配内存用的 GFP 标志（如 GFP_KERNEL）
+*/
 void rtnl_notify(struct sk_buff *skb, struct net *net, u32 pid, u32 group,
 		 struct nlmsghdr *nlh, gfp_t flags)
 {
@@ -883,7 +892,7 @@ static unsigned int rtnl_dev_get_flags(const struct net_device *dev)
 	return (dev->flags & ~(IFF_PROMISC | IFF_ALLMULTI)) |
 	       (dev->gflags & (IFF_PROMISC | IFF_ALLMULTI));
 }
-
+// 计算新的 flags
 static unsigned int rtnl_dev_combine_flags(const struct net_device *dev,
 					   const struct ifinfomsg *ifm)
 {
@@ -2265,16 +2274,19 @@ static struct net *rtnl_link_get_net_by_nlattr(struct net *src_net,
 	return net;
 }
 
+/*
+从 Netlink 请求中提取目标网络命名空间（net），并检查调用者是否具有指定的权限（cap）来操作该网络命名空间
+*/
 static struct net *rtnl_link_get_net_capable(const struct sk_buff *skb,
 					     struct net *src_net,
 					     struct nlattr *tb[], int cap)
 {
 	struct net *net;
-
+	// 根据 Netlink 请求中提供的 PID、FD 或 NetNS ID 来获取目标网络命名空间
 	net = rtnl_link_get_net_by_nlattr(src_net, tb);
 	if (IS_ERR(net))
 		return net;
-
+	// 检查当前请求的发送者是否有能力（cap）操作这个目标命名空间
 	if (!netlink_ns_capable(skb, net->user_ns, cap)) {
 		put_net(net);
 		return ERR_PTR(-EPERM);
@@ -2315,9 +2327,13 @@ invalid_attr:
 	return -EINVAL;
 }
 
+/*
+验证 Netlink 消息中与网络设备相关的属性是否有效，尤其是在处理如 ip link set 或 ip link add 等命令时，用于检查用户空间传入的参数是否合法。
+*/
 static int validate_linkmsg(struct net_device *dev, struct nlattr *tb[],
 			    struct netlink_ext_ack *extack)
 {
+	// 校验 MAC 和广播地址长度
 	if (dev) {
 		if (tb[IFLA_ADDRESS] &&
 		    nla_len(tb[IFLA_ADDRESS]) < dev->addr_len)
@@ -2327,11 +2343,11 @@ static int validate_linkmsg(struct net_device *dev, struct nlattr *tb[],
 		    nla_len(tb[IFLA_BROADCAST]) < dev->addr_len)
 			return -EINVAL;
 	}
-
+	// 处理地址族相关嵌套属性 IFLA_AF_SPEC
 	if (tb[IFLA_AF_SPEC]) {
 		struct nlattr *af;
 		int rem, err;
-
+		// 遍历其中每个嵌套的属性 af
 		nla_for_each_nested(af, tb[IFLA_AF_SPEC], rem) {
 			const struct rtnl_af_ops *af_ops;
 
@@ -2341,7 +2357,7 @@ static int validate_linkmsg(struct net_device *dev, struct nlattr *tb[],
 
 			if (!af_ops->set_link_af)
 				return -EOPNOTSUPP;
-
+			// 如果该地址族实现了 validate_link_af()，则调用它进一步校验该族的属性
 			if (af_ops->validate_link_af) {
 				err = af_ops->validate_link_af(dev, af, extack);
 				if (err < 0)
@@ -2643,8 +2659,17 @@ static int do_set_proto_down(struct net_device *dev,
 #define DO_SETLINK_MODIFIED	0x01
 /* notify flag means notify + modified. */
 #define DO_SETLINK_NOTIFY	0x03
-//是对 RTM_SETLINK 消息（即 ip link 修改命令）作出响应的核心处理函数
-//ip link、ip addr、ip route
+
+/*
+是对 RTM_SETLINK 消息（即 ip link 修改命令）作出响应的核心处理函数
+ip link、ip addr、ip route
+@skb: Netlink 消息
+@dev: 当前设备
+@ifm: 解析出来的 struct ifinfomsg（接口信息）
+@extack: 错误信息扩展报告
+@tb: 顶层属性数组
+@status: 控制是否发送通知（如 RTM_NEWLINK）
+*/
 static int do_setlink(const struct sk_buff *skb,
 		      struct net_device *dev, struct ifinfomsg *ifm,
 		      struct netlink_ext_ack *extack,
@@ -3168,6 +3193,9 @@ out:
 	return err;
 }
 
+/*
+根据 ifinfomsg 中指定的 flags 修改设备状态，并发送通知。用于网络设备初始化或配置变更后的统一处理
+*/
 int rtnl_configure_link(struct net_device *dev, const struct ifinfomsg *ifm)
 {
 	unsigned int old_flags;
@@ -3191,6 +3219,15 @@ int rtnl_configure_link(struct net_device *dev, const struct ifinfomsg *ifm)
 }
 EXPORT_SYMBOL(rtnl_configure_link);
 
+/*
+创建一个网络设备（net_device）对象的核心函数之一。
+它根据传入的参数（比如设备类型、名称、属性等），完成：
+	1.	设备对象的创建（内存分配）
+	2.	参数初始化（MTU、MAC、队列数等）
+	3.	类型设置（桥接、vxlan、veth等）
+	4.	最终返回 struct net_device *
+这个函数并不注册设备，只是构造并准备好设备结构，后续还需要 register_netdevice() 或类似操作来注册到内核网络子系统中
+*/
 struct net_device *rtnl_create_link(struct net *net, const char *ifname,
 				    unsigned char name_assign_type,
 				    const struct rtnl_link_ops *ops,
@@ -3201,12 +3238,12 @@ struct net_device *rtnl_create_link(struct net *net, const char *ifname,
 	unsigned int num_tx_queues = 1;
 	unsigned int num_rx_queues = 1;
 	int err;
-
+	// 获取发送队列数
 	if (tb[IFLA_NUM_TX_QUEUES])
 		num_tx_queues = nla_get_u32(tb[IFLA_NUM_TX_QUEUES]);
 	else if (ops->get_num_tx_queues)
 		num_tx_queues = ops->get_num_tx_queues();
-
+	// 获取接收队列数
 	if (tb[IFLA_NUM_RX_QUEUES])
 		num_rx_queues = nla_get_u32(tb[IFLA_NUM_RX_QUEUES]);
 	else if (ops->get_num_rx_queues)
@@ -3221,7 +3258,7 @@ struct net_device *rtnl_create_link(struct net *net, const char *ifname,
 		NL_SET_ERR_MSG(extack, "Invalid number of receive queues");
 		return ERR_PTR(-EINVAL);
 	}
-
+	// 分配设备对象，有的设备类型实现了自己的 alloc() 分配函数，比如 VXLAN；如果没有，就使用通用函数 alloc_netdev_mqs() 分配 net_device
 	if (ops->alloc) {
 		dev = ops->alloc(tb, ifname, name_assign_type,
 				 num_tx_queues, num_rx_queues);
@@ -3235,17 +3272,18 @@ struct net_device *rtnl_create_link(struct net *net, const char *ifname,
 
 	if (!dev)
 		return ERR_PTR(-ENOMEM);
-
+	// 检查用户传入的 Netlink 属性是否合法，比如不能设置非法 MTU
 	err = validate_linkmsg(dev, tb, extack);
 	if (err < 0) {
 		free_netdev(dev);
 		return ERR_PTR(err);
 	}
-
+	// 设置设备所属命名空间
 	dev_net_set(dev, net);
+	// 标记设备是通过 rtnetlink 创建的；处于“正在初始化”状态。
 	dev->rtnl_link_ops = ops;
 	dev->rtnl_link_state = RTNL_LINK_INITIALIZING;
-
+	// 设置最大传输单元
 	if (tb[IFLA_MTU]) {
 		u32 mtu = nla_get_u32(tb[IFLA_MTU]);
 
@@ -3256,27 +3294,35 @@ struct net_device *rtnl_create_link(struct net *net, const char *ifname,
 		}
 		dev->mtu = mtu;
 	}
+	// 设置 MAC 地址
 	if (tb[IFLA_ADDRESS]) {
 		memcpy(dev->dev_addr, nla_data(tb[IFLA_ADDRESS]),
 				nla_len(tb[IFLA_ADDRESS]));
 		dev->addr_assign_type = NET_ADDR_SET;
 	}
+	// 设置广播地址
 	if (tb[IFLA_BROADCAST])
 		memcpy(dev->broadcast, nla_data(tb[IFLA_BROADCAST]),
 				nla_len(tb[IFLA_BROADCAST]));
+	// 设置 tx queue 长度
 	if (tb[IFLA_TXQLEN])
 		dev->tx_queue_len = nla_get_u32(tb[IFLA_TXQLEN]);
+	// 设置运行状态
 	if (tb[IFLA_OPERSTATE])
 		set_operstate(dev, nla_get_u8(tb[IFLA_OPERSTATE]));
+	// 设置 link mode
 	if (tb[IFLA_LINKMODE])
 		dev->link_mode = nla_get_u8(tb[IFLA_LINKMODE]);
+	// 设置所属设备组
 	if (tb[IFLA_GROUP])
 		dev_set_group(dev, nla_get_u32(tb[IFLA_GROUP]));
+	// 设置最大 GSO 包大小
 	if (tb[IFLA_GSO_MAX_SIZE])
 		netif_set_gso_max_size(dev, nla_get_u32(tb[IFLA_GSO_MAX_SIZE]));
+	// 设置最大 GSO 分段数
 	if (tb[IFLA_GSO_MAX_SEGS])
 		dev->gso_max_segs = nla_get_u32(tb[IFLA_GSO_MAX_SEGS]);
-
+	// 此时，设备还没有被注册到系统中，只是构造好了 struct net_device 结构
 	return dev;
 }
 EXPORT_SYMBOL(rtnl_create_link);
@@ -3360,7 +3406,7 @@ replay:
 	err = validate_linkmsg(dev, tb, extack);
 	if (err < 0)
 		return err;
-
+	// 如果存在 IFLA_LINKINFO 属性（即链路的额外信息），就尝试解析它的嵌套属性并填充到 linkinfo 数组中
 	if (tb[IFLA_LINKINFO]) {
 		err = nla_parse_nested_deprecated(linkinfo, IFLA_INFO_MAX,
 						  tb[IFLA_LINKINFO],
@@ -3369,9 +3415,10 @@ replay:
 			return err;
 	} else
 		memset(linkinfo, 0, sizeof(linkinfo));
-
+	// 检查是否存在名为 IFLA_INFO_KIND 的子属性，即是否指明了网络设备的类型
 	if (linkinfo[IFLA_INFO_KIND]) {
 		nla_strscpy(kind, linkinfo[IFLA_INFO_KIND], sizeof(kind));
+		// 根据设备类型字符串 kind，查找并返回一个对应的 rtnl_link_ops 结构体指针
 		ops = rtnl_link_ops_get(kind);
 	} else {
 		kind[0] = '\0';
@@ -3382,7 +3429,7 @@ replay:
 	if (ops) {
 		if (ops->maxtype > RTNL_MAX_TYPE)
 			return -EINVAL;
-
+		// linkinfo[IFLA_INFO_DATA] 是一个嵌套属性，包含与特定设备类型（如 vxlan、bridge、vlan）相关的参数
 		if (ops->maxtype && linkinfo[IFLA_INFO_DATA]) {
 			err = nla_parse_nested_deprecated(attr, ops->maxtype,
 							  linkinfo[IFLA_INFO_DATA],
@@ -3391,6 +3438,7 @@ replay:
 				return err;
 			data = attr;
 		}
+		// 验证整个配置（基础配置 tb + 类型专属参数 data）
 		if (ops->validate) {
 			err = ops->validate(tb, data, extack);
 			if (err < 0)
@@ -3399,12 +3447,14 @@ replay:
 	}
 
 	slave_data = NULL;
+	// 如果主设备支持从设备配置（即定义了 m_ops），继续处理
 	if (m_ops) {
 		if (m_ops->slave_maxtype > RTNL_SLAVE_MAX_TYPE)
 			return -EINVAL;
 
 		if (m_ops->slave_maxtype &&
 		    linkinfo[IFLA_INFO_SLAVE_DATA]) {
+			// 解析从属设备的嵌套属性
 			err = nla_parse_nested_deprecated(slave_attr,
 							  m_ops->slave_maxtype,
 							  linkinfo[IFLA_INFO_SLAVE_DATA],
@@ -3415,7 +3465,7 @@ replay:
 			slave_data = slave_attr;
 		}
 	}
-
+	// 判断要操作的网络设备是否已经存在, 如果设备不存在，说明是新建流程，不走这里
 	if (dev) {
 		int status = 0;
 
@@ -3423,39 +3473,40 @@ replay:
 			return -EEXIST;
 		if (nlh->nlmsg_flags & NLM_F_REPLACE)
 			return -EOPNOTSUPP;
-
+		// 如果提供了类型专属的数据（如 vxlan、bridge 的参数）
 		if (linkinfo[IFLA_INFO_DATA]) {
-			if (!ops || ops != dev->rtnl_link_ops ||
-			    !ops->changelink)
+			if (!ops || ops != dev->rtnl_link_ops || !ops->changelink)
 				return -EOPNOTSUPP;
-
+			// 更新配置
 			err = ops->changelink(dev, tb, data, extack);
 			if (err < 0)
 				return err;
+			// 表示需要在后续通知用户配置已更新
 			status |= DO_SETLINK_NOTIFY;
 		}
-
+		// 消息中提供了从属设备数据
 		if (linkinfo[IFLA_INFO_SLAVE_DATA]) {
 			if (!m_ops || !m_ops->slave_changelink)
 				return -EOPNOTSUPP;
-
+			// 更新从属配置（例如桥接端口的 cost 等）
 			err = m_ops->slave_changelink(master_dev, dev, tb,
 						      slave_data, extack);
 			if (err < 0)
 				return err;
 			status |= DO_SETLINK_NOTIFY;
 		}
-
+		// 执行实际的设置操作（如更新设备状态、通知、触发 uevent 等）
 		return do_setlink(skb, dev, ifm, extack, tb, status);
 	}
 
 	if (!(nlh->nlmsg_flags & NLM_F_CREATE)) {
-		/* No dev found and NLM_F_CREATE not set. Requested dev does not exist,
-		 * or it's for a group
-		*/
+		/* 没有找到设备，且请求中没有设置 NLM_F_CREATE。表示要么是请求的设备不存在，要么这是对设备组（group）的操作 */
+		// 如果用户明确指定了某个设备（例如 ip link set dev eth0 ...），但这个设备根本找不到 → 返回 -ENODEV（设备不存在）
 		if (link_specified)
 			return -ENODEV;
+		// 针对一组设备（例如桥接组、VLAN 组等）
 		if (tb[IFLA_GROUP])
+			// 处理组内设备的批量变更
 			return rtnl_group_changelink(skb, net,
 						nla_get_u32(tb[IFLA_GROUP]),
 						ifm, extack, tb);
@@ -3509,9 +3560,8 @@ replay:
 	} else {
 		link_net = NULL;
 	}
-
-	dev = rtnl_create_link(link_net ? : dest_net, ifname,
-			       name_assign_type, ops, tb, extack);
+	// 使用指定的网络命名空间（link_net，如果为空就使用 dest_net），尝试创建一个新的网络设备，名字为 ifname，使用指定的类型（ops）和参数（tb）
+	dev = rtnl_create_link(link_net ? : dest_net, ifname, name_assign_type, ops, tb, extack);
 	if (IS_ERR(dev)) {
 		err = PTR_ERR(dev);
 		goto out;
@@ -3520,7 +3570,7 @@ replay:
 	dev->ifindex = ifm->ifi_index;
 
 	if (ops->newlink)
-		err = ops->newlink(link_net ? : net, dev, tb, data, extack);
+		err = ops->newlink(link_net ? : net, dev, tb, data, extack);// vxlan_newlink
 	else
 		err = register_netdevice(dev);
 	if (err < 0) {

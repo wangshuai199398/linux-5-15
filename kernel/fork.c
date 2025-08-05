@@ -3067,12 +3067,9 @@ static int unshare_fd(unsigned long unshare_flags, struct files_struct **new_fdp
 }
 
 /*
- * unshare allows a process to 'unshare' part of the process
- * context which was originally shared using clone.  copy_*
- * functions used by kernel_clone() cannot be used here directly
- * because they modify an inactive task_struct that is being
- * constructed. Here we are modifying the current, active,
- * task_struct.
+ * unshare 允许一个进程“解除共享”进程上下文中某些原本通过 clone 共享的部分。
+ * 由于 kernel_clone() 所使用的 copy_* 系列函数会修改一个尚未激活的 task_struct（任务结构体），这些函数不能直接用于 unshare。
+ * 而在这里，unshare() 正在修改的是当前正在运行的活动 task_struct，因此不能像 clone 一样对一个新结构体进行修改。
  */
 int ksys_unshare(unsigned long unshare_flags)
 {
@@ -3130,6 +3127,7 @@ int ksys_unshare(unsigned long unshare_flags)
 	err = unshare_userns(unshare_flags, &new_cred);
 	if (err)
 		goto bad_unshare_cleanup_fd;
+	// 这里会创建 namespace
 	err = unshare_nsproxy_namespaces(unshare_flags, &new_nsproxy,
 					 new_cred, new_fs);
 	if (err)
@@ -3201,7 +3199,7 @@ bad_unshare_cleanup_fs:
 bad_unshare_out:
 	return err;
 }
-//unshare_wangs
+//ip netns add. unshare_wangs 
 SYSCALL_DEFINE1(unshare, unsigned long, unshare_flags)
 {
 	return ksys_unshare(unshare_flags);

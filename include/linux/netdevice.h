@@ -2393,7 +2393,7 @@ struct net *dev_net(const struct net_device *dev)
 	return read_pnet(&dev->nd_net);
 }
 
-//将一个 net_device（网络设备）对象绑定到特定的 network namespace（网络命名空间）
+//将一个 net_device（网络设备）对象绑定到特定的 network namespace（网络命名空间）net_wangs
 static inline
 void dev_net_set(struct net_device *dev, struct net *net)
 {

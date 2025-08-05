@@ -755,12 +755,13 @@ static inline int nlmsg_parse(const struct nlmsghdr *nlh, int hdrlen,
 }
 
 /**
- * nlmsg_parse_deprecated - parse attributes of a netlink message
- * @nlh: netlink message header
- * @hdrlen: length of family specific header
- * @tb: destination array with maxtype+1 elements
- * @maxtype: maximum attribute type to be expected
- * @extack: extended ACK report struct
+ * 解析 netlink 消息中的属性
+ * @nlh: Netlink 消息头
+ * @hdrlen: 消息头部固定结构体长度（不含属性）
+ * @tb: 输出：属性指针数组 maxtype+1 elements
+ * @maxtype: 属性编号最大值
+ * @policy: 属性校验规则（类型/长度等）
+ * @extack: 错误报告（可选）
  *
  * See nla_parse_deprecated()
  */
@@ -1122,7 +1123,7 @@ static inline int nla_padlen(int payload)
 }
 
 /**
- * nla_type - attribute type
+ * 获取子属性的类型（通常是地址族编号，如 AF_INET）
  * @nla: netlink attribute
  */
 static inline int nla_type(const struct nlattr *nla)

@@ -257,9 +257,8 @@ struct rtnl_link_ifmap {
 
 /*
  * IFLA_AF_SPEC
- *   Contains nested attributes for address family specific attributes.
- *   Each address family may create a attribute with the address family
- *   number as type and create its own attribute structure in it.
+ *   包含用于地址族（Address Family）特定属性的嵌套属性。
+ *   每个地址族可以使用其地址族编号作为类型，创建一个属性，并在其中定义自己的属性结构
  *
  *   Example:
  *   [IFLA_AF_SPEC] = {
@@ -274,11 +273,16 @@ struct rtnl_link_ifmap {
  */
 
 enum {
+	// 未定义属性
 	IFLA_UNSPEC,
+	// 接口的MAC地址
 	IFLA_ADDRESS,
+	// 广播地址
 	IFLA_BROADCAST,
+	// 接口名
 	IFLA_IFNAME,
 	IFLA_MTU,
+	// 连接的底层接口（如 VLAN 父设备）
 	IFLA_LINK,
 	IFLA_QDISC,
 	IFLA_STATS,
@@ -286,22 +290,27 @@ enum {
 #define IFLA_COST IFLA_COST
 	IFLA_PRIORITY,
 #define IFLA_PRIORITY IFLA_PRIORITY
+	// 所属主设备（如 bond/bridge）
 	IFLA_MASTER,
 #define IFLA_MASTER IFLA_MASTER
 	IFLA_WIRELESS,		/* Wireless Extension event - see wireless.h */
 #define IFLA_WIRELESS IFLA_WIRELESS
+	// 用于某些协议相关的私有信息，比如 bridge 端口属性、VLAN 特定配置等，在很多路径中也被限制或移到专门处理逻辑中
 	IFLA_PROTINFO,		/* Protocol specific information for a link */
 #define IFLA_PROTINFO IFLA_PROTINFO
 	IFLA_TXQLEN,
 #define IFLA_TXQLEN IFLA_TXQLEN
+	// 旧的设备内存映射信息，已过时，通常包含 base_addr、irq、dma、port 等，几乎没有现代设备使用
 	IFLA_MAP,
 #define IFLA_MAP IFLA_MAP
 	IFLA_WEIGHT,
 #define IFLA_WEIGHT IFLA_WEIGHT
 	IFLA_OPERSTATE,
 	IFLA_LINKMODE,
+	// 包含设备类型等信息的嵌套属性，可能包含: IFLA_INFO_KIND, IFLA_INFO_DATA
 	IFLA_LINKINFO,
 #define IFLA_LINKINFO IFLA_LINKINFO
+	// 目标命名空间由某个进程的 PID 表示
 	IFLA_NET_NS_PID,
 	IFLA_IFALIAS,
 	IFLA_NUM_VF,		/* Number of VFs if device is SR-IOV PF */
@@ -309,8 +318,10 @@ enum {
 	IFLA_STATS64,
 	IFLA_VF_PORTS,
 	IFLA_PORT_SELF,
+	// 包含地址族特定属性的嵌套属性
 	IFLA_AF_SPEC,
 	IFLA_GROUP,		/* Group the device belongs to */
+	// 目标命名空间通过某个打开的 fd 表示
 	IFLA_NET_NS_FD,
 	IFLA_EXT_MASK,		/* Extended info mask, VFs, etc */
 	IFLA_PROMISCUITY,	/* Promiscuity count: > 0 means acts PROMISC */
@@ -330,6 +341,7 @@ enum {
 	IFLA_XDP,
 	IFLA_EVENT,
 	IFLA_NEW_NETNSID,
+	// 目标 netns 的 ID
 	IFLA_IF_NETNSID,
 	IFLA_TARGET_NETNSID = IFLA_IF_NETNSID, /* new alias */
 	IFLA_CARRIER_UP_COUNT,
@@ -549,7 +561,9 @@ struct ifla_cacheinfo {
 
 enum {
 	IFLA_INFO_UNSPEC,
+	// 网络设备类型（例如 "bridge", "vlan", "vxlan", "dummy" 等）
 	IFLA_INFO_KIND,
+	// 类型相关的参数数据
 	IFLA_INFO_DATA,
 	IFLA_INFO_XSTATS,
 	IFLA_INFO_SLAVE_KIND,

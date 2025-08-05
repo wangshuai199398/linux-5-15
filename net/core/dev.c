@@ -7564,11 +7564,13 @@ bool netdev_has_any_upper_dev(struct net_device *dev)
 EXPORT_SYMBOL(netdev_has_any_upper_dev);
 
 /**
- * netdev_master_upper_dev_get - Get master upper device
+ * 获取该设备的“上层 master 设备”
  * @dev: device
  *
  * Find a master upper device and return pointer to it or NULL in case
  * it's not there. The caller must hold the RTNL lock.
+ * 如果 dev 是一个 VLAN 接口（如 eth0.100），它的 master 可能是 eth0
+ * 如果 dev 是一个虚拟设备（比如 bond、bridge 的从属设备），它的 master 是 bond/bridge
  */
 struct net_device *netdev_master_upper_dev_get(struct net_device *dev)
 {
@@ -9023,6 +9025,9 @@ unsigned int dev_get_flags(const struct net_device *dev)
 }
 EXPORT_SYMBOL(dev_get_flags);
 
+/*
+修改设备的运行状态（例如：将设备置为 UP 或 DOWN）
+*/
 int __dev_change_flags(struct net_device *dev, unsigned int flags,
 		       struct netlink_ext_ack *extack)
 {
@@ -9088,22 +9093,25 @@ int __dev_change_flags(struct net_device *dev, unsigned int flags,
 
 	return ret;
 }
-
+/*
+根据设备状态标志（如 UP、PROMISC、MULTICAST）发生的变化，通知内核其他子系统和用户空间，从而让系统对设备状态做出反应
+*/
 void __dev_notify_flags(struct net_device *dev, unsigned int old_flags,
 			unsigned int gchanges)
 {
+	// 哪些位发生了变化
 	unsigned int changes = dev->flags ^ old_flags;
-
+	// 通过 Netlink 发送 RTM_NEWLINK 消息，这允许像 ip monitor link 这样的工具知道设备状态变了
 	if (gchanges)
 		rtmsg_ifinfo(RTM_NEWLINK, dev, gchanges, GFP_ATOMIC);
-
+	// 如果 IFF_UP 状态发生变化：新状态是 UP：调用 NETDEV_UP 通知；新状态是 DOWN：调用 NETDEV_DOWN 通知。
 	if (changes & IFF_UP) {
 		if (dev->flags & IFF_UP)
 			call_netdevice_notifiers(NETDEV_UP, dev);
 		else
 			call_netdevice_notifiers(NETDEV_DOWN, dev);
 	}
-
+	// 如果设备当前是 UP 且其它重要标志发生了变化（排除掉常见的如 PROMISC）：比如 VLAN、NOARP、RUNNING 等发生变化
 	if (dev->flags & IFF_UP &&
 	    (changes & ~(IFF_UP | IFF_PROMISC | IFF_ALLMULTI | IFF_VOLATILE))) {
 		struct netdev_notifier_change_info change_info = {
@@ -9112,7 +9120,7 @@ void __dev_notify_flags(struct net_device *dev, unsigned int old_flags,
 			},
 			.flags_changed = changes,
 		};
-
+		// 通知其他模块
 		call_netdevice_notifiers_info(NETDEV_CHANGE, &change_info.info);
 	}
 }

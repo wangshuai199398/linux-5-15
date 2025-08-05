@@ -2513,6 +2513,9 @@ EXPORT_SYMBOL(netlink_rcv_skb);
  * @group: destination multicast group or 0
  * @report: 1 to report back, 0 to disable
  * @flags: allocation flags
+ * 将一条 Netlink 消息发送给：
+ *   1.	一个多播组（multicast） 的所有监听者（如 ip monitor）。
+ * 	 2. 特定进程（unicast），如果对方请求“回执”。
  */
 int nlmsg_notify(struct sock *sk, struct sk_buff *skb, u32 portid,
 		 unsigned int group, int report, gfp_t flags)
@@ -2528,7 +2531,8 @@ int nlmsg_notify(struct sock *sk, struct sk_buff *skb, u32 portid,
 		}
 
 		/* errors reported via destination sk->sk_err, but propagate
-		 * delivery errors if NETLINK_BROADCAST_ERROR flag is set */
+		 * delivery errors if NETLINK_BROADCAST_ERROR flag is set 
+		   向该多播组广播 skb */
 		err = nlmsg_multicast(sk, skb, exclude_portid, group, flags);
 		if (err == -ESRCH)
 			err = 0;
@@ -2536,7 +2540,7 @@ int nlmsg_notify(struct sock *sk, struct sk_buff *skb, u32 portid,
 
 	if (report) {
 		int err2;
-
+		// 回发给请求该操作的进程
 		err2 = nlmsg_unicast(sk, skb, portid);
 		if (!err)
 			err = err2;

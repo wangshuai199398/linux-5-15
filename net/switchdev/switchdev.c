@@ -412,6 +412,9 @@ EXPORT_SYMBOL_GPL(unregister_switchdev_notifier);
  *	@info: notifier information data
  *	@extack: netlink extended ack
  *	Call all network notifier blocks.
+ * 发出通知事件
+ * 所有监听了 VXLAN 事件的 switchdev 驱动（如 mlx5）会收到
+ * 会尝试将该 VXLAN FDB 条目同步进硬件 VXLAN 表中
  */
 int call_switchdev_notifiers(unsigned long val, struct net_device *dev,
 			     struct switchdev_notifier_info *info,

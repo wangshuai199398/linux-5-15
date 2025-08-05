@@ -65,8 +65,8 @@ struct nlmsghdr {
 #define NLM_F_DUMP	(NLM_F_ROOT|NLM_F_MATCH)
 
 /* Modifiers to NEW request */
-#define NLM_F_REPLACE	0x100	/* Override existing		*/
-#define NLM_F_EXCL	0x200	/* Do not touch, if it exists	*/
+#define NLM_F_REPLACE	0x100	/* 替换已有设备	*/
+#define NLM_F_EXCL	0x200	/* 必须新建	*/
 #define NLM_F_CREATE	0x400	/* Create, if it does not exist	*/
 #define NLM_F_APPEND	0x800	/* Add to end of list		*/
 

@@ -199,13 +199,13 @@ struct vfs_ns_cap_data {
 /* Allow multicasting */
 /* Allow read/write of device-specific registers */
 /* Allow activation of ATM control sockets */
-
+// 管理网络配置的能力
 #define CAP_NET_ADMIN        12
 
 /* Allow use of RAW sockets */
 /* Allow use of PACKET sockets */
 /* Allow binding to any address for transparent proxying (also via NET_ADMIN) */
-
+// 使用原始套接字的能力
 #define CAP_NET_RAW          13
 
 /* Allow locking of shared memory segments */
