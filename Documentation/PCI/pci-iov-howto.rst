@@ -15,18 +15,15 @@ Overview
 What is SR-IOV
 --------------
 
-Single Root I/O Virtualization (SR-IOV) is a PCI Express Extended
-capability which makes one physical device appear as multiple virtual
-devices. The physical device is referred to as Physical Function (PF)
-while the virtual devices are referred to as Virtual Functions (VF).
-Allocation of the VF can be dynamically controlled by the PF via
-registers encapsulated in the capability. By default, this feature is
-not enabled and the PF behaves as traditional PCIe device. Once it's
-turned on, each VF's PCI configuration space can be accessed by its own
-Bus, Device and Function Number (Routing ID). And each VF also has PCI
-Memory Space, which is used to map its register set. VF device driver
-operates on the register set so it can be functional and appear as a
-real existing PCI device.
+单根 I/O 虚拟化（SR-IOV，Single Root I/O Virtualization）是一种 PCI Express 扩展功能，它可以将一个物理设备虚拟成多个虚拟设备。
+该物理设备称为物理功能（PF，Physical Function），而虚拟出的设备称为虚拟功能（VF，Virtual Function）。
+
+PF 可以通过封装在该扩展能力中的寄存器动态控制 VF 的分配。
+默认情况下，此功能是未启用的，PF 表现为一个传统的 PCIe 设备。
+一旦启用该功能，每个 VF 的 PCI 配置空间都可以通过其各自的总线号（Bus）、设备号（Device）和功能号（Function Number）（也称为 Routing ID）进行访问。
+同时，每个 VF 也拥有自己的 PCI 内存空间，用于映射其寄存器集。
+
+VF 的设备驱动程序会操作这些寄存器，以便让虚拟功能设备具备实际功能并表现为一个真实存在的 PCI 设备。
 
 User Guide
 ==========
@@ -34,28 +31,24 @@ User Guide
 How can I enable SR-IOV capability
 ----------------------------------
 
-Multiple methods are available for SR-IOV enablement.
-In the first method, the device driver (PF driver) will control the
-enabling and disabling of the capability via API provided by SR-IOV core.
-If the hardware has SR-IOV capability, loading its PF driver would
-enable it and all VFs associated with the PF.  Some PF drivers require
-a module parameter to be set to determine the number of VFs to enable.
-In the second method, a write to the sysfs file sriov_numvfs will
-enable and disable the VFs associated with a PCIe PF.  This method
-enables per-PF, VF enable/disable values versus the first method,
-which applies to all PFs of the same device.  Additionally, the
-PCI SRIOV core support ensures that enable/disable operations are
-valid to reduce duplication in multiple drivers for the same
-checks, e.g., check numvfs == 0 if enabling VFs, ensure
-numvfs <= totalvfs.
-The second method is the recommended method for new/future VF devices.
+SR-IOV 的启用有多种方式可供选择。
+
+第一种方法中，由设备驱动程序（PF 驱动）通过 SR-IOV 核心提供的 API 来控制该功能的启用和禁用。
+如果硬件具备 SR-IOV 功能，在加载其 PF 驱动时，就会启用 SR-IOV 以及该 PF 所关联的所有 VF。
+一些 PF 驱动还要求设置一个模块参数来指定启用的 VF 数量。
+
+第二种方法则是通过向 sysfs 文件 sriov_numvfs 写入值来启用或禁用与某个 PCIe PF 关联的 VF。
+相比第一种方法（其作用范围是同型号的所有 PF），这种方式支持按每个 PF 单独设置 VF 的启用/禁用数量。
+
+此外，PCI SR-IOV 核心支持还会确保启用/禁用操作的合法性，从而减少各个驱动中重复编写相同的校验逻辑（例如：启用 VF 时检查 numvfs == 0，或确保 numvfs <= totalvfs）。
+
+推荐为新的/未来的 VF 设备使用第二种方法。
 
 How can I use the Virtual Functions
 -----------------------------------
 
-The VF is treated as hot-plugged PCI devices in the kernel, so they
-should be able to work in the same way as real PCI devices. The VF
-requires device driver that is same as a normal PCI device's.
+VF（虚拟功能）在内核中被视为热插拔的 PCI 设备，因此它们应当能够像真实的 PCI 设备一样工作。
+VF 需要的设备驱动程序与普通 PCI 设备所需的驱动程序是相同的。
 
 Developer Guide
 ===============
@@ -63,50 +56,43 @@ Developer Guide
 SR-IOV API
 ----------
 
-To enable SR-IOV capability:
+启用 SR-IOV 功能的方法如下：
 
-(a) For the first method, in the driver::
+（a）第一种方法：在驱动程序中调用：
 
 	int pci_enable_sriov(struct pci_dev *dev, int nr_virtfn);
 
-'nr_virtfn' is number of VFs to be enabled.
+其中 nr_virtfn 是要启用的虚拟功能（VF）数量。
 
-(b) For the second method, from sysfs::
+(b) 第二种方法：通过 sysfs 接口：
 
-	echo 'nr_virtfn' > \
-        /sys/bus/pci/devices/<DOMAIN:BUS:DEVICE.FUNCTION>/sriov_numvfs
+	echo 'nr_virtfn' > /sys/bus/pci/devices/<DOMAIN:BUS:DEVICE.FUNCTION>/sriov_numvfs
 
-To disable SR-IOV capability:
+禁用 SR-IOV 功能的方法如下：
 
-(a) For the first method, in the driver::
+(a) 第一种方法：在驱动程序中调用：
 
 	void pci_disable_sriov(struct pci_dev *dev);
 
-(b) For the second method, from sysfs::
+（b）第二种方法：通过 sysfs 接口：
 
-	echo  0 > \
-        /sys/bus/pci/devices/<DOMAIN:BUS:DEVICE.FUNCTION>/sriov_numvfs
+	echo  0 > /sys/bus/pci/devices/<DOMAIN:BUS:DEVICE.FUNCTION>/sriov_numvfs
 
-To enable auto probing VFs by a compatible driver on the host, run
-command below before enabling SR-IOV capabilities. This is the
-default behavior.
+若要启用宿主机上兼容驱动程序对 VF 的自动探测（默认行为），可在启用 SR-IOV 功能之前运行以下命令：
 ::
 
-	echo 1 > \
-        /sys/bus/pci/devices/<DOMAIN:BUS:DEVICE.FUNCTION>/sriov_drivers_autoprobe
+	echo 1 > /sys/bus/pci/devices/<DOMAIN:BUS:DEVICE.FUNCTION>/sriov_drivers_autoprobe
 
-To disable auto probing VFs by a compatible driver on the host, run
-command below before enabling SR-IOV capabilities. Updating this
-entry will not affect VFs which are already probed.
+若要禁用宿主机上兼容驱动程序对 VF 的自动探测，可在启用 SR-IOV 功能之前运行以下命令。注意：修改此项不会影响已被探测的 VF。
 ::
 
-	echo  0 > \
-        /sys/bus/pci/devices/<DOMAIN:BUS:DEVICE.FUNCTION>/sriov_drivers_autoprobe
+	echo  0 > /sys/bus/pci/devices/<DOMAIN:BUS:DEVICE.FUNCTION>/sriov_drivers_autoprobe
+
 
 Usage example
 -------------
 
-Following piece of code illustrates the usage of the SR-IOV API.
+下面的代码片段展示了 SR-IOV API 的使用方法
 ::
 
 	static int dev_probe(struct pci_dev *dev, const struct pci_device_id *id)

@@ -2,24 +2,22 @@
 
 :Author: Kishon Vijay Abraham I <kishon@ti.com>
 
-This document is a guide to use the PCI Endpoint Framework in order to create
-endpoint controller driver, endpoint function driver, and using configfs
-interface to bind the function driver to the controller driver.
+本文档是使用 PCI Endpoint 框架的指南，旨在指导如何：
+	•	创建 Endpoint 控制器驱动（Endpoint Controller Driver），
+	•	创建 Endpoint 功能驱动（Endpoint Function Driver），
+	•	以及使用 configfs 接口将功能驱动绑定到控制器驱动。
 
 Introduction
 ============
 
-Linux has a comprehensive PCI subsystem to support PCI controllers that
-operates in Root Complex mode. The subsystem has capability to scan PCI bus,
-assign memory resources and IRQ resources, load PCI driver (based on
-vendor ID, device ID), support other services like hot-plug, power management,
-advanced error reporting and virtual channels.
+Linux 拥有一个功能全面的 PCI 子系统，用于支持在根复合体（Root Complex）模式下运行的 PCI 控制器。该子系统具备以下能力：
+	•	扫描 PCI 总线，
+	•	分配内存资源和中断资源，
+	•	加载 PCI 驱动程序（基于厂商 ID 和设备 ID），
+	•	支持其他服务，如热插拔、电源管理、增强错误报告（AER）和虚拟通道等。
 
-However the PCI controller IP integrated in some SoCs is capable of operating
-either in Root Complex mode or Endpoint mode. PCI Endpoint Framework will
-add endpoint mode support in Linux. This will help to run Linux in an
-EP system which can have a wide variety of use cases from testing or
-validation, co-processor accelerator, etc.
+然而，一些 SoC 中集成的 PCI 控制器 IP 既可以在 Root Complex 模式下运行，也可以在终端设备（Endpoint）模式下运行。PCI Endpoint 框架将为 Linux 添加对终端模式的支持。
+
 
 PCI Endpoint Core
 =================

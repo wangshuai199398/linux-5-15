@@ -11,94 +11,81 @@ The PCI Express Port Bus Driver Guide HOWTO
 About this guide
 ================
 
-This guide describes the basics of the PCI Express Port Bus driver
-and provides information on how to enable the service drivers to
-register/unregister with the PCI Express Port Bus Driver.
+本指南介绍了 PCI Express Port 总线驱动的基础知识,并提供了如何使服务驱动(service drivers)与 PCI Express Port 总线驱动进行注册/注销的相关信息
 
 
-What is the PCI Express Port Bus Driver
+什么是 PCI Express Port 总线驱动程序
 =======================================
 
-A PCI Express Port is a logical PCI-PCI Bridge structure. There
-are two types of PCI Express Port: the Root Port and the Switch
-Port. The Root Port originates a PCI Express link from a PCI Express
-Root Complex and the Switch Port connects PCI Express links to
-internal logical PCI buses. The Switch Port, which has its secondary
-bus representing the switch's internal routing logic, is called the
-switch's Upstream Port. The switch's Downstream Port is bridging from
-switch's internal routing bus to a bus representing the downstream
-PCI Express link from the PCI Express Switch.
+一个 PCI Express 端口(Port)是一个逻辑上的 PCI-to-PCI 桥接结构。
+PCI Express 端口有两种类型: Root Port(根端口) 和 Switch Port(交换端口)。
+	•	Root Port 是从 PCI Express 根复合体(Root Complex)发起 PCI Express 链路的端口。
+	•	Switch Port 用于将 PCI Express 链路连接到内部逻辑 PCI 总线。
+其中, Switch Port 中的 Secondary Bus 表示交换芯片的内部路由逻辑，这个端口被称为 交换芯片的上行端口(Upstream Port)。
+而下行端口(Downstream Port) 是从交换芯片的内部路由总线桥接到下游 PCI Express 链路所连接的总线
 
-A PCI Express Port can provide up to four distinct functions,
-referred to in this document as services, depending on its port type.
-PCI Express Port's services include native hotplug support (HP),
-power management event support (PME), advanced error reporting
-support (AER), and virtual channel support (VC). These services may
-be handled by a single complex driver or be individually distributed
-and handled by corresponding service drivers.
+一个 PCI Express 端口(Port)根据其类型, 最多可以提供四种不同的功能, 本文档中将这些功能称为服务(services)。
 
-Why use the PCI Express Port Bus Driver?
+PCI Express 端口的服务包括：
+	•	原生热插拔支持(HP)
+	•	电源管理事件支持(PME)
+	•	高级错误报告支持(AER)
+	•	虚拟通道支持(VC)
+
+这些服务可以由一个复杂的统一驱动程序进行处理，也可以由各自对应的服务驱动程序分别独立处理。
+
+为什么要使用 PCI Express Port 总线驱动程序？
 ========================================
 
-In existing Linux kernels, the Linux Device Driver Model allows a
-physical device to be handled by only a single driver. The PCI
-Express Port is a PCI-PCI Bridge device with multiple distinct
-services. To maintain a clean and simple solution each service
-may have its own software service driver. In this case several
-service drivers will compete for a single PCI-PCI Bridge device.
-For example, if the PCI Express Root Port native hotplug service
-driver is loaded first, it claims a PCI-PCI Bridge Root Port. The
-kernel therefore does not load other service drivers for that Root
-Port. In other words, it is impossible to have multiple service
-drivers load and run on a PCI-PCI Bridge device simultaneously
-using the current driver model.
+在现有的 Linux 内核中, Linux 设备驱动模型(Device Driver Model) 规定一个物理设备只能由一个驱动程序处理
+而 PCI Express 端口是一个具有多个不同服务的 PCI-to-PCI 桥接设备。
+为了保持解决方案的清晰和简洁，每个服务可以由其各自的服务驱动程序进行处理。
 
-To enable multiple service drivers running simultaneously requires
-having a PCI Express Port Bus driver, which manages all populated
-PCI Express Ports and distributes all provided service requests
-to the corresponding service drivers as required. Some key
-advantages of using the PCI Express Port Bus driver are listed below:
+在这种情况下，多个服务驱动程序会竞争同一个 PCI-to-PCI 桥接设备。
 
-  - Allow multiple service drivers to run simultaneously on
-    a PCI-PCI Bridge Port device.
+例如，如果 PCI Express 根端口(Root Port)的原生热插拔服务驱动程序被最先加载,
+它将占用这个 Root Port, 因此内核就不会再为该 Root Port 加载其它服务驱动程序。
 
-  - Allow service drivers implemented in an independent
-    staged approach.
+换句话说，在当前驱动模型下，不可能让多个服务驱动同时加载并运行在同一个 PCI-to-PCI 桥设备上。
 
-  - Allow one service driver to run on multiple PCI-PCI Bridge
-    Port devices.
+为了实现多个服务驱动的同时运行，必须引入一个 PCI Express Port 总线驱动(Port Bus Driver)
+它用于管理所有已连接的 PCI Express 端口，并根据需要将不同的服务请求分发给相应的服务驱动程序。
 
-  - Manage and distribute resources of a PCI-PCI Bridge Port
-    device to requested service drivers.
+使用 PCI Express Port 总线驱动的一些主要优势如下所示：
 
-Configuring the PCI Express Port Bus Driver vs. Service Drivers
+  - 允许多个服务驱动程序同时运行在一个 PCI-to-PCI 桥接端口设备上
+
+  - 允许服务驱动程序以独立、分阶段的方式实现
+
+  - 允许一个服务驱动程序同时运行在多个 PCI-to-PCI 桥接端口设备上
+
+  - 负责管理和分发 PCI-to-PCI 桥接端口设备的资源，以供请求的服务驱动程序使用
+
+配置 PCI Express Port 总线驱动与服务驱动程序的区别
 ===============================================================
 
-Including the PCI Express Port Bus Driver Support into the Kernel
+将 PCI Express Port 总线驱动支持集成进内核
 -----------------------------------------------------------------
 
-Including the PCI Express Port Bus driver depends on whether the PCI
-Express support is included in the kernel config. The kernel will
-automatically include the PCI Express Port Bus driver as a kernel
-driver when the PCI Express support is enabled in the kernel.
+是否包含 PCI Express Port 总线驱动取决于内核配置中是否启用了 PCI Express 支持
+当内核中启用了 PCI Express 支持时，内核将自动将 PCI Express Port 总线驱动作为内核驱动程序包含进来
 
-Enabling Service Driver Support
+启用服务驱动程序支持
 -------------------------------
 
-PCI device drivers are implemented based on Linux Device Driver Model.
-All service drivers are PCI device drivers. As discussed above, it is
-impossible to load any service driver once the kernel has loaded the
-PCI Express Port Bus Driver. To meet the PCI Express Port Bus Driver
-Model requires some minimal changes on existing service drivers that
-imposes no impact on the functionality of existing service drivers.
+PCI 设备驱动程序是基于 Linux 设备驱动模型实现的，所有服务驱动程序本质上都是 PCI 设备驱动程序。
 
-A service driver is required to use the two APIs shown below to
-register its service with the PCI Express Port Bus driver (see
-section 5.2.1 & 5.2.2). It is important that a service driver
-initializes the pcie_port_service_driver data structure, included in
-header file /include/linux/pcieport_if.h, before calling these APIs.
-Failure to do so will result an identity mismatch, which prevents
-the PCI Express Port Bus driver from loading a service driver.
+如前所述，一旦内核加载了 PCI Express Port 总线驱动，就无法再加载任何服务驱动程序。
+
+为了适配 PCI Express Port 总线驱动模型，对现有服务驱动程序需要进行一些最小化的修改，
+这些修改不会影响其原有功能。
+
+一个服务驱动程序必须使用下方的两个 API 来将其服务注册到 PCI Express Port 总线驱动中（参见第 5.2.1 和 5.2.2 节）。
+
+在调用这些 API 之前，服务驱动程序必须初始化 pcie_port_service_driver 数据结构，
+该结构定义在头文件 /include/linux/pcieport_if.h 中。
+
+如果未正确初始化该结构, 将导致身份不匹配(identity mismatch), 从而阻止 PCI Express Port 总线驱动加载该服务驱动程序
 
 pcie_port_service_register
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -106,11 +93,10 @@ pcie_port_service_register
 
   int pcie_port_service_register(struct pcie_port_service_driver *new)
 
-This API replaces the Linux Driver Model's pci_register_driver API. A
-service driver should always calls pcie_port_service_register at
-module init. Note that after service driver being loaded, calls
-such as pci_enable_device(dev) and pci_set_master(dev) are no longer
-necessary since these calls are executed by the PCI Port Bus driver.
+该 API 用于替代 Linux 驱动模型中的 pci_register_driver API
+服务驱动程序在模块初始化时应始终调用 pcie_port_service_register。
+
+需要注意的是，在服务驱动被加载后，像 pci_enable_device(dev) 和 pci_set_master(dev) 这样的调用就不再需要，因为这些调用已经由 PCI Port 总线驱动执行
 
 pcie_port_service_unregister
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -118,15 +104,14 @@ pcie_port_service_unregister
 
   void pcie_port_service_unregister(struct pcie_port_service_driver *new)
 
-pcie_port_service_unregister replaces the Linux Driver Model's
-pci_unregister_driver. It's always called by service driver when a
-module exits.
+pcie_port_service_unregister 用于替代 Linux 驱动模型中的 pci_unregister_driver
+
+当模块退出时，服务驱动程序应始终调用该函数
 
 Sample Code
 ~~~~~~~~~~~
 
-Below is sample service driver code to initialize the port service
-driver data structure.
+以下是初始化端口服务驱动程序数据结构的示例服务驱动代码
 ::
 
   static struct pcie_port_service_id service_id[] = { {
@@ -148,8 +133,7 @@ driver data structure.
     .resume		= aerdrv_resume,
   };
 
-Below is a sample code for registering/unregistering a service
-driver.
+以下是用于注册和注销服务驱动程序的示例代码
 ::
 
   static int __init aerdrv_service_init(void)
@@ -173,48 +157,38 @@ driver.
   module_init(aerdrv_service_init);
   module_exit(aerdrv_service_exit);
 
-Possible Resource Conflicts
+可能的资源冲突
 ===========================
 
-Since all service drivers of a PCI-PCI Bridge Port device are
-allowed to run simultaneously, below lists a few of possible resource
-conflicts with proposed solutions.
+由于同一个 PCI-to-PCI 桥接端口设备上的所有服务驱动程序都允许同时运行，下面列出了一些可能发生的资源冲突以及对应的解决方案
 
 MSI and MSI-X Vector Resource
 -----------------------------
 
-Once MSI or MSI-X interrupts are enabled on a device, it stays in this
-mode until they are disabled again.  Since service drivers of the same
-PCI-PCI Bridge port share the same physical device, if an individual
-service driver enables or disables MSI/MSI-X mode it may result
-unpredictable behavior.
+一旦在某个设备上启用了 MSI 或 MSI-X 中断，该设备将保持在该模式，直到它们被再次禁用。
+由于同一 PCI-to-PCI 桥接端口的多个服务驱动程序共享同一个物理设备，如果某个单独的服务驱动启用或禁用了 MSI/MSI-X 模式，可能会导致不可预期的行为。
 
-To avoid this situation all service drivers are not permitted to
-switch interrupt mode on its device. The PCI Express Port Bus driver
-is responsible for determining the interrupt mode and this should be
-transparent to service drivers. Service drivers need to know only
-the vector IRQ assigned to the field irq of struct pcie_device, which
-is passed in when the PCI Express Port Bus driver probes each service
-driver. Service drivers should use (struct pcie_device*)dev->irq to
-call request_irq/free_irq. In addition, the interrupt mode is stored
-in the field interrupt_mode of struct pcie_device.
+为避免上述情况，所有服务驱动程序都不允许切换设备的中断模式。
 
-PCI Memory/IO Mapped Regions
+由 PCI Express Port 总线驱动负责确定中断模式，这一过程对服务驱动来说应当是透明的。
+
+服务驱动只需要知道分配给 struct pcie_device 中 irq 字段的中断向量号，
+该结构在 PCI Express Port 总线驱动对每个服务驱动进行 probe 时传入。
+
+服务驱动应通过 (struct pcie_device*)dev->irq 来调用 request_irq 和 free_irq。
+
+此外，中断模式也会被存储在 struct pcie_device 的 interrupt_mode 字段中。
+
+PCI 内存 / I/O 映射区域
 ----------------------------
 
-Service drivers for PCI Express Power Management (PME), Advanced
-Error Reporting (AER), Hot-Plug (HP) and Virtual Channel (VC) access
-PCI configuration space on the PCI Express port. In all cases the
-registers accessed are independent of each other. This patch assumes
-that all service drivers will be well behaved and not overwrite
-other service driver's configuration settings.
+用于 PCI Express 电源管理(PME)、高级错误报告(AER)、热插拔(HP)和虚拟通道(VC)的服务驱动程序，都会访问 PCI Express 端口上的 PCI 配置空间。
+在所有情况下，所访问的寄存器彼此是独立的。
+该补丁的假设是：所有服务驱动程序都会遵循规范行为，不会覆盖其他服务驱动的配置设置。
 
-PCI Config Registers
+PCI 配置寄存器
 --------------------
 
-Each service driver runs its PCI config operations on its own
-capability structure except the PCI Express capability structure, in
-which Root Control register and Device Control register are shared
-between PME and AER. This patch assumes that all service drivers
-will be well behaved and not overwrite other service driver's
-configuration settings.
+每个服务驱动程序在其各自的能力结构(capability structure)上执行 PCI 配置操作，
+除了 PCI Express 能力结构，其中的 Root Control 寄存器 和 Device Control 寄存器会被 PME 和 AER 两个服务驱动共享。
+该补丁假设所有服务驱动程序都会遵守规范行为，不会覆盖其他服务驱动的配置设置。

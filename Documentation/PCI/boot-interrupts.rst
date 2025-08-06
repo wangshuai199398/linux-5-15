@@ -9,30 +9,26 @@ Boot Interrupts
 Overview
 ========
 
-On PCI Express, interrupts are represented with either MSI or inbound
-interrupt messages (Assert_INTx/Deassert_INTx). The integrated IO-APIC in a
-given Core IO converts the legacy interrupt messages from PCI Express to
-MSI interrupts.  If the IO-APIC is disabled (via the mask bits in the
-IO-APIC table entries), the messages are routed to the legacy PCH. This
-in-band interrupt mechanism was traditionally necessary for systems that
-did not support the IO-APIC and for boot. Intel in the past has used the
-term "boot interrupts" to describe this mechanism. Further, the PCI Express
-protocol describes this in-band legacy wire-interrupt INTx mechanism for
-I/O devices to signal PCI-style level interrupts. The subsequent paragraphs
-describe problems with the Core IO handling of INTx message routing to the
-PCH and mitigation within BIOS and the OS.
+在 PCI Express 中，中断通过 MSI 或入带中断消息（Assert_INTx / Deassert_INTx）表示。
+某些 Core IO 中集成的 IO-APIC（I/O 高级可编程中断控制器）会将来自 PCI Express 的传统中断消息转换为 MSI 中断。
+
+如果 IO-APIC 被禁用（通过 IO-APIC 表项中的屏蔽位），这些消息将被路由到传统的 PCH（平台控制器集线器）。
+这种入带中断机制最初是为不支持 IO-APIC 的系统和系统启动过程而设计的。
+
+英特尔过去称这一机制为“启动中断（boot interrupts）”。此外，PCI Express 协议将这种入带的传统线路中断 INTx 机制描述为 I/O 设备用来发出 PCI 风格电平中断的一种方式。
+
+接下来的段落将描述 Core IO 在将 INTx 消息路由到 PCH 时存在的问题，以及 BIOS 和操作系统中为缓解这些问题所采取的措施。
 
 
 Issue
 =====
 
-When in-band legacy INTx messages are forwarded to the PCH, they in turn
-trigger a new interrupt for which the OS likely lacks a handler. When an
-interrupt goes unhandled over time, they are tracked by the Linux kernel as
-Spurious Interrupts. The IRQ will be disabled by the Linux kernel after it
-reaches a specific count with the error "nobody cared". This disabled IRQ
-now prevents valid usage by an existing interrupt which may happen to share
-the IRQ line::
+当入带的传统 INTx 消息被转发至 PCH（平台控制器集线器）时，它们会触发一个新的中断，而操作系统往往没有为此中断设置处理程序（handler）。
+
+如果一个中断长时间无人处理，Linux 内核会将其标记为伪中断（Spurious Interrupt）。
+当该中断的未处理次数达到一定数量后，Linux 内核会禁用该 IRQ，并显示错误信息 “nobody cared”。
+
+一旦该 IRQ 被禁用，就会阻止任何有效的中断使用该中断号，这对于可能共享这条 IRQ 线路的设备来说是致命的。例如：
 
   irq 19: nobody cared (try booting with the "irqpoll" option)
   CPU: 0 PID: 2988 Comm: irq/34-nipalk Tainted: 4.14.87-rt49-02410-g4a640ec-dirty #1
@@ -55,38 +51,37 @@ the IRQ line::
   handlers:
   irq_default_primary_handler threaded usb_hcd_irq
   Disabling IRQ #19
+  这个例子中，IRQ 19 被禁用了，意味着所有共享该中断线的设备将无法继续正常工作。系统日志建议尝试使用 irqpoll 内核参数来继续引导系统。
 
 
 Conditions
 ==========
 
-The use of threaded interrupts is the most likely condition to trigger
-this problem today. Threaded interrupts may not be reenabled after the IRQ
-handler wakes. These "one shot" conditions mean that the threaded interrupt
-needs to keep the interrupt line masked until the threaded handler has run.
-Especially when dealing with high data rate interrupts, the thread needs to
-run to completion; otherwise some handlers will end up in stack overflows
-since the interrupt of the issuing device is still active.
+在当前系统中，线程化中断（threaded interrupts） 是最可能触发该问题的条件。
+线程化中断在中断处理程序唤醒后，可能不会重新启用 IRQ（中断请求）。
+这些所谓的“一次性（one shot）”条件要求线程化中断在其处理线程运行完毕前保持中断线路处于屏蔽状态（masked）。
+
+尤其是在处理高数据速率中断时，中断线程必须运行完成，否则可能会因中断设备持续发出中断而导致处理线程出现**栈溢出（stack overflow）**等问题。
+
 
 Affected Chipsets
 =================
 
-The legacy interrupt forwarding mechanism exists today in a number of
-devices including but not limited to chipsets from AMD/ATI, Broadcom, and
-Intel. Changes made through the mitigations below have been applied to
-drivers/pci/quirks.c
+传统的中断转发机制（legacy interrupt forwarding）如今依然存在于多种设备中，包括但不限于以下厂商的芯片组：
+   • AMD/ATI
+   • Broadcom
+   • Intel
 
-Starting with ICX there are no longer any IO-APICs in the Core IO's
-devices.  IO-APIC is only in the PCH.  Devices connected to the Core IO's
-PCIe Root Ports will use native MSI/MSI-X mechanisms.
+对此问题的缓解措施已经通过补丁集成到了内核代码的 drivers/pci/quirks.c 文件中。
+
+自 英特尔 Ice Lake Xeon（ICX） 起，Core IO 设备中已不再包含 IO-APIC，IO-APIC 仅保留在 PCH（平台控制器集线器）中。
+连接到 Core IO 的 PCIe 根端口（Root Ports）的设备将使用原生的 MSI/MSI-X 中断机制，而不再依赖传统中断转发方式。
 
 Mitigations
 ===========
 
-The mitigations take the form of PCI quirks. The preference has been to
-first identify and make use of a means to disable the routing to the PCH.
-In such a case a quirk to disable boot interrupt generation can be
-added. [1]_
+这些缓解措施采用了 PCI quirks（特殊处理机制）的形式。
+优先选择的方法是首先识别并利用某种手段来禁用到 PCH 的中断路由。在这种情况下，可以添加一个 quirk 来禁用启动中断的生成。[1]_
 
 Intel® 6300ESB I/O Controller Hub
   Alternate Base Address Register:
@@ -106,27 +101,23 @@ Intel® Sandy Bridge through Sky Lake based Xeon servers:
 	  (if the IO-APIC mask bit is clear in the appropriate entries)
 	  or cause no further action (when mask bit is set)
 
-In the absence of a way to directly disable the routing, another approach
-has been to make use of PCI Interrupt pin to INTx routing tables for
-purposes of redirecting the interrupt handler to the rerouted interrupt
-line by default.  Therefore, on chipsets where this INTx routing cannot be
-disabled, the Linux kernel will reroute the valid interrupt to its legacy
-interrupt. This redirection of the handler will prevent the occurrence of
-the spurious interrupt detection which would ordinarily disable the IRQ
-line due to excessive unhandled counts. [2]_
+在无法直接禁用中断路由的情况下，另一种方法是利用 PCI 中断引脚到 INTx 路由表，将中断处理程序默认重定向到被重新路由的中断线。
 
-The config option X86_REROUTE_FOR_BROKEN_BOOT_IRQS exists to enable (or
-disable) the redirection of the interrupt handler to the PCH interrupt
-line. The option can be overridden by either pci=ioapicreroute or
-pci=noioapicreroute. [3]_
+因此，在 无法禁用 INTx 路由的芯片组上，Linux 内核会将有效的中断重定向到其传统中断上。
+这种中断处理程序的重定向可以防止“虚假中断（spurious interrupt）”的检测，
+避免因为未处理中断次数过多而被禁用 IRQ 线路的情况发生。[2]_
+
+内核配置选项 X86_REROUTE_FOR_BROKEN_BOOT_IRQS 允许启用或禁用将中断处理程序重定向到 PCH 中断线的机制。
+该选项也可以通过以下引导参数覆盖：
+  • 启用：pci=ioapicreroute
+  • 禁用：pci=noioapicreroute【3】
 
 
 More Documentation
 ==================
 
-There is an overview of the legacy interrupt handling in several datasheets
-(6300ESB and 6700PXH below). While largely the same, it provides insight
-into the evolution of its handling with chipsets.
+以下数据手册中提供了对传统中断（Legacy Interrupt）处理的概述（如 6300ESB 和 6700PXH）。
+虽然处理方式大体相同，但这些内容有助于了解不同芯片组中断处理机制的演进过程。
 
 Example of disabling of the boot interrupt
 ------------------------------------------

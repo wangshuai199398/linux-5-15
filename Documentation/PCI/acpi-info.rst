@@ -4,97 +4,54 @@
 ACPI considerations for PCI host bridges
 ========================================
 
-The general rule is that the ACPI namespace should describe everything the
-OS might use unless there's another way for the OS to find it [1, 2].
+总的原则是，除非操作系统可以通过其他方式发现硬件，否则 ACPI 命名空间必须描述操作系统可能使用的所有内容【1, 2】。
 
-For example, there's no standard hardware mechanism for enumerating PCI
-host bridges, so the ACPI namespace must describe each host bridge, the
-method for accessing PCI config space below it, the address space windows
-the host bridge forwards to PCI (using _CRS), and the routing of legacy
-INTx interrupts (using _PRT).
+例如，标准硬件机制无法枚举 PCI 主桥，因此 ACPI 命名空间必须描述每个主桥、访问该主桥下 PCI 配置空间的方法、主桥转发到 PCI 的地址空间窗口（通过 _CRS）以及传统 INTx 中断的路由（通过 _PRT）。
 
-PCI devices, which are below the host bridge, generally do not need to be
-described via ACPI.  The OS can discover them via the standard PCI
-enumeration mechanism, using config accesses to discover and identify
-devices and read and size their BARs.  However, ACPI may describe PCI
-devices if it provides power management or hotplug functionality for them
-or if the device has INTx interrupts connected by platform interrupt
-controllers and a _PRT is needed to describe those connections.
+位于主桥下的 PCI 设备通常不需要通过 ACPI 描述。
+操作系统可以使用标准的 PCI 枚举机制（通过配置访问）发现和识别设备，并读取和分配它们的 BAR。
+但在某些情况下，如果 ACPI 提供电源管理或热插拔功能，或者设备的 INTx 中断连接到平台中断控制器并且需要 _PRT 描述这些连接，那么 ACPI 也可以描述这些设备。
 
-ACPI resource description is done via _CRS objects of devices in the ACPI
-namespace [2].   The _CRS is like a generalized PCI BAR: the OS can read
-_CRS and figure out what resource is being consumed even if it doesn't have
-a driver for the device [3].  That's important because it means an old OS
-can work correctly even on a system with new devices unknown to the OS.
-The new devices might not do anything, but the OS can at least make sure no
-resources conflict with them.
+ACPI 资源描述是通过 ACPI 命名空间中设备的 _CRS 对象完成的【2】。
+_CRS 类似于通用的 PCI BAR：即使操作系统没有对应驱动程序，也可以读取 _CRS 了解该设备使用了哪些资源【3】。
+这非常重要，因为这意味着旧操作系统也能在存在新设备的系统上正常运行。
+虽然新设备可能无法正常工作，但操作系统至少可以确保不会出现资源冲突。
 
-Static tables like MCFG, HPET, ECDT, etc., are *not* mechanisms for
-reserving address space.  The static tables are for things the OS needs to
-know early in boot, before it can parse the ACPI namespace.  If a new table
-is defined, an old OS needs to operate correctly even though it ignores the
-table.  _CRS allows that because it is generic and understood by the old
-OS; a static table does not.
+诸如 MCFG、HPET、ECDT 等静态表 不 是用于保留地址空间的机制。
+这些静态表用于操作系统在引导早期、还无法解析 ACPI 命名空间时获取所需信息。
+如果定义了一个新表，而旧系统忽略它，也必须能够正常运行。
+_CRS 能实现这一点，因为它是通用的，并且能被旧操作系统识别；静态表则不行。
 
-If the OS is expected to manage a non-discoverable device described via
-ACPI, that device will have a specific _HID/_CID that tells the OS what
-driver to bind to it, and the _CRS tells the OS and the driver where the
-device's registers are.
+如果期望操作系统管理一个无法自动发现的、通过 ACPI 描述的设备，该设备将包含特定的 _HID / _CID 来告诉操作系统应绑定哪个驱动程序，而 _CRS 则向操作系统和驱动程序说明设备寄存器的位置。
 
-PCI host bridges are PNP0A03 or PNP0A08 devices.  Their _CRS should
-describe all the address space they consume.  This includes all the windows
-they forward down to the PCI bus, as well as registers of the host bridge
-itself that are not forwarded to PCI.  The host bridge registers include
-things like secondary/subordinate bus registers that determine the bus
-range below the bridge, window registers that describe the apertures, etc.
-These are all device-specific, non-architected things, so the only way a
-PNP0A03/PNP0A08 driver can manage them is via _PRS/_CRS/_SRS, which contain
-the device-specific details.  The host bridge registers also include ECAM
-space, since it is consumed by the host bridge.
+PCI 主桥是 PNP0A03 或 PNP0A08 设备。它们的 _CRS 应描述它们消耗的所有地址空间，包括：
+  •	主桥转发到 PCI 总线的所有窗口；
+  •	主桥本身不转发到 PCI 的寄存器（如用于设置子总线范围的寄存器、窗口寄存器等）；
+  •	这类寄存器是设备特定的，因此 PNP0A03/PNP0A08 驱动程序只能通过 _PRS / _CRS / _SRS 管理它们；
+  •	也包括 ECAM 空间（由主桥消费）；
 
-ACPI defines a Consumer/Producer bit to distinguish the bridge registers
-("Consumer") from the bridge apertures ("Producer") [4, 5], but early
-BIOSes didn't use that bit correctly.  The result is that the current ACPI
-spec defines Consumer/Producer only for the Extended Address Space
-descriptors; the bit should be ignored in the older QWord/DWord/Word
-Address Space descriptors.  Consequently, OSes have to assume all
-QWord/DWord/Word descriptors are windows.
+ACPI 通过“Consumer/Producer”位来区分主桥寄存器（Consumer）和主桥窗口（Producer）【4, 5】，但早期 BIOS 并未正确使用该位。
+因此，当前 ACPI 规范规定只对扩展地址空间描述符使用 Consumer/Producer，而旧的 QWord/DWord/Word 描述符中该位应被忽略。
+因此，操作系统必须假设所有 QWord/DWord/Word 描述符都是窗口。
 
-Prior to the addition of Extended Address Space descriptors, the failure of
-Consumer/Producer meant there was no way to describe bridge registers in
-the PNP0A03/PNP0A08 device itself.  The workaround was to describe the
-bridge registers (including ECAM space) in PNP0C02 catch-all devices [6].
-With the exception of ECAM, the bridge register space is device-specific
-anyway, so the generic PNP0A03/PNP0A08 driver (pci_root.c) has no need to
-know about it.  
+在引入扩展地址空间描述符之前，由于 Consumer/Producer 位失效，无法在 PNP0A03/PNP0A08 设备中描述主桥寄存器。
+解决方法是在 PNP0C02（通用）设备中描述主桥寄存器（包括 ECAM）【6】。
+除了 ECAM，主桥寄存器空间本身就是设备特定的，因此通用 PNP0A03/PNP0A08 驱动（如 pci_root.c）无需了解这些内容。
 
-New architectures should be able to use "Consumer" Extended Address Space
-descriptors in the PNP0A03 device for bridge registers, including ECAM,
-although a strict interpretation of [6] might prohibit this.  Old x86 and
-ia64 kernels assume all address space descriptors, including "Consumer"
-Extended Address Space ones, are windows, so it would not be safe to
-describe bridge registers this way on those architectures.
 
-PNP0C02 "motherboard" devices are basically a catch-all.  There's no
-programming model for them other than "don't use these resources for
-anything else."  So a PNP0C02 _CRS should claim any address space that is
-(1) not claimed by _CRS under any other device object in the ACPI namespace
-and (2) should not be assigned by the OS to something else.
+新架构应能在 PNP0A03 设备中使用扩展地址空间描述符中的 “Consumer” 类型来描述主桥寄存器（包括 ECAM），尽管【6】中严格的解释可能不允许这样做。
+但旧的 x86 和 ia64 内核会假设所有地址空间描述符（即使是“Consumer”类型）都是窗口，因此在这些架构上以这种方式描述主桥寄存器并不安全。
 
-The PCIe spec requires the Enhanced Configuration Access Method (ECAM)
-unless there's a standard firmware interface for config access, e.g., the
-ia64 SAL interface [7].  A host bridge consumes ECAM memory address space
-and converts memory accesses into PCI configuration accesses.  The spec
-defines the ECAM address space layout and functionality; only the base of
-the address space is device-specific.  An ACPI OS learns the base address
-from either the static MCFG table or a _CBA method in the PNP0A03 device.
+PNP0C02 “主板”设备本质上是一种兜底手段。它们没有明确的编程模型，唯一的含义是“不要将这些资源用于其他用途”。因此，PNP0C02 的 _CRS 应声明所有符合以下条件的地址空间：
+  1. 没有被 ACPI 命名空间中任何其他设备的 _CRS 声明；
+  2. 不应被操作系统分配给其他用途。
 
-The MCFG table must describe the ECAM space of non-hot pluggable host
-bridges [8].  Since MCFG is a static table and can't be updated by hotplug,
-a _CBA method in the PNP0A03 device describes the ECAM space of a
-hot-pluggable host bridge [9].  Note that for both MCFG and _CBA, the base
-address always corresponds to bus 0, even if the bus range below the bridge
-(which is reported via _CRS) doesn't start at 0.
+PCIe 规范要求除非有标准固件接口（如 ia64 的 SAL 接口）用于配置访问，否则必须使用增强配置访问机制（ECAM）【7】。
+主桥将 ECAM 的内存地址空间转换为 PCI 配置访问。ECAM 地址空间的布局和功能由规范定义，只有地址基址是设备特定的。
+ACPI 操作系统可以通过静态 MCFG 表或 PNP0A03 设备中的 _CBA 方法获取地址基址。
+  •	对于不可热插拔的主桥，MCFG 表必须描述其 ECAM 空间【8】；
+  •	对于热插拔主桥，必须通过 _CBA 方法 在 PNP0A03 设备中描述 ECAM 空间【9】；
+  •	无论是通过 MCFG 还是 _CBA，基地址都表示总线号为 0 的地址空间，即使该桥下面的总线范围（由 _CRS 报告）不从 0 开始。
 
 
 [1] ACPI 6.2, sec 6.1:

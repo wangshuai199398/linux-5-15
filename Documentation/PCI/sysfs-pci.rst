@@ -4,8 +4,7 @@
 Accessing PCI device resources through sysfs
 ============================================
 
-sysfs, usually mounted at /sys, provides access to PCI resources on platforms
-that support it.  For example, a given bus might look like this::
+sysfs, 通常挂载在 /sys, 在支持的系统平台上提供对 PCI 资源的访问, 例如，一个特定的总线可能看起来像这样::
 
      /sys/devices/pci0000:17
      |-- 0000:17:00.0
@@ -27,11 +26,9 @@ that support it.  For example, a given bus might look like this::
      |   `-- vendor
      `-- ...
 
-The topmost element describes the PCI domain and bus number.  In this case,
-the domain number is 0000 and the bus number is 17 (both values are in hex).
-This bus contains a single function device in slot 0.  The domain and bus
-numbers are reproduced for convenience.  Under the device directory are several
-files, each with their own function.
+最上层的元素描述了 PCI 的 域号(domain)和总线号(bus number). 在这个例子中, 域号是 0000, 总线号是 17(这两个值都是十六进制表示).
+这个总线包含一个位于槽位 0(slot 0)的单功能设备. 为了方便起见，域号和总线号 会在路径中重复出现.
+在该设备对应的目录下, 每个文件都有其各自的功能
 
        =================== =====================================================
        file		   function
@@ -65,42 +62,31 @@ files, each with their own function.
 
 .. [1] rw for IORESOURCE_IO (I/O port) regions only
 
-The read only files are informational, writes to them will be ignored, with
-the exception of the 'rom' file.  Writable files can be used to perform
-actions on the device (e.g. changing config space, detaching a device).
-mmapable files are available via an mmap of the file at offset 0 and can be
-used to do actual device programming from userspace.  Note that some platforms
-don't support mmapping of certain resources, so be sure to check the return
-value from any attempted mmap.  The most notable of these are I/O port
-resources, which also provide read/write access.
+只读文件是用于提供信息的, 对它们的写操作将被忽略, 唯一的例外是 'rom' 文件.  
+可写文件可用于对设备执行操作(例如: 更改配置空间, 卸载设备)
+支持 mmap 的文件可以通过从偏移量 0 开始对该文件进行 mmap, 从而用于在用户空间对设备进行实际编程.
+请注意, 一些平台不支持对某些资源进行mmap, 因此请务必检查任何尝试执行的 mmap 调用的返回值
+最典型的不支持 mmap 的资源是 I/O 端口资源, 但这些资源仍然支持 read 和 write 访问
 
-The 'enable' file provides a counter that indicates how many times the device
-has been enabled.  If the 'enable' file currently returns '4', and a '1' is
-echoed into it, it will then return '5'.  Echoing a '0' into it will decrease
-the count.  Even when it returns to 0, though, some of the initialisation
-may not be reversed.
+'enable' 文件提供了一个计数器, 用于指示该设备被启用的次数
+如果当前 enable 文件返回值为 4, 并向其中 echo 一个 1, 那么它将返回 5.
+向其中 echo 一个 0 会使计数减少, 不过，即使它的值减到 0, 一些初始化操作可能不会被撤销
 
-The 'rom' file is special in that it provides read-only access to the device's
-ROM file, if available.  It's disabled by default, however, so applications
-should write the string "1" to the file to enable it before attempting a read
-call, and disable it following the access by writing "0" to the file.  Note
-that the device must be enabled for a rom read to return data successfully.
-In the event a driver is not bound to the device, it can be enabled using the
-'enable' file, documented above.
+rom 文件是一个特殊文件，它在设备支持的情况下，提供对设备 ROM 的只读访问
+但它默认是禁用的，因此在尝试读取之前，应用程序应该先向该文件写入字符串 "1" 以启用它，读取完成后，再向该文件写入 "0" 来将其禁用。
+注意, 设备必须处于启用状态, rom 读取操作才能成功返回数据。
+如果该设备尚未绑定驱动程序，可以通过上面描述的 enable 文件来启用该设备
 
-The 'remove' file is used to remove the PCI device, by writing a non-zero
-integer to the file.  This does not involve any kind of hot-plug functionality,
-e.g. powering off the device.  The device is removed from the kernel's list of
-PCI devices, the sysfs directory for it is removed, and the device will be
-removed from any drivers attached to it. Removal of PCI root buses is
-disallowed.
+remove 文件用于移除 PCI 设备，只需向该文件写入一个非零整数即可
+这不涉及任何热插拔功能，例如关闭设备电源
+该操作会将设备从内核的 PCI 设备列表中移除，对应的 sysfs 目录也会被删除，同时设备也会从任何绑定的驱动程序中解绑。
+不允许移除 PCI 根总线(root bus)
 
-Accessing legacy resources through sysfs
+通过 sysfs 访问传统资源
 ----------------------------------------
 
-Legacy I/O port and ISA memory resources are also provided in sysfs if the
-underlying platform supports them.  They're located in the PCI class hierarchy,
-e.g.::
+如果底层平台支持，传统的 I/O 端口和 ISA 内存资源也会通过 sysfs 提供。
+它们位于 PCI 类层级结构中，例如：
 
 	/sys/class/pci_bus/0000:17/
 	|-- bridge -> ../../../devices/pci0000:17
@@ -108,31 +94,26 @@ e.g.::
 	|-- legacy_io
 	`-- legacy_mem
 
-The legacy_io file is a read/write file that can be used by applications to
-do legacy port I/O.  The application should open the file, seek to the desired
-port (e.g. 0x3e8) and do a read or a write of 1, 2 or 4 bytes.  The legacy_mem
-file should be mmapped with an offset corresponding to the memory offset
-desired, e.g. 0xa0000 for the VGA frame buffer.  The application can then
-simply dereference the returned pointer (after checking for errors of course)
-to access legacy memory space.
+legacy_io 文件是一个可读写的文件，应用程序可以通过它进行传统的端口 I/O 操作
+应用程序应打开该文件, seek 到目标端口(例如 0x3e8),然后读取或写入 1、2 或 4 字节的数据
+legacy_mem 文件则应通过 mmap 映射，偏移量应对应所需的内存地址偏移，
+例如 0xa0000 表示 VGA 帧缓冲区。
+随后，应用程序可以直接解引用返回的指针（当然，在此之前应检查是否存在错误），以访问传统的内存空间。
 
-Supporting PCI access on new platforms
+在新平台上支持 PCI 访问
 --------------------------------------
 
-In order to support PCI resource mapping as described above, Linux platform
-code should ideally define ARCH_GENERIC_PCI_MMAP_RESOURCE and use the generic
-implementation of that functionality. To support the historical interface of
-mmap() through files in /proc/bus/pci, platforms may also set HAVE_PCI_MMAP.
+为了支持上述所描述的 PCI 资源映射, Linux 平台代码理想情况下应定义 ARCH_GENERIC_PCI_MMAP_RESOURCE, 并使用该功能的通用实现。
+为了支持通过 /proc/bus/pci 文件执行 mmap() 的历史接口，平台也可以设置 HAVE_PCI_MMAP。
 
-Alternatively, platforms which set HAVE_PCI_MMAP may provide their own
-implementation of pci_mmap_page_range() instead of defining
-ARCH_GENERIC_PCI_MMAP_RESOURCE.
+另外，设置了 HAVE_PCI_MMAP 的平台也可以选择自行实现 pci_mmap_page_range()，而不是定义 ARCH_GENERIC_PCI_MMAP_RESOURCE。
 
-Platforms which support write-combining maps of PCI resources must define
-arch_can_pci_mmap_wc() which shall evaluate to non-zero at runtime when
-write-combining is permitted. Platforms which support maps of I/O resources
-define arch_can_pci_mmap_io() similarly.
+支持对 PCI 资源进行 写合并(write-combining)映射 的平台，必须定义函数 arch_can_pci_mmap_wc()，该函数在运行时返回非零值表示允许写合并。
 
-Legacy resources are protected by the HAVE_PCI_LEGACY define.  Platforms
-wishing to support legacy functionality should define it and provide
-pci_legacy_read, pci_legacy_write and pci_mmap_legacy_page_range functions.
+支持对 I/O 类型资源进行映射 的平台，也应类似地定义 arch_can_pci_mmap_io() 函数。
+
+对于传统资源(legacy resources), 其支持由宏 HAVE_PCI_LEGACY 控制。
+希望支持传统功能的平台应定义该宏，并提供以下函数的实现：
+  •	pci_legacy_read
+	•	pci_legacy_write
+	•	pci_mmap_legacy_page_range
