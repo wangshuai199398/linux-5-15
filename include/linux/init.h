@@ -45,10 +45,9 @@
  * section.
  */
 
-/* These are for everybody (although not all archs will actually
-   discard it in modules) */
+/* These are for everybody (although not all archs will actually discard it in modules) 
+   __initdata 意味着这些内存都会在内核初始化结束后释放掉 */
 #define __init		__section(".init.text") __cold  __latent_entropy __noinitretpoline __nocfi
-// __initdata 意味着这些内存都会在内核初始化结束后释放掉
 #define __initdata	__section(".init.data")
 #define __initconst	__section(".init.rodata")
 #define __exitdata	__section(".exit.data")
