@@ -77,6 +77,7 @@ do {								\
 		typecheck(unsigned long, flags);	\
 		flags = _raw_read_lock_irqsave(lock);	\
 	} while (0)
+// 互斥多个写操作，屏蔽本地中断，防止中断上下文也写这个链表
 #define write_lock_irqsave(lock, flags)			\
 	do {						\
 		typecheck(unsigned long, flags);	\

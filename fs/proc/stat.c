@@ -234,7 +234,7 @@ static const struct proc_ops stat_proc_ops = {
 	.proc_lseek	= seq_lseek,
 	.proc_release	= single_release,
 };
-//proc_wangs
+//stat_wangs
 static int __init proc_stat_init(void)
 {
 	proc_create("stat", 0, NULL, &stat_proc_ops);

@@ -888,12 +888,10 @@ void pci_disable_msi(struct pci_dev *dev)
 EXPORT_SYMBOL(pci_disable_msi);
 
 /**
- * pci_msix_vec_count - return the number of device's MSI-X table entries
- * @dev: pointer to the pci_dev data structure of MSI-X device function
- * This function returns the number of device's MSI-X table entries and
- * therefore the number of MSI-X vectors device is capable of sending.
- * It returns a negative errno if the device is not capable of sending MSI-X
- * interrupts.
+ * 返回设备的 MSI-X 表项数量
+ * @dev: 指向该 MSI-X 设备功能的 pci_dev 数据结构的指针
+ * 本函数返回设备 MSI-X 表中的条目数，也就是该设备能够发送的 MSI-X 向量的数量。
+ * 如果设备不支持发送 MSI-X 中断，则返回一个负的错误码（errno）。
  **/
 int pci_msix_vec_count(struct pci_dev *dev)
 {
@@ -1107,22 +1105,20 @@ int pci_enable_msix_range(struct pci_dev *dev, struct msix_entry *entries,
 EXPORT_SYMBOL(pci_enable_msix_range);
 
 /**
- * pci_alloc_irq_vectors_affinity - allocate multiple IRQs for a device
- * @dev:		PCI device to operate on
- * @min_vecs:		minimum number of vectors required (must be >= 1)
- * @max_vecs:		maximum (desired) number of vectors
- * @flags:		flags or quirks for the allocation
- * @affd:		optional description of the affinity requirements
+ * 为设备分配多个中断向量
+ * @dev:		要操作的 PCI 设备
+ * @min_vecs:	所需的最小向量数量（必须 ≥ 1）
+ * @max_vecs:	最大（期望）的向量数量
+ * @flags:		分配时的标志或特殊处理选项
+ * @affd:		可选的中断亲和性（affinity）需求描述
  *
- * Allocate up to @max_vecs interrupt vectors for @dev, using MSI-X or MSI
- * vectors if available, and fall back to a single legacy vector
- * if neither is available.  Return the number of vectors allocated,
- * (which might be smaller than @max_vecs) if successful, or a negative
- * error code on error. If less than @min_vecs interrupt vectors are
- * available for @dev the function will fail with -ENOSPC.
+ * 为 @dev 分配最多 @max_vecs 个中断向量，如果可用，则优先使用 MSI-X 或 MSI 中断方式；
+ * 如果这些方式都不可用，则退回到使用单一的传统（Legacy）中断向量。
+ * 如果成功，返回已分配的中断向量数量（可能小于 @max_vecs）；
+ * 如果失败，则返回负的错误码。
+ * 如果可用的中断向量数量小于 @min_vecs，则函数会返回 -ENOSPC 表示空间不足（无法满足要求）。
  *
- * To get the Linux IRQ number used for a vector that can be passed to
- * request_irq() use the pci_irq_vector() helper.
+ * 注意: 要获取可传递给 request_irq() 的、对应于某个向量的 Linux IRQ 编号，可以使用 pci_irq_vector() 辅助函数
  */
 int pci_alloc_irq_vectors_affinity(struct pci_dev *dev, unsigned int min_vecs,
 				   unsigned int max_vecs, unsigned int flags,

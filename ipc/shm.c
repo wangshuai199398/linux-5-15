@@ -144,6 +144,10 @@ void shm_exit_ns(struct ipc_namespace *ns)
 }
 #endif
 
+/*
+初始化 IPC 命名空间（IPC namespace）中的共享内存（shm）子系统
+Linux 的 IPC 命名空间（IPC namespace） 是一个容器化机制，它允许不同的进程看到各自的 IPC 资源（shm、msg、sem），互不干扰
+*/
 static int __init ipc_ns_init(void)
 {
 	shm_init_ns(&init_ipc_ns);

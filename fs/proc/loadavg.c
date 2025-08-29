@@ -24,7 +24,7 @@ static int loadavg_proc_show(struct seq_file *m, void *v)
 		idr_get_cursor(&task_active_pid_ns(current)->idr) - 1);
 	return 0;
 }
-//proc_wangs
+//loadavg_wangs
 static int __init proc_loadavg_init(void)
 {
 	proc_create_single("loadavg", 0, NULL, loadavg_proc_show);

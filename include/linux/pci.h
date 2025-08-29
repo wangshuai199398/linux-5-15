@@ -900,6 +900,7 @@ struct module;
  */
 struct pci_driver {
 	struct list_head	node;
+	// 驱动名字 ysk_unic3
 	const char		*name;
 	const struct pci_device_id *id_table;	/* Must be non-NULL for probe to be called */
 	int  (*probe)(struct pci_dev *dev, const struct pci_device_id *id);	/* New device inserted */
@@ -1972,7 +1973,7 @@ static inline void pci_set_drvdata(struct pci_dev *pdev, void *data)
 {
 	dev_set_drvdata(&pdev->dev, data);
 }
-
+// 返回pci号: 0000:01:00.0
 static inline const char *pci_name(const struct pci_dev *pdev)
 {
 	return dev_name(&pdev->dev);

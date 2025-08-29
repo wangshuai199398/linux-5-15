@@ -6819,8 +6819,16 @@ void __napi_schedule_irqoff(struct napi_struct *n)
 }
 EXPORT_SYMBOL(__napi_schedule_irqoff);
 
-//判断是否可以结束本次NAPI poll循环，并做一些完成态下的清理和调度准备工作
-//为了驱动是否能够打开硬中断，返回true，打开硬中断
+/*
+判断是否可以结束本次NAPI poll循环，并做一些完成态下的清理和调度准备工作
+
+1. 不处于禁止结束的状态
+2. 这轮 poll 期间没有 miss 掉新的调度
+3. 不会因为“延迟硬中断/延迟 GRO 刷新”而强制留在活跃状态
+4. 其它分支对返回值无直接影响
+返回 true ≈ “这轮 NAPI poll 完整收尾、没有 miss、也不因延迟硬中断/GRO 刷新而被迫继续活跃，可以认为 这次完成了，无需立刻再调度”。
+为了驱动是否能够打开硬中断，返回true，打开硬中断
+*/
 bool napi_complete_done(struct napi_struct *n, int work_done)
 {
 	unsigned long flags, val, new, timeout = 0;
@@ -7280,7 +7288,7 @@ static int __napi_poll(struct napi_struct *n, bool *repoll)
 	work = 0;
 	if (test_bit(NAPI_STATE_SCHED, &n->state)) {
 		//调用驱动poll函数，驱动注册的软中断处理函数netif_napi_add添加的
-		//传递一个 预算（budget） 参数，限制处理的最大包数，以保证系统响应性
+		//传递一个 预算（budget） 参数，限制处理的最大包数，以保证系统响应性 poll_wangs
 		work = n->poll(n, weight);
 		trace_napi_poll(n, work, weight);
 	}

@@ -2424,6 +2424,7 @@ static inline void *netdev_priv(const struct net_device *dev)
 
 /* Default NAPI poll() weight
  * Device drivers are strongly advised to not use bigger value
+ * napi_wangs
  */
 #define NAPI_POLL_WEIGHT 64
 
@@ -2471,10 +2472,10 @@ static inline void netif_tx_napi_add(struct net_device *dev,
 void __netif_napi_del(struct napi_struct *napi);
 
 /**
- *  netif_napi_del - remove a NAPI context
- *  @napi: NAPI context
+ *  移除一个 NAPI 上下文
+ *  @napi: NAPI 上下文
  *
- *  netif_napi_del() removes a NAPI context from the network device NAPI list
+ *  会从网络设备的 NAPI 列表中移除一个 NAPI 上下文
  */
 static inline void netif_napi_del(struct napi_struct *napi)
 {
@@ -3376,6 +3377,11 @@ static inline void dev_xmit_recursion_dec(void)
 void __netif_schedule(struct Qdisc *q);
 void netif_schedule_queue(struct netdev_queue *txq);
 
+/*
+	遍历给定网络设备 dev 的所有发送队列（Tx queues）；
+	将它们重新加入调度器（qdisc，队列规则调度器）；
+	触发内核的发送流程，让队列里的数据包继续往下发送到驱动层。
+*/
 static inline void netif_tx_schedule_all(struct net_device *dev)
 {
 	unsigned int i;
