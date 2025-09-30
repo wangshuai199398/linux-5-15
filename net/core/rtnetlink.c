@@ -3613,13 +3613,11 @@ static int rtnl_newlink(struct sk_buff *skb, struct nlmsghdr *nlh,
 {
 	struct nlattr **attr;
 	int ret;
-	pr_debug("%s: \n", __func__);
 	attr = kmalloc_array(RTNL_MAX_TYPE + 1, sizeof(*attr), GFP_KERNEL);
 	if (!attr)
 		return -ENOMEM;
 
 	ret = __rtnl_newlink(skb, nlh, attr, extack);
-	pr_debug("%s: called from pid %d, comm %s\n", __func__, current->pid, current->comm);
 	kfree(attr);
 	return ret;
 }
