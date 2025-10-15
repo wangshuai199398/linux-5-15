@@ -1586,7 +1586,7 @@ static int __ref kernel_init(void *unused)
 	 */
 	if (execute_command) {
 		ret = run_init_process(execute_command);
-		panic("%s: Requested init %s  ( %d).", __func__, execute_command, ret);
+		pr_err("%s: Requested init %s  ( %d).", __func__, execute_command, ret);
 		if (!ret)
 			return 0;
 		panic("Requested init %s failed (error %d).",
