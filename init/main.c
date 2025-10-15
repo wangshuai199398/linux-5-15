@@ -1569,7 +1569,7 @@ static int __ref kernel_init(void *unused)
 	rcu_end_inkernel_boot();
 
 	do_sysctl_args();
-	printk(KERN_INFO "%s: ROOT_DEV Major: %d, Minor: %d\n", __func__ ,MAJOR(ROOT_DEV), MINOR(ROOT_DEV));
+
 	//尝试运行 init 进程, 如果有 init=/earlyinit 参数，执行
 	if (ramdisk_execute_command) {
 		//填充 argv_init 数组的第一个元素
