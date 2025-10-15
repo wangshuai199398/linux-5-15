@@ -655,7 +655,7 @@ out:
 #ifdef CONFIG_BLOCK
 	//如果启用了块设备支持，创建 /dev/root 节点，供兼容老式用户态脚本使用
 	err = create_dev("/dev/root", ROOT_DEV);
-
+    printk(KERN_INFO "%s: ROOT_DEV Major: %d, Minor: %d\n", __func__ ,MAJOR(ROOT_DEV), MINOR(ROOT_DEV));
 	if (err < 0)
 		pr_emerg("Failed to create /dev/root: %d\n", err);
 #endif
