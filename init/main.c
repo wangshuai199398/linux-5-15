@@ -1573,6 +1573,7 @@ static int __ref kernel_init(void *unused)
 	if (ramdisk_execute_command) {
 		//填充 argv_init 数组的第一个元素
 		ret = run_init_process(ramdisk_execute_command);
+		pr_err("%s: to execute %s ( %d)\n", __func__, ramdisk_execute_command, ret);
 		if (!ret)
 			return 0;
 		pr_err("Failed to execute %s (error %d)\n",
@@ -1585,6 +1586,7 @@ static int __ref kernel_init(void *unused)
 	 */
 	if (execute_command) {
 		ret = run_init_process(execute_command);
+		panic("%s: Requested init %s  ( %d).", __func__, execute_command, ret);
 		if (!ret)
 			return 0;
 		panic("Requested init %s failed (error %d).",
