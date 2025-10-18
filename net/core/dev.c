@@ -5161,9 +5161,7 @@ static __latent_entropy void net_tx_action(struct softirq_action *h)
 
 			head = head->next_sched;
 
-			/* We need to make sure head->next_sched is read
-			 * before clearing __QDISC_STATE_SCHED
-			 */
+			/* 确保读取next指针早于清除位 __QDISC_STATE_SCHED */
 			smp_mb__before_atomic();
 
 			if (!(q->flags & TCQ_F_NOLOCK)) {
@@ -5182,7 +5180,7 @@ static __latent_entropy void net_tx_action(struct softirq_action *h)
 				clear_bit(__QDISC_STATE_SCHED, &q->state);
 				continue;
 			}
-
+            //清除已入调度标位置，表示正在处理它
 			clear_bit(__QDISC_STATE_SCHED, &q->state);
 			//发送数据
 			qdisc_run(q);
@@ -5680,6 +5678,10 @@ static inline void __netif_receive_skb_list_ptype(struct list_head *head,
 	if (list_empty(head))
 		return;
 	if (pt_prev->list_func != NULL) {
+		list_for_each_entry_safe(skb, next, head, list) {
+            if (is_src_k2pro(skb))
+                printk(KERN_INFO "%s: list_for_each_entry_safe 0x%x\n", __func__, ntohs(pt_prev->type));
+		}
 		INDIRECT_CALL_INET(pt_prev->list_func, ipv6_list_rcv,
 				   ip_list_rcv, head, pt_prev, orig_dev);
 	} else {
@@ -6064,7 +6066,7 @@ static void flush_all_backlogs(void)
 	cpus_read_unlock();
 }
 
-/* Pass the currently batched GRO_NORMAL SKBs up to the stack. */
+/* 将当前批处理的 GRO_NORMAL 类型的 SKB 上传到协议栈 */
 static void gro_normal_list(struct napi_struct *napi)
 {
 	struct sk_buff *skb, *next;
@@ -6828,6 +6830,8 @@ EXPORT_SYMBOL(__napi_schedule_irqoff);
 4. 其它分支对返回值无直接影响
 返回 true ≈ “这轮 NAPI poll 完整收尾、没有 miss、也不因延迟硬中断/GRO 刷新而被迫继续活跃，可以认为 这次完成了，无需立刻再调度”。
 为了驱动是否能够打开硬中断，返回true，打开硬中断
+• work_done > 0 ⇒ 这轮有收包 → 可能还有 GRO 未刷、也希望稍微再延迟开硬中断来提高吞吐，于是按设备当前配置更新 timeout 和 defer_hard_irqs_count。
+• work_done == 0 ⇒ 这轮无事可做 → 不必动这些收尾参数，避免无谓的延迟与开销。
 */
 bool napi_complete_done(struct napi_struct *n, int work_done)
 {
@@ -6983,6 +6987,10 @@ static void busy_poll_stop(struct napi_struct *napi, void *have_poll_lock, bool 
 	local_bh_enable();
 }
 
+/*
+ep_busy_loop ->
+sk_busy_loop ->
+*/
 void napi_busy_loop(unsigned int napi_id,
 		    bool (*loop_end)(void *, unsigned long),
 		    void *loop_end_arg, bool prefer_busy_poll, u16 budget)
@@ -7306,10 +7314,7 @@ static int __napi_poll(struct napi_struct *n, bool *repoll)
 	if (likely(work < weight))
 		return work;
 
-	//如果驱动程序消耗了全部的weight（权重），则不得修改NAPI的状态
-	//weight 是 NAPI poll 的“配额”或处理上限，表示本次 poll 调用最多可以处理多少个包。
-	//如果 驱动没有处理完（还剩下 weight），那么它可能会修改 NAPI 的调度状态，比如重新加入 poll 列表。
-	//但如果 驱动已经消耗完了全部 weight，那么根据协议，它不应再修改 NAPI 的状态，因为此时控制权还属于调度器，而不是驱动。
+    //驱动程序在用完全部配额（weight）时，不得修改 NAPI 的状态。在这种情况下，当前这段内核调度代码仍然拥有该 NAPI 实例，内核可以自由地在链表中移动这个 NAPI 实例
 	if (unlikely(napi_disable_pending(n))) {//查询是否有人调用napi_disable来禁用该napi实例
 		napi_complete(n);//完成 poll，重启硬中断，并清除 napi 状态
 		return work;
@@ -7332,9 +7337,8 @@ static int __napi_poll(struct napi_struct *n, bool *repoll)
 	}
 	gro_normal_list(n);
 
-	//某些网络驱动可能在还没处理完当前批次的全部数据包（即还没达到 budget 限额）时就调用了 napi_schedule()，意味着它请求再次调度自己。
-	//这可能会导致重复调度或逻辑异常，因此相关的调度机制需要考虑这种行为
-	//当 NAPI poll 完成后，如果发现 napi_struct->poll_list 不为空，说明本次 NAPI 被重新调度了，但 budget 已耗尽，于是记录警告并提前返回
+	/* 如果队列已清空work_done < budget，驱动应调用 napi_complete_done()，表示本轮完成 
+	   如果还有活没干完work_done == budget，驱动不要改 NAPI 的状态，也不要自己 napi_schedule 重新入队，只需返回 budget，由核心框架来决定如何把它放回链表、何时再调度*/
 	if (unlikely(!list_empty(&n->poll_list))) {
 		pr_warn_once("%s: Budget exhausted after napi rescheduled\n",
 			     n->dev ? n->dev->name : "backlog");
