@@ -5680,7 +5680,7 @@ static inline void __netif_receive_skb_list_ptype(struct list_head *head,
 	if (pt_prev->list_func != NULL) {
 		list_for_each_entry_safe(skb, next, head, list) {
             if (is_src_k2pro(skb))
-                printk(KERN_INFO "%s: list_for_each_entry_safe 0x%x\n", __func__, ntohs(pt_prev->type));
+                printk(KERN_INFO "%s: list_func !=NUll 0x%x\n", __func__, ntohs(pt_prev->type));
 		}
 		INDIRECT_CALL_INET(pt_prev->list_func, ipv6_list_rcv,
 				   ip_list_rcv, head, pt_prev, orig_dev);
