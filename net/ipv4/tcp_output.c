@@ -1787,6 +1787,8 @@ static inline int __tcp_mtu_to_mss(struct sock *sk, int pmtu)
 
 	/* 用 pmtu 减去 IP 头 + 基础 TCP 头 */
 	mss_now = pmtu - icsk->icsk_af_ops->net_header_len - sizeof(struct tcphdr);
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: icsk->icsk_af_ops->net_header_len %hu mss_now %d ->net_frag_header_len %d\n", __func__, icsk->icsk_af_ops->net_header_len, mss_now, icsk->icsk_af_ops->net_frag_header_len);
 
 	/* IPv6 adds a frag_hdr in case RTAX_FEATURE_ALLFRAG is set */
 	if (icsk->icsk_af_ops->net_frag_header_len) {
@@ -1795,6 +1797,8 @@ static inline int __tcp_mtu_to_mss(struct sock *sk, int pmtu)
 		if (dst && dst_allfrag(dst))
 			mss_now -= icsk->icsk_af_ops->net_frag_header_len;
 	}
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s:tp->rx_opt.mss_clamp %hu icsk->icsk_ext_hdr_len %hu\n", __func__, tp->rx_opt.mss_clamp, icsk->icsk_ext_hdr_len);
 
 	/* Clamp it (mss_clamp does not include tcp options) */
 	if (mss_now > tp->rx_opt.mss_clamp)
@@ -1891,7 +1895,7 @@ unsigned int tcp_sync_mss(struct sock *sk, u32 pmtu)
 
 	mss_now = tcp_mtu_to_mss(sk, pmtu);
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: -> mss_now %u\n", __func__, mss_now);
+		printk(KERN_INFO "%s: -> mss_now %u tcp_header_len %hu\n", __func__, mss_now, tp->tcp_header_len);
 	//根据发送窗口大小进一步限制 MSS
 	mss_now = tcp_bound_to_half_wnd(tp, mss_now);
 
