@@ -1309,7 +1309,7 @@ int tcp_sendmsg_locked(struct sock *sk, struct msghdr *msg, size_t size)
 
 	timeo = sock_sndtimeo(sk, flags & MSG_DONTWAIT);
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: timeo %ld tp->app_limited %u\n", __func__, timeo, tp->app_limited);
+		printk(KERN_INFO "%s: timeo %ld tp->app_limited %u mss_cache %u\n", __func__, timeo, tp->app_limited, tp->mss_cache);
 	//检测当前 TCP 连接是否受到应用层限制
 	tcp_rate_check_app_limited(sk);  /* is sending application-limited? */
 
@@ -1366,6 +1366,7 @@ int tcp_sendmsg_locked(struct sock *sk, struct msghdr *msg, size_t size)
 	copied = 0;
 
 restart:
+    //size_goal是skb的最大数据长度
 	mss_now = tcp_send_mss(sk, &size_goal, flags);
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
 		printk(KERN_INFO "%s: tcp_send_mss mss_now %d size_goal %d\n", __func__, mss_now, size_goal);

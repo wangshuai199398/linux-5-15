@@ -742,8 +742,26 @@ static int shift_arg_pages(struct vm_area_struct *vma, unsigned long shift)
 }
 
 /*
- * Finalizes the stack vm_area_struct. The flags and permissions are updated,
- * the stack is optionally relocated, and some extra space is added.
+ * 为即将启动的进程把参数/环境所在的内存区域当作“栈”来设置：
+ * 对齐栈顶 → 校验范围 → 调整指针 → 设定栈的内存权限（可/不可执行）→ 如有需要把页整体下移到真正的栈顶 → 去掉临时标志 → 按 RLIMIT_STACK 扩栈 → 记录 start_stack
+ 高地址
+   |
+   |  <-- stack top (SP 指向这里)
+   |       push/call 会往下走
+   |
+   v
+   |  栈内容（函数帧、局部变量、返回地址、参数等）
+   |
+   |  <-- stack base (最低边界)
+低地址
+
+高地址
+    vma->vm_end     ← 未来临时栈顶（参数区最顶端）
+    [  env strings  ]
+    [  argv strings ]
+    [  pointers     ]
+    vma->vm_start   ← 参数区最低端（靠近未来栈底方向）
+低地址
  */
 int setup_arg_pages(struct linux_binprm *bprm,
 		    unsigned long stack_top,
@@ -782,13 +800,13 @@ int setup_arg_pages(struct linux_binprm *bprm,
 #else
 	stack_top = arch_align_stack(stack_top);
 	stack_top = PAGE_ALIGN(stack_top);
-
+    // 栈顶不能小于最小映射间隔 或 当前用于存放 argv/env 的临时栈区域大小不能超过允许分配栈的最大可能空间
 	if (unlikely(stack_top < mmap_min_addr) ||
 	    unlikely(vma->vm_end - vma->vm_start >= stack_top - mmap_min_addr))
 		return -ENOMEM;
-
+    // 计算出需要移动的偏移量 vma->vm_start到vm_end下移
 	stack_shift = vma->vm_end - stack_top;
-
+    // bprm->p 指向 参数区最低地址（低地址端）
 	bprm->p -= stack_shift;
 	mm->arg_start = bprm->p;
 #endif
@@ -813,7 +831,7 @@ int setup_arg_pages(struct linux_binprm *bprm,
 		vm_flags &= ~VM_EXEC;
 	vm_flags |= mm->def_flags;
 	vm_flags |= VM_STACK_INCOMPLETE_SETUP;
-
+    //应用这些权限到 VMA
 	ret = mprotect_fixup(vma, &prev, vma->vm_start, vma->vm_end,
 			vm_flags);
 	if (ret)
@@ -825,7 +843,7 @@ int setup_arg_pages(struct linux_binprm *bprm,
 			     bprm->file);
 	}
 
-	/* Move stack pages down in memory. */
+	/* 把这段 VMA 里的真实物理页表映射，整体下移到以 stack_top 结尾的位置，实现“把参数挪到真正的栈顶” */
 	if (stack_shift) {
 		ret = shift_arg_pages(vma, stack_shift);
 		if (ret)
@@ -838,8 +856,8 @@ int setup_arg_pages(struct linux_binprm *bprm,
 	stack_expand = 131072UL; /* randomly 32*4k (or 2*64k) pages */
 	stack_size = vma->vm_end - vma->vm_start;
 	/*
-	 * Align this down to a page boundary as expand_stack
-	 * will align it up.
+	 * Align this down to a page boundary as expand_stack will align it up.
+	 * RLIMIT_STACK 当前软限制
 	 */
 	rlim_stack = bprm->rlim_stack.rlim_cur & PAGE_MASK;
 #ifdef CONFIG_STACK_GROWSUP
@@ -848,6 +866,7 @@ int setup_arg_pages(struct linux_binprm *bprm,
 	else
 		stack_base = vma->vm_end + stack_expand;
 #else
+    //如果扩栈超过 rlimit，就把栈底卡住，使栈大小 = rlimit；否则就向低地址额外扩 128KB
 	if (stack_size + stack_expand > rlim_stack)
 		stack_base = vma->vm_end - rlim_stack;
 	else
@@ -855,6 +874,7 @@ int setup_arg_pages(struct linux_binprm *bprm,
 #endif
 	//把前面准备的进程栈的地址空间指针设置到新进程mm对象上
 	current->mm->start_stack = bprm->p;
+	//扩大栈到低地址stack_base位置
 	ret = expand_stack(vma, stack_base);
 	if (ret)
 		ret = -EFAULT;
@@ -1905,6 +1925,7 @@ static int do_execveat_common(int fd, struct filename *filename,
 	 * set*uid() to execve() because too many poorly written programs
 	 * don't check setuid() return code.  Here we additionally recheck
 	 * whether NPROC limit is still exceeded.
+	 * 检查没有超出系统允许的最大可运行进程数限制
 	 */
 	if ((current->flags & PF_NPROC_EXCEEDED) &&
 	    is_ucounts_overlimit(current_ucounts(), UCOUNT_RLIMIT_NPROC, rlimit(RLIMIT_NPROC))) {
@@ -1937,12 +1958,12 @@ static int do_execveat_common(int fd, struct filename *filename,
 	retval = bprm_stack_limits(bprm);
 	if (retval < 0)
 		goto out_free;
-
+    //把程序的文件名从内核空间复制到当前正在准备的bprm中
 	retval = copy_string_kernel(bprm->filename, bprm);
 	if (retval < 0)
 		goto out_free;
 	bprm->exec = bprm->p;
-
+    //把用户态的环境变量向量 envp 中的 envc 个字符串 复制到 bprm 维护的参数/环境缓冲区里
 	retval = copy_strings(bprm->envc, envp, bprm);
 	if (retval < 0)
 		goto out_free;
