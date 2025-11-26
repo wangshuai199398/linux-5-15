@@ -6434,6 +6434,8 @@ static int tcp_rcv_synsent_state_process(struct sock *sk, struct sk_buff *skb,
 		} else {
 			tp->tcp_header_len = sizeof(struct tcphdr);
 		}
+		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+			printk(KERN_INFO "%s: ->tcp_sync_mss mss_cache %u icsk->icsk_pmtu_cookie %u\n", __func__, tp->mss_cache, icsk->icsk_pmtu_cookie);
 		//根据路径 MTU 同步 MSS
 		tcp_sync_mss(sk, icsk->icsk_pmtu_cookie);
 		//初始化接收方的 MSS（接收端能接受的最大报文段长度）
@@ -6483,7 +6485,7 @@ discard:
 			if (is_src_k2pro(skb))
 				printk(KERN_INFO "%s: is_src_k2pro tcp_send_ack\n", __func__);
 			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-				printk(KERN_INFO "%s: is that sock\n", __func__);
+				printk(KERN_INFO "%s: is that sock mss_cache %u\n", __func__, tp->mss_cache);
 			//发送第三次握手包
 			tcp_send_ack(sk);
 		}
