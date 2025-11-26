@@ -252,6 +252,8 @@ EXPORT_SYMBOL(tcp_select_initial_window);
  * socket, and return result with RFC1323 scaling applied.  The return
  * value can be stuffed directly into th->window for an outgoing
  * frame.
+ * 这个函数根据当前接收缓冲可用空间计算一个不收缩、不超上限、按缩放粒度对齐的接收窗口，更新 TCP 状态，
+ * 并返回缩放后（可直接写入 TCP 头）的 16 位窗口值；遇到零窗口会关闭快速路径并做相应统计
  */
 static u16 tcp_select_window(struct sock *sk)
 {
@@ -260,7 +262,7 @@ static u16 tcp_select_window(struct sock *sk)
 	u32 cur_win = tcp_receive_window(tp);
 	u32 new_win = __tcp_select_window(sk);
 
-	/* Never shrink the offered window */
+	/* 如果新算出的 new_win 比当前可通告的 cur_win 还小，就不采纳（TCP 规范要求接收窗口不得收缩） */
 	if (new_win < cur_win) {
 		/* Danger Will Robinson!
 		 * Don't update rcv_wup/rcv_wnd here or else
@@ -1783,9 +1785,7 @@ static inline int __tcp_mtu_to_mss(struct sock *sk, int pmtu)
 	const struct inet_connection_sock *icsk = inet_csk(sk);
 	int mss_now;
 
-	/* Calculate base mss without TCP options:
-	   It is MMS_S - sizeof(tcphdr) of rfc1122
-	 */
+	/* 用 pmtu 减去 IP 头 + 基础 TCP 头 */
 	mss_now = pmtu - icsk->icsk_af_ops->net_header_len - sizeof(struct tcphdr);
 
 	/* IPv6 adds a frag_hdr in case RTAX_FEATURE_ALLFRAG is set */
@@ -1805,7 +1805,7 @@ static inline int __tcp_mtu_to_mss(struct sock *sk, int pmtu)
 
 	/* Then reserve room for full set of TCP options and 8 bytes of data */
 	mss_now = max(mss_now,
-		      READ_ONCE(sock_net(sk)->ipv4.sysctl_tcp_min_snd_mss));
+		      READ_ONCE(sock_net(sk)->ipv4.sysctl_tcp_min_snd_mss));//最小48
 	return mss_now;
 }
 
@@ -1813,6 +1813,7 @@ static inline int __tcp_mtu_to_mss(struct sock *sk, int pmtu)
 int tcp_mtu_to_mss(struct sock *sk, int pmtu)
 {
 	/* Subtract TCP options size, not including SACKs */
+	//tp->tcp_header_len = 基础 TCP 头 + 所有当前会发的 TCP 选项长度，这里减去时间戳的12字节，所以最终算出的1500-20-20-12=1448
 	return __tcp_mtu_to_mss(sk, pmtu) -
 	       (tcp_sk(sk)->tcp_header_len - sizeof(struct tcphdr));
 }
@@ -1858,28 +1859,27 @@ void tcp_mtup_init(struct sock *sk)
 }
 EXPORT_SYMBOL(tcp_mtup_init);
 
-/* This function synchronize snd mss to current pmtu/exthdr set.
+/* 这个函数根据当前的 PMTU / 扩展头(exthdr) 设置来同步 snd_mss。
 
-   tp->rx_opt.user_mss is mss set by user by TCP_MAXSEG. It does NOT counts
-   for TCP options, but includes only bare TCP header.
+   tp->rx_opt.user_mss 是用户通过 TCP_MAXSEG 设置的 MSS。
+   它**不**包含任何 TCP 选项的长度，只包含裸 TCP 头部的大小。
 
-   tp->rx_opt.mss_clamp is mss negotiated at connection setup.
-   It is minimum of user_mss and mss received with SYN.
-   It also does not include TCP options.
+   tp->rx_opt.mss_clamp 是在建立连接时协商得到的 MSS。
+   它是 user_mss 和 SYN 报文中携带的 MSS 两者的最小值。
+   它同样不包含 TCP 选项。
 
-   inet_csk(sk)->icsk_pmtu_cookie is last pmtu, seen by this function.
+   inet_csk(sk)->icsk_pmtu_cookie 是该函数最后一次看到的 PMTU 值。
 
-   tp->mss_cache is current effective sending mss, including
-   all tcp options except for SACKs. It is evaluated,
-   taking into account current pmtu, but never exceeds
-   tp->rx_opt.mss_clamp.
+   tp->mss_cache 是当前实际有效的发送 MSS，包含
+   所有 TCP 选项（除了 SACK）。它是在考虑当前 PMTU 的基础上计算出来的，
+   但绝不会超过 tp->rx_opt.mss_clamp。
 
-   NOTE1. rfc1122 clearly states that advertised MSS
-   DOES NOT include either tcp or ip options.
+   说明1：RFC 1122 明确指出，通告的 MSS
+   **不包含** TCP 或 IP 选项。
 
-   NOTE2. inet_csk(sk)->icsk_pmtu_cookie and tp->mss_cache
-   are READ ONLY outside this function.		--ANK (980731)
- */
+   说明2：inet_csk(sk)->icsk_pmtu_cookie 和 tp->mss_cache
+   在该函数外部是只读的。		--ANK (980731)
+*/
 unsigned int tcp_sync_mss(struct sock *sk, u32 pmtu)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
@@ -1890,6 +1890,8 @@ unsigned int tcp_sync_mss(struct sock *sk, u32 pmtu)
 		icsk->icsk_mtup.search_high = pmtu;
 
 	mss_now = tcp_mtu_to_mss(sk, pmtu);
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: -> mss_now %u\n", __func__, mss_now);
 	//根据发送窗口大小进一步限制 MSS
 	mss_now = tcp_bound_to_half_wnd(tp, mss_now);
 
@@ -1901,6 +1903,8 @@ unsigned int tcp_sync_mss(struct sock *sk, u32 pmtu)
 		mss_now = min(mss_now, tcp_mtu_to_mss(sk, icsk->icsk_mtup.search_low));
 	//更新 TCP MSS 缓存
 	tp->mss_cache = mss_now;
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: -> mss_now %u\n", __func__, mss_now);
 
 	return mss_now;
 }
@@ -2089,6 +2093,7 @@ static u32 tcp_tso_segs(struct sock *sk, unsigned int mss_now)
 
 /* Returns the portion of skb which can be sent right away */
 //你现在这个大 skb，最多能从里面分出多少字节的数据发出去，并且不违反 TCP 拥塞、窗口、Nagle 规则
+//当前 TCP 数据包最多可以发送多少字节，从而保证既不超过窗口，也避免发送不必要的小包
 static unsigned int tcp_mss_split_point(const struct sock *sk,
 					const struct sk_buff *skb,
 					unsigned int mss_now,
@@ -2097,16 +2102,16 @@ static unsigned int tcp_mss_split_point(const struct sock *sk,
 {
 	const struct tcp_sock *tp = tcp_sk(sk);
 	u32 partial, needed, window, max_len;
-	//计算从该 skb 开始还能发多少数据不超过发送窗口（剩余窗口大小）
+	//滑动窗口允许的大小
 	window = tcp_wnd_end(tp) - TCP_SKB_CB(skb)->seq;
-	//最多可以发送 max_segs 个 MSS 的长度
+	//理论最大可发送长度
 	max_len = mss_now * max_segs;
-	//如果可以完整地发送 max_segs * mss 字节，并且该 skb 不是写队列的最后一个包，就直接发全部的 max_len
+	//当前窗口足够大（能容纳全部 max_len 数据），且该 skb 不是 发送队列中的最后一个包
 	if (likely(max_len <= window && skb != tcp_write_queue_tail(sk)))
 		return max_len;
-	//需要发送的数据不能超过 skb 实际长度 和 window 中的较小者
+	//否则，受限于窗口或 skb 大小，实际“需要发送的最大可能字节数”，不能超过当前 skb 长度，也不能超过窗口
 	needed = min(skb->len, window);
-	//如果 max_len 本来就小于 needed，也直接发送 max_len
+	//窗口和 skb 都足够大，可以发满 max_len
 	if (max_len <= needed)
 		return max_len;
 	//计算 needed 中除完整的 MSS 外的“剩余字节”（即不满一个 MSS 的部分）
@@ -2193,7 +2198,7 @@ static bool tcp_snd_wnd_test(const struct tcp_sock *tp,
 
 	if (skb->len > cur_mss)
 		end_seq = TCP_SKB_CB(skb)->seq + cur_mss;
-
+    //如果 end_seq 在发送窗口的范围内，返回 true，否则返回 false
 	return !after(end_seq, tcp_wnd_end(tp));
 }
 
@@ -2813,7 +2818,7 @@ static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 		limit = mss_now;
 		//判断当前发送端是否处于“紧急模式（URG mode）”
 		if (tso_segs > 1 && !tcp_urg_mode(tp)) {
-			//计算 TCP 在发送数据时，是否应该把一个大包 在某个字节位置“切成两段” 
+			//当前 TCP 数据包最多可以发送多少字节
 			limit = tcp_mss_split_point(sk, skb, mss_now,
 						    min_t(unsigned int,
 							  cwnd_quota,
@@ -3062,57 +3067,42 @@ void tcp_push_one(struct sock *sk, unsigned int mss_now)
 	tcp_write_xmit(sk, mss_now, TCP_NAGLE_PUSH, 1, sk->sk_allocation);
 }
 
-/* This function returns the amount that we can raise the
- * usable window based on the following constraints
+/* 这个函数返回我们可以增加的“可用接收窗口”的大小，受以下约束条件限制
  *
- * 1. The window can never be shrunk once it is offered (RFC 793)
- * 2. We limit memory per socket
+ * 1. 一旦接收窗口通告出去，就不能再缩小（RFC 793 规定）
+ * 2. 每个 socket 的内存使用要受限
  *
  * RFC 1122:
  * "the suggested [SWS] avoidance algorithm for the receiver is to keep
  *  RECV.NEXT + RCV.WIN fixed until:
  *  RCV.BUFF - RCV.USER - RCV.WINDOW >= min(1/2 RCV.BUFF, MSS)"
+ * 只有当接收缓冲中至少腾出了半个缓冲区或一个 MSS 大小时，才可以扩大窗口
  *
- * i.e. don't raise the right edge of the window until you can raise
- * it at least MSS bytes.
+ * 也就是说： 不要增加窗口右边界，除非你能增加至少一个 MSS 大小
  *
- * Unfortunately, the recommended algorithm breaks header prediction,
- * since header prediction assumes th->window stays fixed.
+ * 但遗憾的是，这种算法会破坏 TCP 的“首部预测机制”，因为预测机制假设 TCP 头中的 window 字段保持不变
  *
- * Strictly speaking, keeping th->window fixed violates the receiver
- * side SWS prevention criteria. The problem is that under this rule
- * a stream of single byte packets will cause the right side of the
- * window to always advance by a single byte.
+ * 严格来说，保持 window 固定又违反了接收端防止 SWS 的规则
+ * 问题在于：如果发送方不断发 1 字节的小包，那么接收端窗口右边界也会一直只前进 1 字节
  *
- * Of course, if the sender implements sender side SWS prevention
- * then this will not be a problem.
+ * 当然，如果发送方实现了自己的 SWS 预防机制，这就不成问题了
  *
- * BSD seems to make the following compromise:
+ * BSD 系统采用了如下折中方案：
  *
- *	If the free space is less than the 1/4 of the maximum
- *	space available and the free space is less than 1/2 mss,
- *	then set the window to 0.
- *	[ Actually, bsd uses MSS and 1/4 of maximal _window_ ]
- *	Otherwise, just prevent the window from shrinking
- *	and from being larger than the largest representable value.
+ *	如果当前可用空间 < 最大缓冲区的 1/4，且 < 1/2 MSS，就通告零窗口
+ *	（实际上 BSD 用的是 MSS 和最大“窗口”的 1/4 作为判断基准）
  *
- * This prevents incremental opening of the window in the regime
- * where TCP is limited by the speed of the reader side taking
- * data out of the TCP receive queue. It does nothing about
- * those cases where the window is constrained on the sender side
- * because the pipeline is full.
+ * 否则，只要保证窗口不收缩且不超过协议允许的最大值即可。
+ * 这种策略可以避免在读取进程较慢时出现“逐字节打开窗口”的情况
  *
- * BSD also seems to "accidentally" limit itself to windows that are a
- * multiple of MSS, at least until the free space gets quite small.
- * This would appear to be a side effect of the mbuf implementation.
- * Combining these two algorithms results in the observed behavior
- * of having a fixed window size at almost all times.
+ * 但它无法解决发送方因为发送管道已满而受限的情况
  *
- * Below we obtain similar behavior by forcing the offered window to
- * a multiple of the mss when it is feasible to do so.
- *
- * Note, we don't "adjust" for TIMESTAMP or SACK option bytes.
- * Regular options like TIMESTAMP are taken into account.
+ * BSD 似乎还“顺带”限制了窗口大小总是 MSS 的整数倍（至少在空间比较充足时如此）
+ * 这看起来是 BSD 使用 mbuf 缓冲机制带来的副作用
+ * 结合这两种算法的效果是：几乎所有时候窗口大小都是固定的。
+ * 下面我们的实现也采用类似的行为：当可行时，把通告的接收窗口强制为 MSS 的整数倍
+ * 
+ * 注意：我们不会为 TIMESTAMP 或 SACK 选项额外调整窗口大小。普通的 TCP 选项（如 TIMESTAMP）已经被计算在内
  */
 u32 __tcp_select_window(struct sock *sk)
 {
@@ -3911,7 +3901,7 @@ static void tcp_connect_init(struct sock *sk)
 		tp->rcv_tstamp = tcp_jiffies32;
 	tp->rcv_wup = tp->rcv_nxt;
 	WRITE_ONCE(tp->copied_seq, tp->rcv_nxt);
-
+    //设置发送syn的超时重传时间
 	inet_csk(sk)->icsk_rto = tcp_timeout_init(sk);
 	inet_csk(sk)->icsk_retransmits = 0;
 	tcp_clear_retrans(tp);
@@ -4043,7 +4033,7 @@ int tcp_connect(struct sock *sk)
 
 	if (inet_csk(sk)->icsk_af_ops->rebuild_header(sk))
 		return -EHOSTUNREACH; /* Routing failure or similar. */
-
+	//初始化与地址族无关的通用参数，发送窗口、接收窗口、MSS、拥塞控制等参数进行初始化
 	tcp_connect_init(sk);
 
 	if (unlikely(tp->repair)) {
@@ -4093,7 +4083,7 @@ int tcp_connect(struct sock *sk)
 	TCP_INC_STATS(sock_net(sk), TCP_MIB_ACTIVEOPENS);
 
 	/* Timer for repeating the SYN until an answer. 重启重传定时器 */
-	//设置了一个 timer，如果 SYN 发送不成功，则再次发送
+	//设置了一个 timer，如果 SYN 发送不成功，则再次发送，超时时间icsk_rto在tcp_connect_init中设置为1s
 	inet_csk_reset_xmit_timer(sk, ICSK_TIME_RETRANS,
 				  inet_csk(sk)->icsk_rto, TCP_RTO_MAX);
 	return 0;
