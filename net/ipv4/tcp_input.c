@@ -6012,10 +6012,8 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 	if (is_src_k2pro(skb)) {
 		printk(KERN_INFO "%s: !rcu_access_pointer\n", __func__);
 	}
-	//tcp_flag_word(th) 提取 TCP 首部中的 flags 字段
-	//TCP_HP_BITS 是快速路径中允许的 flags 位（如 ACK，但不包含 SYN、RST、FIN 等）。
-	//tp->pred_flags 是预期的 flag 状态，通常是 ACK + 没有其它控制位。
-	//判断这个包是不是我们“最理想的那类包： 纯 ACK 包（也可能带数据），没有控制标志、选项、异常行为
+
+	//快路径判断：纯 ACK 包（也可能带数据）
 	//这个包的序列号 seq 等于我们期望的下一个序列号 rcv_nxt，说明：包是按顺序来的，不是重传，不是乱序
 	//ACK 的确认号 ≤ 我们已发送的数据尾部 snd_nxt,对方不是在“乱确认”未来还没发出去的数据
 	if ((tcp_flag_word(th) & TCP_HP_BITS) == tp->pred_flags &&
@@ -6547,7 +6545,7 @@ discard:
 		tcp_initialize_rcv_mss(sk);
 		//回应 SYN+ACK —— 开始完成同时连接过程
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s ->tcp_send_synack \n", __func__);
+			printk(KERN_INFO "%s ->tcp_send_synack tp->mss_cache %u\n", __func__, tp->mss_cache);
 		tcp_send_synack(sk);
 #if 0
 		/* Note, we could accept data and URG from this segment.
@@ -7206,7 +7204,7 @@ int tcp_conn_request(struct request_sock_ops *rsk_ops,
 				    rsk_ops->family);
 			goto drop_and_release;
 		}
-		//为当前请求生成一个 初始序列号（ISN）
+		//为当前请求生成一个 初始序列号（ISN） tcp_v4_init_seq
 		isn = af_ops->init_seq(skb);
 	}
 	if (is_src_k2pro(skb))
