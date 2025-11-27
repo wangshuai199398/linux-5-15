@@ -1785,7 +1785,7 @@ static inline int __tcp_mtu_to_mss(struct sock *sk, int pmtu)
 	const struct inet_connection_sock *icsk = inet_csk(sk);
 	int mss_now;
 
-	/* 用 pmtu 减去 IP 头 + 基础 TCP 头 */
+	/* 用 pmtu 减去 IP 头 + 基础 TCP 头 1500-20-20*/
 	mss_now = pmtu - icsk->icsk_af_ops->net_header_len - sizeof(struct tcphdr);
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
 		printk(KERN_INFO "%s: icsk->icsk_af_ops->net_header_len %hu mss_now %d ->net_frag_header_len %d\n", __func__, icsk->icsk_af_ops->net_header_len, mss_now, icsk->icsk_af_ops->net_frag_header_len);
@@ -3748,6 +3748,8 @@ struct sk_buff *tcp_make_synack(const struct sock *sk, struct dst_entry *dst,
 	skb_dst_set(skb, dst);
 
 	mss = tcp_mss_clamp(tp, dst_metric_advmss(dst));
+	if (ireq->ir_rmt_addr == 0xa4dc77a)
+		printk(KERN_ERR "%s: mss %d tp->msscache %hu\n", __func__, mss, tp->mss_cache);
 
 	memset(&opts, 0, sizeof(opts));
 	now = tcp_clock_ns();
@@ -4067,7 +4069,7 @@ int tcp_connect(struct sock *sk)
 			printk(KERN_INFO "%s: ->tcp_transmit_skb\n", __func__);
 		}
 	}
-	//发出SYN
+	//发出SYN 走后边这个
 	err = tp->fastopen_req ? tcp_send_syn_data(sk, buff) :
 	      tcp_transmit_skb(sk, buff, 1, sk->sk_allocation);
 	if (err == -ECONNREFUSED)
