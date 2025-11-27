@@ -6323,6 +6323,8 @@ static int tcp_rcv_synsent_state_process(struct sock *sk, struct sk_buff *skb,
 	struct tcp_sock *tp = tcp_sk(sk);
 	struct tcp_fastopen_cookie foc = { .len = -1 };
 	int saved_clamp = tp->rx_opt.mss_clamp;
+	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
+		printk(KERN_INFO "%s: ->mss_cache tp->rx_opt.mss_clamp %hu\n", __func__,tp->rx_opt.mss_clamp);
 	bool fastopen_fail;
 	//解析 SYN 包中的 TCP 选项
 	tcp_parse_options(sock_net(sk), skb, &tp->rx_opt, 0, &foc);
