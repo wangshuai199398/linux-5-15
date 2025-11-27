@@ -3749,7 +3749,7 @@ struct sk_buff *tcp_make_synack(const struct sock *sk, struct dst_entry *dst,
 
 	mss = tcp_mss_clamp(tp, dst_metric_advmss(dst));
 	if (ireq->ir_rmt_addr == 0xa4dc77a)
-		printk(KERN_ERR "%s: mss %d tp->msscache %hu\n", __func__, mss, tp->mss_cache);
+		printk(KERN_ERR "%s: mss %d tp->msscache %hu %u\n", __func__, mss, tp->mss_cache, ((u32 *)DST_METRICS_PTR(dst))[RTAX_ADVMSS-1]);
 
 	memset(&opts, 0, sizeof(opts));
 	now = tcp_clock_ns();
