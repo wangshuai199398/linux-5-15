@@ -1506,7 +1506,7 @@ int __sock_create(struct net *net, int family, int type, int protocol,
 
 	/* Now protected by module ref count */
 	rcu_read_unlock();
-	//调用指定协议族的创建函数，对于AF_INET对应的是 inet_create
+	//调用指定协议族的创建函数，对于AF_INET对应的是 inet_create 抓包 packet_create
 	err = pf->create(net, sock, protocol, kern);
 	if (err < 0) {
 		/* ->create should release the allocated sock->sk object on error
@@ -1835,7 +1835,7 @@ struct file *do_accept(struct file *file, unsigned file_flags,
 					false);// inet_accept
 	if (err < 0)
 		goto out_fd;
-
+    //获取对端地址 inet_getname
 	if (upeer_sockaddr) {
 		len = newsock->ops->getname(newsock,
 					(struct sockaddr *)&address, 2);
@@ -2102,7 +2102,7 @@ int __sys_sendto(int fd, void __user *buff, size_t len, unsigned int flags,
 	msg.msg_flags = flags;
 
 	if (inet_sk(sock->sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "__sys_sendto -> __sock_sendmsg \n");
+		pr_debug("__sys_sendto -> __sock_sendmsg \n");
 	//发送数据
 	err = __sock_sendmsg(sock, &msg);
 
