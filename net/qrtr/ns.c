@@ -15,7 +15,7 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/qrtr.h>
 
-static (nodes, GFP_KERNEL);
+static RADIX_TREE(nodes, GFP_KERNEL);
 
 static struct {
 	struct socket *sock;
