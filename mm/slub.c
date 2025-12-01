@@ -4868,6 +4868,7 @@ void __init kmem_cache_init_late(void)
 	WARN_ON(!flushwq);
 }
 
+/* 如果已经存在一个“可以共用（mergeable）”的 cache，那么不再新建，而是复用旧的 cache，并建立 alias（别名）关系 */
 struct kmem_cache *
 __kmem_cache_alias(const char *name, unsigned int size, unsigned int align,
 		   slab_flags_t flags, void (*ctor)(void *))

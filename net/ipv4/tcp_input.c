@@ -3805,7 +3805,7 @@ static void tcp_xmit_recovery(struct sock *sk, int rexmit)
 
 	if (unlikely(rexmit == REXMIT_NEW)) {
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "tcp_xmit_recovery\n");
+			pr_debug("tcp_xmit_recovery\n");
 		__tcp_push_pending_frames(sk, tcp_current_mss(sk),
 					  TCP_NAGLE_OFF);
 		if (after(tp->snd_nxt, tp->high_seq))
@@ -4016,7 +4016,7 @@ static int tcp_ack(struct sock *sk, const struct sk_buff *skb, int flag)
 				      &rexmit);
 	}
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: flag 0x%x\n", __func__, flag);
+		pr_debug("%s: flag 0x%x\n", __func__, flag);
 	/* If needed, reset TLP/RTO timer when RACK doesn't set. */
 	//如果标记中 FLAG_SET_XMIT_TIMER 被置位，说明当前 ACK 收到后需要重置（或启动）发送定时器
 	//重新设置 TLP/RTO 定时器
@@ -4041,7 +4041,7 @@ static int tcp_ack(struct sock *sk, const struct sk_buff *skb, int flag)
 	//传输恢复处理，负责触发或结束恢复阶段。处理重传和恢复窗口的维护。rexmit 参数表示是否需要重传。
 	tcp_xmit_recovery(sk, rexmit);
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: tcp_xmit_recovery rexmit 0x%x\n", __func__, rexmit);
+		pr_debug("%s: tcp_xmit_recovery rexmit 0x%x\n", __func__, rexmit);
 	return 1;
 
 no_queue:
@@ -5095,7 +5095,7 @@ static int __must_check tcp_queue_rcv(struct sock *sk, struct sk_buff *skb,
 				  skb, fragstolen)) ? 1 : 0;
 	//eaten=1合并了，为0没合并
 	if (is_src_k2pro(skb))
-		printk(KERN_ERR "%s: tcp_rcv_nxt_update eaten %d\n", __func__, eaten);
+		pr_debug("%s: tcp_rcv_nxt_update eaten %d\n", __func__, eaten);
 	//更新rcv_nxt，即使合并了，也要更新 rcv_nxt 为该 skb 的 end_seq
 	//rcv_nxt 是 TCP 接收侧最关键的按序指针，永远指向“下一个期望序列号”
 	tcp_rcv_nxt_update(tcp_sk(sk), TCP_SKB_CB(skb)->end_seq);
@@ -5191,16 +5191,16 @@ static void tcp_data_queue(struct sock *sk, struct sk_buff *skb)
 	//如果是 MPTCP 且检查不通过，直接丢包
 	if (sk_is_mptcp(sk) && !mptcp_incoming_options(sk, skb)) {
 		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: sk_is_mptcp !mptcp_incoming_options \n", __func__);
+			pr_debug("%s: sk_is_mptcp !mptcp_incoming_options \n", __func__);
 		__kfree_skb(skb);
 		return;
 	}
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: TCP_SKB_CB(skb)->seq 0x%x TCP_SKB_CB(skb)->end_seq 0x%x tp->rcv_nxt 0x%x\n", __func__, TCP_SKB_CB(skb)->seq, TCP_SKB_CB(skb)->end_seq, tp->rcv_nxt);
+		pr_debug("%s: TCP_SKB_CB(skb)->seq 0x%x TCP_SKB_CB(skb)->end_seq 0x%x tp->rcv_nxt 0x%x\n", __func__, TCP_SKB_CB(skb)->seq, TCP_SKB_CB(skb)->end_seq, tp->rcv_nxt);
 	//如果数据长度为 0（可能 SYN、FIN 等），直接丢包
 	if (TCP_SKB_CB(skb)->seq == TCP_SKB_CB(skb)->end_seq) {
 		if (is_src_k2pro(skb))
-			printk(KERN_ERR "%s: skb payload is 0, drop skb! \n", __func__);
+			pr_debug("%s: skb payload is 0, drop skb! \n", __func__);
 		__kfree_skb(skb);
 		return;
 	}
@@ -5231,7 +5231,7 @@ queue_and_out:
 		}
 		//使用 tcp_queue_rcv 入接收队列
 		if (is_src_k2pro(skb))
-			printk(KERN_ERR "%s: tcp_queue_rcv\n", __func__);
+			pr_debug("%s: tcp_queue_rcv\n", __func__);
 		eaten = tcp_queue_rcv(sk, skb, &fragstolen);
 		//接收到数据包并且该包有效数据非 0 时，记录统计和触发相关的接收事件
 		if (skb->len)
@@ -5694,7 +5694,7 @@ static void __tcp_ack_snd_check(struct sock *sk, int ofo_possible)
 	    /* Protocol state mandates a one-time immediate ACK */
 	    inet_csk(sk)->icsk_ack.pending & ICSK_ACK_NOW) {
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s: ->tcp_send_ack\n", __func__);
+			pr_debug("%s: ->tcp_send_ack\n", __func__);
 send_now:
 		tcp_send_ack(sk);
 		return;
@@ -6010,7 +6010,7 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 	//为了避免误用之前接收包的时间戳信息
 	tp->rx_opt.saw_tstamp = 0;
 	if (is_src_k2pro(skb)) {
-		printk(KERN_INFO "%s: !rcu_access_pointer\n", __func__);
+		pr_debug("%s: !rcu_access_pointer\n", __func__);
 	}
 
 	//快路径判断：纯 ACK 包（也可能带数据）
@@ -6024,7 +6024,7 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 
 		/* 时间戳头部预测：由于 pred_flags 匹配的缘故，tcp_header_len 自动等于 th->doff * 4 */
 		if (is_src_k2pro(skb)) {
-			printk(KERN_INFO "%s: fast process tcp_header_len %d len %d\n", __func__, tcp_header_len, len);
+			pr_debug("%s: fast process tcp_header_len %d len %d\n", __func__, tcp_header_len, len);
 		}
 		//当前报文的 TCP 头长度是否精确等于基本 TCP 首部 + 时间戳选项（aligned 后的长度）
 		//这个包只带了 时间戳选项，没有其他复杂选项（如 SACK、窗口缩放等）
@@ -6051,7 +6051,7 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 
 				/* 我们知道这类数据包在进入时已经完成了校验和计算 */
 				if (is_src_k2pro(skb))
-					printk(KERN_INFO "%s: tcp_ack tcp_data_snd_check\n", __func__);
+					pr_debug("%s: tcp_ack tcp_data_snd_check\n", __func__);
 				//处理ACK
 				tcp_ack(sk, skb, 0);
 				//ACK包中没有数据，处理完可以直接释放
@@ -6089,7 +6089,7 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 			/* Bulk data transfer: receiver */
 			__skb_pull(skb, tcp_header_len);
 			if (is_src_k2pro(skb)) {
-				printk(KERN_INFO "%s: ->tcp_queue_rcv tcp_event_data_recv\n", __func__);
+				pr_debug("%s: ->tcp_queue_rcv tcp_event_data_recv\n", __func__);
 			}
 			//接收数据放到队列中
 			eaten = tcp_queue_rcv(sk, skb, &fragstolen);
@@ -6098,7 +6098,7 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 			//如果 ACK 号与未确认号不同（说明这个数据包顺便确认了一些新数据）
 			if (TCP_SKB_CB(skb)->ack_seq != tp->snd_una) {
 				if (is_src_k2pro(skb))
-					printk(KERN_INFO "%s: tcp_ack\n", __func__);
+					pr_debug("%s: tcp_ack\n", __func__);
 				//处理 ACK，更新发送窗口，看看是否要立即发送 ACK 响应
 				tcp_ack(sk, skb, FLAG_DATA);
 				tcp_data_snd_check(sk);
@@ -6110,7 +6110,7 @@ void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
 				tcp_update_wl(tp, TCP_SKB_CB(skb)->seq);
 			}
 			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-				printk(KERN_INFO "%s: ->__tcp_ack_snd_check\n", __func__);
+				pr_debug("%s: ->__tcp_ack_snd_check\n", __func__);
 			//根据当前 socket 状态判断是否需要发送 ACK（例如 delayed ACK、生 ACK、窗口更新等）
 			__tcp_ack_snd_check(sk, 0);
 no_ack:
@@ -6136,7 +6136,7 @@ slow_path:
 
 step5:
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: tcp_ack\n", __func__);
+		pr_debug("%s: tcp_ack\n", __func__);
 	//处理ACK序号确认，更新拥塞窗口 / 重传队列 / RTT / SACK 等状态
 	//FLAG_SLOWPATH：表明是慢路径处理  FLAG_UPDATE_TS_RECENT：允许更新ts_recent（用于 PAWS 检查）
 	if (tcp_ack(sk, skb, FLAG_SLOWPATH | FLAG_UPDATE_TS_RECENT) < 0)
@@ -6149,7 +6149,7 @@ step5:
 
 	/* step 7: process the segment text */
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: ->tcp_data_queue\n", __func__);
+		pr_debug("%s: ->tcp_data_queue\n", __func__);
 	//将数据包放入 socket 的接收队列（sk_receive_queue）
 	//如果数据是乱序，会暂存到 out-of-order 队列并等待重排
 	//如果数据正好是期望的序列，可能直接可读，等待应用层 recv()
@@ -6324,7 +6324,7 @@ static int tcp_rcv_synsent_state_process(struct sock *sk, struct sk_buff *skb,
 	struct tcp_fastopen_cookie foc = { .len = -1 };
 	int saved_clamp = tp->rx_opt.mss_clamp;
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->mss_cache tp->rx_opt.mss_clamp %hu\n", __func__,tp->rx_opt.mss_clamp);
+		pr_debug("%s: ->mss_cache tp->rx_opt.mss_clamp %hu\n", __func__,tp->rx_opt.mss_clamp);
 	bool fastopen_fail;
 	//解析 SYN 包中的 TCP 选项
 	tcp_parse_options(sock_net(sk), skb, &tp->rx_opt, 0, &foc);
@@ -6404,7 +6404,7 @@ static int tcp_rcv_synsent_state_process(struct sock *sk, struct sk_buff *skb,
 		//如果之前 SYN 被误认为丢失，尝试撤销错误的重传处理
 		tcp_try_undo_spurious_syn(sk);
 		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: tcp_ack\n", __func__);
+			pr_debug("%s: tcp_ack\n", __func__);
 		//处理 ACK 包
 		tcp_ack(sk, skb, FLAG_SLOWPATH);
 
@@ -6437,7 +6437,7 @@ static int tcp_rcv_synsent_state_process(struct sock *sk, struct sk_buff *skb,
 			tp->tcp_header_len = sizeof(struct tcphdr);
 		}
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s: ->tcp_sync_mss mss_cache %u icsk->icsk_pmtu_cookie %u\n", __func__, tp->mss_cache, icsk->icsk_pmtu_cookie);
+			pr_debug("%s: ->tcp_sync_mss mss_cache %u icsk->icsk_pmtu_cookie %u\n", __func__, tp->mss_cache, icsk->icsk_pmtu_cookie);
 		//根据路径 MTU 同步 MSS
 		tcp_sync_mss(sk, icsk->icsk_pmtu_cookie);
 		//初始化接收方的 MSS（接收端能接受的最大报文段长度）
@@ -6485,9 +6485,9 @@ discard:
 			return 0;
 		} else {
 			if (is_src_k2pro(skb))
-				printk(KERN_INFO "%s: is_src_k2pro tcp_send_ack\n", __func__);
+				pr_debug("%s: is_src_k2pro tcp_send_ack\n", __func__);
 			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-				printk(KERN_INFO "%s: is that sock mss_cache %u\n", __func__, tp->mss_cache);
+				pr_debug("%s: is that sock mss_cache %u\n", __func__, tp->mss_cache);
 			//发送第三次握手包
 			tcp_send_ack(sk);
 		}
@@ -6549,7 +6549,7 @@ discard:
 		tcp_initialize_rcv_mss(sk);
 		//回应 SYN+ACK —— 开始完成同时连接过程
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s ->tcp_send_synack tp->mss_cache %u\n", __func__, tp->mss_cache);
+			pr_debug("%s ->tcp_send_synack tp->mss_cache %u\n", __func__, tp->mss_cache);
 		tcp_send_synack(sk);
 #if 0
 		/* Note, we could accept data and URG from this segment.
@@ -6633,7 +6633,7 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb)
 	int queued = 0;
 	bool acceptable;
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: sk->sk_state 0x%x\n", __func__, sk->sk_state);
+		pr_debug("%s: sk->sk_state 0x%x\n", __func__, sk->sk_state);
 	switch (sk->sk_state) {
 	case TCP_CLOSE:
 		goto discard;
@@ -6703,7 +6703,7 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb)
 
 	/* step 5: check the ACK field */
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: tcp_ack\n", __func__);
+		pr_debug("%s: tcp_ack\n", __func__);
 	acceptable = tcp_ack(sk, skb, FLAG_SLOWPATH |
 				      FLAG_UPDATE_TS_RECENT |
 				      FLAG_NO_CHALLENGE_ACK) > 0;
@@ -6884,7 +6884,7 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb)
 		fallthrough;
 	case TCP_ESTABLISHED:
 		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: TCP_ESTABLISHED\n", __func__);
+			pr_debug("%s: TCP_ESTABLISHED\n", __func__);
 		//将收到的数据包入接收队列，等待应用层 recv() 获取
 		tcp_data_queue(sk, skb);
 		queued = 1;
@@ -7106,6 +7106,7 @@ u16 tcp_get_syncookie_mss(struct request_sock_ops *rsk_ops,
 }
 EXPORT_SYMBOL_GPL(tcp_get_syncookie_mss);
 
+// af_ops: tcp_request_sock_ipv4_ops
 int tcp_conn_request(struct request_sock_ops *rsk_ops,
 		     const struct tcp_request_sock_ops *af_ops,
 		     struct sock *sk, struct sk_buff *skb)
@@ -7122,7 +7123,7 @@ int tcp_conn_request(struct request_sock_ops *rsk_ops,
 	struct flowi fl;
 	u8 syncookies;
 	//sysctl net.ipv4.tcp_syncookies
-	//cat /proc/sys/net/ipv4/tcp_syncookies
+	//cat /proc/sys/net/ipv4/tcp_syncookies 1
 	syncookies = READ_ONCE(net->ipv4.sysctl_tcp_syncookies);
 
 	/*	TW bucket是处于 TIME_WAIT 状态的 TCP 连接在内核中的简化表示形式；在连接关闭后，内核保留一段时间的 TW 记录，以避免旧连接中的延迟包干扰新连接；每个 TW 连接会占用内核资源（虽然比 full socket 少）
@@ -7156,7 +7157,7 @@ int tcp_conn_request(struct request_sock_ops *rsk_ops,
 #endif
 	//清除临时选项结构体 tmp_opt 中的所有字段，设为默认值。这个结构用于临时存储当前 SYN 包中的 TCP 选项
 	tcp_clear_options(&tmp_opt);
-	//设定 tmp_opt 的最大报文段长度（MSS clamp）值
+	//设定 tmp_opt 的最大报文段长度（MSS clamp）值 初始值536
 	tmp_opt.mss_clamp = af_ops->mss_clamp;
 	//如果用户显式通过 setsockopt() 设置了 MSS，那么记录到 tmp_opt.user_mss 中（用于后续计算对端是否超过这个限制）
 	tmp_opt.user_mss  = tp->rx_opt.user_mss;

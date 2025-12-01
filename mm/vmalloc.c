@@ -601,16 +601,13 @@ int vmap_pages_range_noflush(unsigned long addr, unsigned long end,
 }
 
 /**
- * vmap_pages_range - map pages to a kernel virtual address
- * @addr: start of the VM area to map
- * @end: end of the VM area to map (non-inclusive)
- * @prot: page protection flags to use
- * @pages: pages to map (always PAGE_SIZE pages)
- * @page_shift: maximum shift that the pages may be mapped with, @pages must
- * be aligned and contiguous up to at least this shift.
- *
- * RETURNS:
- * 0 on success, -errno on failure.
+ * vmap_pages_range - 将一组物理页映射到一段内核虚拟地址空间中
+ * @addr: 要映射的虚拟内存区域的起始地址
+ * @end:  要映射的虚拟内存区域的结束地址（不包含 end 本身）
+ * @prot: 映射使用的页保护属性（如读/写/执行权限）
+ * @pages:      待映射的物理页数组（数组中的每个元素始终表示一个 PAGE_SIZE 大小的页）
+ * @page_shift: 映射所允许使用的最大页大小（以位移形式表达）。要求 @pages 至少到
+ *        达相应粒度的对齐和物理连续性，才能使用该 page_shift 提升映射粒度
  */
 static int vmap_pages_range(unsigned long addr, unsigned long end,
 		pgprot_t prot, struct page **pages, unsigned int page_shift)
@@ -2896,6 +2893,7 @@ static void *__vmalloc_area_node(struct vm_struct *area, gfp_t gfp_mask,
 	unsigned long addr = (unsigned long)area->addr;
 	unsigned long size = get_vm_area_size(area);
 	unsigned long array_size;
+	// 计算需要的小页数量
 	unsigned int nr_small_pages = size >> PAGE_SHIFT;
 	unsigned int page_order;
 
@@ -2904,8 +2902,9 @@ static void *__vmalloc_area_node(struct vm_struct *area, gfp_t gfp_mask,
 	if (!(gfp_mask & (GFP_DMA | GFP_DMA32)))
 		gfp_mask |= __GFP_HIGHMEM;
 
-	/* Please note that the recursion is strictly bounded. */
+	/* 分配页指针数组, 每次递归减少512 */
 	if (array_size > PAGE_SIZE) {
+		//为了避免向 kmalloc 要高阶连续物理页，给数组本身分配一段虚拟连续的内存（底层仍是离散小页）
 		area->pages = __vmalloc_node(array_size, 1, nested_gfp, node,
 					area->caller);
 	} else {
@@ -2919,10 +2918,10 @@ static void *__vmalloc_area_node(struct vm_struct *area, gfp_t gfp_mask,
 		free_vm_area(area);
 		return NULL;
 	}
-
+    //根据目标映射粒度 page_shift 设置页的阶（例如 PMD 级大页映射时，可能优先申请更大阶的页以减少分段；实现细节与架构/配置相关）
 	set_vm_area_page_order(area, page_shift - PAGE_SHIFT);
 	page_order = vm_area_page_order(area);
-
+    //批量分配所需页，填入 area->pages 数组
 	area->nr_pages = vm_area_alloc_pages(gfp_mask, node,
 		page_order, nr_small_pages, area->pages);
 
@@ -2940,7 +2939,7 @@ static void *__vmalloc_area_node(struct vm_struct *area, gfp_t gfp_mask,
 				area->nr_pages * PAGE_SIZE, page_order);
 		goto fail;
 	}
-
+    //建立页表映射, 把 area->pages 里的页，按 page_shift 粒度映射到内核虚拟地址 [addr, addr+size)；支持一次性/批量建表、并由更高层进行 cache/TLB 刷新（此处只是建立 PTE/PMD 等）
 	if (vmap_pages_range(addr, addr + size, prot, area->pages,
 			page_shift) < 0) {
 		warn_alloc(gfp_mask, NULL,
@@ -2985,14 +2984,14 @@ void *__vmalloc_node_range(unsigned long size, unsigned long align,
 
 	if (WARN_ON_ONCE(!size))
 		return NULL;
-
+    //如果需要的页数超过系统总物理页数，提前报错返回
 	if ((size >> PAGE_SHIFT) > totalram_pages()) {
 		warn_alloc(gfp_mask, NULL,
 			"vmalloc error: size %lu, exceeds total pages",
 			real_size);
 		return NULL;
 	}
-
+    //尽可能用更大的页表粒度来映射，减少 PTE 数量与 TLB 压力
 	if (vmap_allow_huge && !(vm_flags & VM_NO_HUGE_VMAP)) {
 		unsigned long size_per_node;
 
@@ -3016,6 +3015,7 @@ void *__vmalloc_node_range(unsigned long size, unsigned long align,
 	}
 
 again:
+    //在 [start, end)（通常是 vmalloc 区）里找一段满足对齐要求的空洞
 	area = __get_vm_area_node(real_size, align, shift, VM_ALLOC |
 				  VM_UNINITIALIZED | vm_flags, start, end, node,
 				  gfp_mask, caller);
@@ -3025,7 +3025,7 @@ again:
 			real_size);
 		goto fail;
 	}
-
+    //映射物理页 + 建立页表
 	addr = __vmalloc_area_node(area, gfp_mask, prot, shift, node);
 	if (!addr)
 		goto fail;
@@ -3044,6 +3044,7 @@ again:
 	return addr;
 
 fail:
+    //如果以 PMD/更大粒度映射失败, 再尝试一次普通 4K PTE路径
 	if (shift > PAGE_SHIFT) {
 		shift = PAGE_SHIFT;
 		align = real_align;

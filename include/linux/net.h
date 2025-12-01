@@ -61,7 +61,7 @@ struct net;
 enum sock_type {
 	SOCK_STREAM	= 1,
 	SOCK_DGRAM	= 2,
-	//原始的 IP 包
+	//原始的 IP 包，IPPROTO_IP 属于这种类型
 	SOCK_RAW	= 3,
 	SOCK_RDM	= 4,
 	SOCK_SEQPACKET	= 5,

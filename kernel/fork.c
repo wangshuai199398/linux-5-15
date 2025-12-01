@@ -2046,7 +2046,7 @@ static __latent_entropy struct task_struct *copy_process(
 		goto fork_out;
 
 	retval = -ENOMEM;
-	//复制进程task_struct结构体
+	//复制进程task_struct结构体，current表示当前进程
 	p = dup_task_struct(current, node);
 	if (!p)
 		goto fork_out;
@@ -2204,11 +2204,11 @@ static __latent_entropy struct task_struct *copy_process(
 	retval = copy_semundo(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_security;
-	//复制files_struct
+	//复制一个进程打开的文件信息
 	retval = copy_files(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_semundo;
-	//复制fs_struct
+	//复制一个进程的目录信息
 	retval = copy_fs(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_files;
@@ -2218,7 +2218,7 @@ static __latent_entropy struct task_struct *copy_process(
 	retval = copy_signal(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_sighand;
-	//复制mm_struct
+	//复制进程内存空间
 	retval = copy_mm(clone_flags, p);
 	if (retval)
 		goto bad_fork_cleanup_signal;
@@ -2580,25 +2580,18 @@ pid_t kernel_clone(struct kernel_clone_args *args)
 	int trace = 0;
 	pid_t nr;
 
-	/*
-	 * For legacy clone() calls, CLONE_PIDFD uses the parent_tid argument
-	 * to return the pidfd. Hence, CLONE_PIDFD and CLONE_PARENT_SETTID are
-	 * mutually exclusive. With clone3() CLONE_PIDFD has grown a separate
-	 * field in struct clone_args and it still doesn't make sense to have
-	 * them both point at the same memory location. Performing this check
-	 * here has the advantage that we don't need to have a separate helper
-	 * to check for legacy clone().
-	 */
+	/* 对于传统的 clone() 调用，CLONE_PIDFD 使用 parent_tid 参数来返回 pidfd。因此，CLONE_PIDFD 和 CLONE_PARENT_SETTID 是互斥的
+	 * 在 clone3() 中，CLONE_PIDFD 在 struct clone_args 里有了一个独立的字段，并且让这两个选项同时指向同一个内存位置依然没有意义 
+	 * 在这里进行这个检查的好处是，我们不需要单独写一个辅助函数来检查传统的 clone */
 	if ((args->flags & CLONE_PIDFD) &&
 	    (args->flags & CLONE_PARENT_SETTID) &&
 	    (args->pidfd == args->parent_tid))
 		return -EINVAL;
 
 	/*
-	 * Determine whether and which event to report to ptracer.  When
-	 * called from kernel_thread or CLONE_UNTRACED is explicitly
-	 * requested, no event is reported; otherwise, report if the event
-	 * for the type of forking is enabled.
+	 * 确定是否要向 ptracer 报告事件，以及报告哪种事件。
+	 * 当从 kernel_thread 调用，或者显式请求了 CLONE_UNTRACED 时，不会报告任何事件；
+	 * 否则，如果启用了对应类型的 fork 事件，就进行报告
 	 */
 	if (!(clone_flags & CLONE_UNTRACED)) {
 		if (clone_flags & CLONE_VFORK)
@@ -2618,10 +2611,7 @@ pid_t kernel_clone(struct kernel_clone_args *args)
 	if (IS_ERR(p))
 		return PTR_ERR(p);
 
-	/*
-	 * Do this prior waking up the new thread - the thread pointer
-	 * might get invalid after that point, if the thread exits quickly.
-	 */
+	/* 在唤醒新线程之前执行这一步 —— 因为一旦唤醒后，如果线程很快退出，那么线程指针可能就会失效 */
 	trace_sched_process_fork(current, p);
 
 	pid = get_task_pid(p, PIDTYPE_PID);
@@ -2629,13 +2619,14 @@ pid_t kernel_clone(struct kernel_clone_args *args)
 
 	if (clone_flags & CLONE_PARENT_SETTID)
 		put_user(nr, args->parent_tid);
-
+    /* CLONE_VFORK表示让子进程和父进程共享内存空间，直到子进程执行 execve 或者退出
+	 * 在这种模式下：父进程会被挂起，必须等子进程完成 execve 或退出，父进程才会继续运行 */
 	if (clone_flags & CLONE_VFORK) {
 		p->vfork_done = &vfork;
 		init_completion(&vfork);
 		get_task_struct(p);
 	}
-	//将新进程添加到就绪队列中等待调度器调度
+	//将新进程添加到就绪队列中，等待调度器调度
 	wake_up_new_task(p);
 
 	/* forking complete and child started to run, tell ptracer */

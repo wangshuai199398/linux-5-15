@@ -1002,25 +1002,25 @@ static void complete_signal(int sig, struct task_struct *p, enum pid_type type)
 		t = p;
 	else if ((type == PIDTYPE_PID) || thread_group_empty(p))
 		/*
-		 * There is just one thread and it does not need to be woken.
-		 * It will dequeue unblocked signals before it runs again.
+		 * 只有一个线程且它现在不需要被唤醒
+		 * 但等它下次被调度运行时会自己从队列里取。所以直接返回，不强行唤醒
 		 */
 		return;
 	else {
 		/*
-		 * Otherwise try to find a suitable thread.
+		 * 多线程情况下，找一个合适的线程
+		 * 从 signal->curr_target（上次命中的候选）开始，轮询线程组（next_thread(t) 遍历同组线程）找一个目前“想要这个信号”的线程
 		 */
 		t = signal->curr_target;
 		while (!wants_signal(sig, t)) {
 			t = next_thread(t);
 			if (t == signal->curr_target)
 				/*
-				 * No thread needs to be woken.
-				 * Any eligible threads will see
-				 * the signal in the queue soon.
+				 * 如果绕了一整圈都没有线程愿意接（全部被屏蔽/暂时不该唤醒），就返回：不唤醒任何线程。等这些线程将来运行时，会看到队列里的该信号并自行处理
 				 */
 				return;
 		}
+        //找到了就把 signal->curr_target 更新为本次命中的线程，形成近似轮转/公平分配，避免总是同一个线程被选中
 		signal->curr_target = t;
 	}
 

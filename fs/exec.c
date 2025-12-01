@@ -280,6 +280,7 @@ static int __bprm_mm_init(struct linux_binprm *bprm)
 
 	mm->stack_vm = mm->total_vm = 1;
 	mmap_write_unlock(mm);
+	// 栈指针指向栈顶
 	bprm->p = vma->vm_end - sizeof(void *);
 	return 0;
 err:

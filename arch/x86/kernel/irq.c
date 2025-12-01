@@ -238,6 +238,7 @@ static __always_inline void handle_irq(struct irq_desc *desc,
  * 接受一个参数 - pt_regs 结构体，它存放着用户空间寄存器的值
  * do_IRQ_wangs
  * 原来的 do_IRQ 
+ * 在 ".byte	0x6a, vector" 把vector这个中断向量号压入栈中,就是这里的vector
  */
 DEFINE_IDTENTRY_IRQ(common_interrupt)
 {

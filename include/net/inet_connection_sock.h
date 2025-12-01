@@ -277,7 +277,7 @@ static inline int inet_csk_reqsk_queue_len(const struct sock *sk)
 {
 	return reqsk_queue_len(&inet_csk(sk)->icsk_accept_queue);
 }
-//半连接队列是否满
+//半连接队列是否满，sk_max_ack_backlog全连接队列的上限，但在内核逻辑上，它也被间接用于限制半连接队列（SYN 队列）的长度
 static inline int inet_csk_reqsk_queue_is_full(const struct sock *sk)
 {
 	return inet_csk_reqsk_queue_len(sk) > READ_ONCE(sk->sk_max_ack_backlog);

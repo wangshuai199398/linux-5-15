@@ -345,6 +345,7 @@ struct vm_area_struct {
 	 * Either between this VMA and vma->vm_prev, or between one of the
 	 * VMAs below us in the VMA rbtree and its ->vm_prev. This helps
 	 * get_unmapped_area find a free area of the right size.
+	 * 红黑树增广字段，记录该子树内“最大的可用空洞”大小，用来剪枝（没希望的子树直接跳过）。
 	 */
 	unsigned long rb_subtree_gap;
 
@@ -417,7 +418,7 @@ struct mm_struct {
 	struct {
 		//已经被分配出去的地址范围列表 双向链表+红黑树来管理vma
 		struct vm_area_struct *mmap;		/* list of VMAs */
-		struct rb_root mm_rb;
+		struct rb_root mm_rb;/* 当前进程所有 vm_area_struct（VMA）的红黑树，按地址排序 */
 		u64 vmacache_seqnum;                   /* per-thread vmacache */
 #ifdef CONFIG_MMU
 		unsigned long (*get_unmapped_area) (struct file *filp,

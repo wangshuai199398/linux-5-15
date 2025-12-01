@@ -83,8 +83,10 @@ static int __init control_va_addr_alignment(char *str)
 }
 __setup("align_va_addr=", control_va_addr_alignment);
 
-// mmap_wangs
-// 申请一大块内存，就要用 mmap
+/* mmap_wangs
+ * 申请一大块内存，就要用 mmap
+ * addr: 建议的起始地址
+*/
 SYSCALL_DEFINE6(mmap, unsigned long, addr, unsigned long, len,
 		unsigned long, prot, unsigned long, flags,
 		unsigned long, fd, unsigned long, off)

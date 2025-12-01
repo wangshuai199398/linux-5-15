@@ -314,6 +314,15 @@ int __pci_read_base(struct pci_dev *dev, enum pci_bar_type type,
 fail:
 	res->flags = 0;
 out:
+	/*reg 0x10: [mem 0x6100000000-0x6107ffffff 64bit pref]
+	  reg 0x18: [mem 0x611ba10000-0x611ba13fff 64bit pref]
+	  reg 0x20: [mem 0x611a800000-0x611a9fffff 64bit pref]
+	  reg 0x164: [mem 0x6114000000-0x6114ffffff 64bit pref]
+	  VF(n) BAR0 space: [mem 0x6114000000-0x6117ffffff 64bit pref] (contains BAR0 for 4 VFs)
+	  reg 0x16c: [mem 0x611b600000-0x611b6fffff 64bit pref]
+	  VF(n) BAR2 space: [mem 0x611b600000-0x611b9fffff 64bit pref] (contains BAR2 for 4 VFs)
+	  reg 0x174: [mem 0x6119800000-0x61199fffff 64bit pref]
+	  VF(n) BAR4 space: [mem 0x6119800000-0x6119ffffff 64bit pref] (contains BAR4 for 4 VFs) */
 	if (res->flags)
 		pci_info(dev, "reg 0x%x: %pR\n", pos, res);
 
@@ -942,7 +951,7 @@ static int pci_register_host_bridge(struct pci_host_bridge *bridge)
 	err = pcibios_root_bridge_prepare(bridge);
 	if (err)
 		goto free;
-
+	//pci0000:00
 	err = device_add(&bridge->dev);
 	if (err) {
 		put_device(&bridge->dev);
@@ -964,7 +973,7 @@ static int pci_register_host_bridge(struct pci_host_bridge *bridge)
 
 	dev_set_name(&bus->dev, "%04x:%02x", pci_domain_nr(bus), bus->number);
 	name = dev_name(&bus->dev);
-
+	//0000:00
 	err = device_register(&bus->dev);
 	if (err)
 		goto unregister;
@@ -1915,7 +1924,7 @@ int pci_setup_device(struct pci_dev *dev)
 	pci_fixup_device(pci_fixup_early, dev);
 
 	pci_set_removable(dev);
-
+	//[1f47:1011] type 00 class 0x020000
 	pci_info(dev, "[%04x:%04x] type %02x class %#08x\n",
 		 dev->vendor, dev->device, dev->hdr_type, dev->class);
 

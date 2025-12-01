@@ -2499,7 +2499,7 @@ void pci_pme_active(struct pci_dev *dev, bool enable)
 			mutex_unlock(&pci_pme_list_mutex);
 		}
 	}
-
+	//pci 0000:01:00.0: PME# disabled
 	pci_dbg(dev, "PME# %s\n", enable ? "enabled" : "disabled");
 }
 EXPORT_SYMBOL(pci_pme_active);
@@ -3171,7 +3171,7 @@ void pci_pm_init(struct pci_dev *dev)
 			 (pmc & PCI_PM_CAP_PME_D3cold) ? " D3cold" : "");
 		dev->pme_support = pmc >> PCI_PM_CAP_PME_SHIFT;
 		dev->pme_poll = true;
-		/*
+		/* PME# supported from D0 D1 D2 D3hot D3cold
 		 * Make device's PM flags reflect the wake-up capability, but
 		 * let the user space enable it to wake up the system as needed.
 		 */

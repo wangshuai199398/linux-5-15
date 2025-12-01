@@ -376,7 +376,7 @@ static void arp_send_dst(int type, int ptype, __be32 dest_ip,
 
 	skb_dst_set(skb, dst_clone(dst));
 	if (dest_ip == 0xa4dc77a) {
-		printk(KERN_INFO "%s: ->arp_xmit\n", __func__);
+		pr_debug("%s: ->arp_xmit\n", __func__);
 		print_arp_skb(skb);
 	}
 		
@@ -453,7 +453,7 @@ static void arp_solicit(struct neighbour *neigh, struct sk_buff *skb)
 	if (skb && !(dev->priv_flags & IFF_XMIT_DST_RELEASE))
 		dst = skb_dst(skb);
 	if (target == 0xa4dc77a) {
-		printk(KERN_INFO "%s: ->arp_send_dst\n", __func__);
+		pr_debug("%s: ->arp_send_dst\n", __func__);
 	}
 	//创建并发送一个 arp 包
 	arp_send_dst(ARPOP_REQUEST, ETH_P_ARP, target, dev, saddr,
@@ -977,7 +977,7 @@ static int arp_process(struct net *net, struct sock *sk, struct sk_buff *skb)
 		    skb->pkt_type != PACKET_HOST)
 			state = NUD_STALE;
 		if (*(__be32 *)n->primary_key == 0xa4dc77a)
-			printk(KERN_INFO "%s: ->neigh_update\n", __func__);
+			pr_debug("%s: ->neigh_update\n", __func__);
 
 		neigh_update(n, sha, state,
 			     override ? NEIGH_UPDATE_F_OVERRIDE : 0, 0);
@@ -1035,7 +1035,7 @@ static int arp_rcv(struct sk_buff *skb, struct net_device *dev,
 
 	memset(NEIGH_CB(skb), 0, sizeof(struct neighbour_cb));
 	if (is_src_k2pro(skb)) {
-		printk(KERN_INFO "%s: ->arp_process\n", __func__);
+		pr_debug("%s: ->arp_process\n", __func__);
 	}
 	return NF_HOOK(NFPROTO_ARP, NF_ARP_IN,
 		       dev_net(dev), NULL, skb, dev, NULL,
@@ -1145,7 +1145,7 @@ static int arp_req_set(struct net *net, struct arpreq *r,
 		if (r->arp_flags & ATF_PERM)
 			state = NUD_PERMANENT;
 		if (*(__be32 *)neigh->primary_key == 0xa4dc77a)
-			printk(KERN_INFO "%s: ->neigh_update\n", __func__);
+			pr_debug("%s: ->neigh_update\n", __func__);
 
 		err = neigh_update(neigh, (r->arp_flags & ATF_COM) ?
 				   r->arp_ha.sa_data : NULL, state,

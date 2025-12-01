@@ -61,6 +61,7 @@ static int create_files(struct kernfs_node *parent, struct kobject *kobj,
 			     (*attr)->name, mode);
 
 			mode &= SYSFS_PREALLOC | 0664;
+			//创建对应的 sysfs 文件
 			error = sysfs_add_file_mode_ns(parent, *attr, false,
 						       mode, uid, gid, NULL);
 			if (unlikely(error))
@@ -124,6 +125,7 @@ static int internal_create_group(struct kobject *kobj, int update,
 			kobj->name, grp->name ?: "");
 		return -EINVAL;
 	}
+	// 决定目录的所有者 UID/GID
 	kobject_get_ownership(kobj, &uid, &gid);
 	if (grp->name) {
 		if (update) {
@@ -134,6 +136,7 @@ static int internal_create_group(struct kobject *kobj, int update,
 				return -EINVAL;
 			}
 		} else {
+			// 在 kobj->sd 下面创建一个子目录
 			kn = kernfs_create_dir_ns(kobj->sd, grp->name,
 						  S_IRWXU | S_IRUGO | S_IXUGO,
 						  uid, gid, kobj, NULL);
@@ -146,6 +149,7 @@ static int internal_create_group(struct kobject *kobj, int update,
 	} else
 		kn = kobj->sd;
 	kernfs_get(kn);
+	// 根据 grp->attrs、grp->bin_attrs，在 kn 这个目录里创建或更新 sysfs 文件
 	error = create_files(kn, kobj, uid, gid, grp, update);
 	if (error) {
 		if (grp->name)
@@ -160,9 +164,9 @@ static int internal_create_group(struct kobject *kobj, int update,
 }
 
 /**
- * sysfs_create_group - given a directory kobject, create an attribute group
- * @kobj:	The kobject to create the group on
- * @grp:	The attribute group to create
+ * 给指定目录对应的 kobject 创建一组属性
+ * @kobj:	要在哪个 kobject 上创建这组属性
+ * @grp:	要创建的属性组
  *
  * This function creates a group for the first time.  It will explicitly
  * warn and error if any of the attribute files being created already exist.

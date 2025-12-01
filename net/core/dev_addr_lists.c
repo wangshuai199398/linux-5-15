@@ -516,7 +516,7 @@ void dev_addr_flush(struct net_device *dev)
 EXPORT_SYMBOL(dev_addr_flush);
 
 /**
- *	dev_addr_init - Init device address list
+ *	为网卡 dev 初始化“硬件地址列表”(dev->dev_addrs)，创建第一个地址元素，并让 dev->dev_addr 指向这个地址
  *	@dev: device
  *
  *	Init device address list and create the first element,

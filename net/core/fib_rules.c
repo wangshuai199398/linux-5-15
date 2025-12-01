@@ -288,7 +288,9 @@ static int fib_rule_match(struct fib_rule *rule, struct fib_rules_ops *ops,
 out:
 	return (rule->flags & FIB_RULE_INVERT) ? !ret : ret;
 }
-
+/*
+按规则优先级逐条匹配并触发表动作；在这里会显式查 local → main → default 等表
+*/
 int fib_rules_lookup(struct fib_rules_ops *ops, struct flowi *fl,
 		     int flags, struct fib_lookup_arg *arg)
 {

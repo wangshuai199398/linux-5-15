@@ -201,6 +201,7 @@ EXPORT_SYMBOL(up);
 struct semaphore_waiter {
 	struct list_head list;
 	struct task_struct *task;
+	//如果是true，表示可以获取信号量
 	bool up;
 };
 

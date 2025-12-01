@@ -123,7 +123,7 @@ static int set_brk(unsigned long start, unsigned long end, int prot)
 		if (error)
 			return error;
 	}
-	//初始化堆的指针
+	//初始化堆的指针，程序初始化时堆还是空的，指向同一个值，当代码调用 malloc 时修改 brk 相关指针来实现内存申请的
 	current->mm->start_brk = current->mm->brk = end;
 	return 0;
 }
@@ -484,7 +484,7 @@ static struct elf_phdr *load_elf_phdrs(const struct elfhdr *elf_ex,
 	if (!elf_phdata)
 		goto out;
 
-	/* Read in the program headers */
+	/* 将可执行文件在磁盘上保存的内容读取到内存中 */
 	retval = elf_read(elf_file, elf_phdata, size, elf_ex->e_phoff);
 	if (retval < 0) {
 		err = retval;
@@ -1062,7 +1062,7 @@ out_free_interp:
 			/* There was a PT_LOAD segment with p_memsz > p_filesz
 			   before this one. Map anonymous pages, if needed,
 			   and clear the area.  */
-			//load_bias是Segment要加载到内存的基地址
+			//load_bias 是Segment要加载到内存的基地址，值为0表示按照ELF文件中的地址进行映射，不为0加载到对齐的整数页
 			//数据内存申请 & 堆初始化
 			retval = set_brk(elf_bss + load_bias,
 					 elf_brk + load_bias,
@@ -1155,7 +1155,7 @@ out_free_interp:
 				goto out_free_dentry;
 			}
 		}
-		//为Segment建立内存mmap，将程序文件中的内容映射到虚拟内存空间，这样将来程序中的代码、数据就都可以被访问了
+		//为Segment建立内存mmap，将程序文件中的内容映射到虚拟内存空间，这样将来程序中的代码、数据就都可以被访问了，访问的时候触发缺页中断加载磁盘数据
 		error = elf_map(bprm->file, load_bias + vaddr, elf_ppnt,
 				elf_prot, elf_flags, total_size);
 		if (BAD_ADDR(error)) {
@@ -1242,7 +1242,7 @@ out_free_interp:
 		retval = -EFAULT; /* Nobody gets to see this, but.. */
 		goto out_free_dentry;
 	}
-	//如果程序中指定了动态链接器，就把动态链接器程序读出来
+	//如果程序中指定了动态链接器(比如ld-linux-x86-64.so.2)，也就是说存在 INTERP 类型的Segment，就把动态链接器程序加载到地址空间
 	if (interpreter) {
 		//加载并返回动态链接器代码段地址
 		elf_entry = load_elf_interp(interp_elf_ex,
@@ -1292,7 +1292,7 @@ out_free_interp:
 				   e_entry, phdr_addr);
 	if (retval < 0)
 		goto out;
-
+	// 设置虚拟地址的代码段，数据段
 	mm = current->mm;
 	mm->end_code = end_code;
 	mm->start_code = start_code;

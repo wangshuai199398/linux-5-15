@@ -107,7 +107,7 @@ struct io_tlb_mem {
 	} *slots;
 };
 extern struct io_tlb_mem io_tlb_default_mem;
-
+/* SWIOTLB 是给 不能直接访问高端内存 / 只能 32bit 地址 的设备使用的一块中转缓冲区 */
 static inline bool is_swiotlb_buffer(struct device *dev, phys_addr_t paddr)
 {
 	struct io_tlb_mem *mem = dev->dma_io_tlb_mem;

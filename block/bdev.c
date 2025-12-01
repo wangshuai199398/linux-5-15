@@ -974,6 +974,7 @@ EXPORT_SYMBOL(blkdev_put);
  * namespace if possible and return it.  Return ERR_PTR(error)
  * otherwise.
  * pathname 是设备的文件名，例如 /dev/xxx。这个文件是在 devtmpfs 文件系统中的
+ * inode是init_special_node生成的特殊 inode，里边设置了i_rdev字段，表示这个设备的 dev_t
  */
 int lookup_bdev(const char *pathname, dev_t *dev)
 {

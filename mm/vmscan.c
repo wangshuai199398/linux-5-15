@@ -1367,6 +1367,8 @@ static unsigned int demote_page_list(struct list_head *demote_pages,
 
 /*
  * shrink_page_list() returns the number of reclaimed pages
+ * 对于匿名页来讲，需要分配 swap，将内存页写入文件系统；对于内存映射关联了文件的，我们需要将在内存中对于文件的修改写回到文件中
+ * 对于匿名页，交换出去；对于文件页，脏页就回写
  */
 static unsigned int shrink_page_list(struct list_head *page_list,
 				     struct pglist_data *pgdat,
@@ -2173,6 +2175,10 @@ static int current_may_throttle(void)
 /*
  * shrink_inactive_list() is a helper for shrink_node().  It returns the number
  * of reclaimed pages
+ *  nr_to_scan：计划要扫描的页数（不是一定能回收这么多）
+ *  lruvec：    目标回收集合（一个 node 上的某个 memcg 的 LRU 视图）
+ *  sc：        本轮回收的扫描控制参数（优先级、是否直接回收、是否 memcg 回收等统计与策略）
+ *  lru：       要操作的 哪个 LRU 列表（LRU_INACTIVE_FILE 或 LRU_INACTIVE_ANON）
  */
 static unsigned long
 shrink_inactive_list(unsigned long nr_to_scan, struct lruvec *lruvec,
@@ -2187,7 +2193,7 @@ shrink_inactive_list(unsigned long nr_to_scan, struct lruvec *lruvec,
 	enum vm_event_item item;
 	struct pglist_data *pgdat = lruvec_pgdat(lruvec);
 	bool stalled = false;
-
+    //如果系统已经隔离了太多页（从 LRU 摘下、尚未处理完），这里会短暂睡眠，防止把 LRU 掏空，导致抖动。若收到致命信号则提前返回 SWAP_CLUSTER_MAX
 	while (unlikely(too_many_isolated(pgdat, file, sc))) {
 		if (stalled)
 			return 0;
@@ -2200,16 +2206,17 @@ shrink_inactive_list(unsigned long nr_to_scan, struct lruvec *lruvec,
 		if (fatal_signal_pending(current))
 			return SWAP_CLUSTER_MAX;
 	}
-
+    //把 CPU 本地 pagevec 上还没入 LRU 的页推入全局 LRU，保证扫描能看到最新的 LRU 状态
 	lru_add_drain();
 
 	spin_lock_irq(&lruvec->lru_lock);
-
+    //在 LRU 自旋锁下，从 inactive_{anon|file} 上取出最多 nr_to_scan 个候选页，放到临时链表 page_list
 	nr_taken = isolate_lru_pages(nr_to_scan, lruvec, &page_list,
 				     &nr_scanned, sc, lru);
 
 	__mod_node_page_state(pgdat, NR_ISOLATED_ANON + file, nr_taken);
 	item = current_is_kswapd() ? PGSCAN_KSWAPD : PGSCAN_DIRECT;
+	//更新节点上的“已隔离页”计数，以及“扫描次数（PGSCAN_…）”事件统计
 	if (!cgroup_reclaim(sc))
 		__count_vm_events(item, nr_scanned);
 	__count_memcg_events(lruvec_memcg(lruvec), item, nr_scanned);
@@ -2219,22 +2226,25 @@ shrink_inactive_list(unsigned long nr_to_scan, struct lruvec *lruvec,
 
 	if (nr_taken == 0)
 		return 0;
-
+    // 回收
 	nr_reclaimed = shrink_page_list(&page_list, pgdat, sc, &stat, false);
-
+    //未回收的页会被分类后放回对应的 LRU（有的会被激活进 active LRU）
 	spin_lock_irq(&lruvec->lru_lock);
 	move_pages_to_lru(lruvec, &page_list);
-
+    //“把 pgdat 上记录的 isolated_{anon|file} 数量减掉 nr_taken, 因为这些页已经完成处理，不再处于隔离状态”
 	__mod_node_page_state(pgdat, NR_ISOLATED_ANON + file, -nr_taken);
 	item = current_is_kswapd() ? PGSTEAL_KSWAPD : PGSTEAL_DIRECT;
 	if (!cgroup_reclaim(sc))
 		__count_vm_events(item, nr_reclaimed);
 	__count_memcg_events(lruvec_memcg(lruvec), item, nr_reclaimed);
+	//增加按 LRU 类型分类的全局 VM 事件计数
 	__count_vm_events(PGSTEAL_ANON + file, nr_reclaimed);
 	spin_unlock_irq(&lruvec->lru_lock);
-
+    //记录本轮 IO/pageout 成本，用于后续调节
 	lru_note_cost(lruvec, file, stat.nr_pageout);
+	//对将要释放的页从 memcg 里“解账”
 	mem_cgroup_uncharge_list(&page_list);
+	//最终释放这些页的引用（真正归还伙伴系统）
 	free_unref_page_list(&page_list);
 
 	/*
@@ -2247,10 +2257,11 @@ shrink_inactive_list(unsigned long nr_to_scan, struct lruvec *lruvec,
 	 * pressure reclaiming all the clean cache. And in some cases,
 	 * the flushers simply cannot keep up with the allocation
 	 * rate. Nudge the flusher threads in case they are asleep.
+	 * 如果几乎全是未入写回队列的脏页，说明刷脏线程可能“落后/睡着”，唤醒它们加速写回，避免回收被脏页阻塞
 	 */
 	if (stat.nr_unqueued_dirty == nr_taken)
 		wakeup_flusher_threads(WB_REASON_VMSCAN);
-
+    //把统计回填到 sc->nr
 	sc->nr.dirty += stat.nr_dirty;
 	sc->nr.congested += stat.nr_congested;
 	sc->nr.unqueued_dirty += stat.nr_unqueued_dirty;

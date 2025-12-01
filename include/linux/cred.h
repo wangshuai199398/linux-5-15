@@ -117,20 +117,20 @@ struct cred {
 #define CRED_MAGIC	0x43736564
 #define CRED_MAGIC_DEAD	0x44656144
 #endif
-	kuid_t		uid;		/* real UID of the task */
-	kgid_t		gid;		/* real GID of the task */
-	kuid_t		suid;		/* saved UID of the task */
-	kgid_t		sgid;		/* saved GID of the task */
-	kuid_t		euid;		/* effective UID of the task */
-	kgid_t		egid;		/* effective GID of the task */
-	kuid_t		fsuid;		/* 对文件操作会审核的权限 */
+	kuid_t		uid;		/* 启动的进程 real UID of the task */
+	kgid_t		gid;		/* 启动的进程 real GID of the task */
+	kuid_t		suid;		/* 拥有这个程序的用户 saved UID of the task */
+	kgid_t		sgid;		/* 拥有这个程序的组   saved GID of the task */
+	kuid_t		euid;		/* 那个用户对当前程序有效 effective UID of the task */
+	kgid_t		egid;		/* 那个用户组对当前程序有效 effective GID of the task */
+	kuid_t		fsuid;		/* 用户对文件操作的权限 */
 	kgid_t		fsgid;		/* GID for VFS ops */
 	unsigned	securebits;	/* SUID-less security management */
-	kernel_cap_t	cap_inheritable; /* caps our children can inherit */
-	kernel_cap_t	cap_permitted;	/* caps we're permitted */
-	kernel_cap_t	cap_effective;	/* caps we can actually use */
-	kernel_cap_t	cap_bset;	/* capability bounding set */
-	kernel_cap_t	cap_ambient;	/* Ambient capability set */
+	kernel_cap_t	cap_inheritable; /* 调用 exec 执行该程序会继承调用者的 inheritable 集合 caps our children can inherit */
+	kernel_cap_t	cap_permitted;	/* 进程能够使用的权限 caps we're permitted */
+	kernel_cap_t	cap_effective;	/* 进程实际有效的权限 caps we can actually use */
+	kernel_cap_t	cap_bset;	/* 所有进程允许保留的权限 capability bounding set */
+	kernel_cap_t	cap_ambient;	/* 当执行 exec 的时候，cap_ambient 会被添加到 cap_permitted 中，同时设置到 cap_effective 中 Ambient capability set */
 #ifdef CONFIG_KEYS
 	unsigned char	jit_keyring;	/* default keyring to attach requested
 					 * keys to */

@@ -100,7 +100,7 @@ static unsigned int __head *fixup_int(void *ptr, unsigned long physaddr)
 {
 	return fixup_pointer(ptr, physaddr);
 }
-
+// 5级别页表改成这个
 static bool __head check_la57_support(unsigned long physaddr)
 {
 	/*

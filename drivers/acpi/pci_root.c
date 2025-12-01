@@ -396,7 +396,12 @@ static acpi_status acpi_pci_osc_control_set(acpi_handle handle, u32 *mask, u32 r
 	root->osc_control_set = *mask;
 	return AE_OK;
 }
-
+/*
+_OSC: OS supports [ExtendedConfig ASPM ClockPM Segments MSI EDR HPX-Type3]
+_OSC: platform does not support [PCIeHotplug SHPCHotplug PME]
+_OSC: OS now controls [AER PCIeCapability LTR DPC]
+FADT indicates ASPM is unsupported, using BIOS configuration
+*/
 static void negotiate_os_control(struct acpi_pci_root *root, int *no_aspm,
 				 bool is_pcie)
 {
@@ -573,7 +578,7 @@ static int acpi_pci_root_add(struct acpi_device *device,
 		result = -ENXIO;
 		goto end;
 	}
-
+	//ACPI: PCI Root Bridge [PC00] (domain 0000 [bus 00-fe])
 	pr_info("%s [%s] (domain %04x %pR)\n",
 	       acpi_device_name(device), acpi_device_bid(device),
 	       root->segment, &root->secondary);

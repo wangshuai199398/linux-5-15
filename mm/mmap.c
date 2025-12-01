@@ -597,8 +597,8 @@ static inline struct vm_area_struct *vma_next(struct mm_struct *mm,
  * @rb_link: the rb_node
  * @rb_parent: the parent rb_node
  *
- * Find all the vm_area_struct that overlap from @start to
- * @end and munmap them.  Set @pprev to the previous vm_area_struct.
+ * 在进程的 VMA 红黑树中，找到与 [start, start+len) 区间有重叠的 VMA，依次执行 munmap（解除映射），直到整个范围被完全拆除
+ * Set @pprev to the previous vm_area_struct.
  *
  * Returns: -ENOMEM on munmap failure or 0 on success.
  */
@@ -607,7 +607,7 @@ munmap_vma_range(struct mm_struct *mm, unsigned long start, unsigned long len,
 		 struct vm_area_struct **pprev, struct rb_node ***link,
 		 struct rb_node **parent, struct list_head *uf)
 {
-
+    //在 mm->mm_rb 中查找与 [start, start+len) 区间重叠的 VMA
 	while (find_vma_links(mm, start, start + len, pprev, link, parent))
 		if (do_munmap(mm, start, len, uf))
 			return -ENOMEM;
@@ -1411,6 +1411,10 @@ static inline bool file_mmap_ok(struct file *file, struct inode *inode,
 
 /*
  * The caller must write-lock current->mm->mmap_lock.
+ * 1. 对于堆的申请来讲，mmap 是映射内存空间到物理内存
+ * 2. 映射一个文件到自己的虚拟内存空间
+ * 3. IPC 共享内存
+ * 
  * 1. 调用 get_unmapped_area 找到一个没有映射的区域
  * 2. 调用 mmap_region 映射这个区域
  */
@@ -1773,7 +1777,7 @@ static unsigned long __mmap_region(struct file *file, unsigned long addr,
 	}
 
 	/*
-	 * 我们刚找到了虚拟内存区域的前一个 vm_area_struct, 是否能够基于它进行扩展，和前一个 vm_area_struct 合并到一起
+	 * 尝试把当前要创建或调整的 VMA [addr, addr+len) 与相邻的 VMA 合并成一个更大的 VMA，减少 VMA 数量，提高内存管理效率
 	 */
 	vma = vma_merge(mm, prev, addr, addr + len, vm_flags,
 			NULL, file, pgoff, NULL, NULL_VM_UFFD_CTX);
@@ -1913,6 +1917,7 @@ unacct_error:
 	return error;
 }
 
+/* 找一段尚未映射的虚拟地址区间 */
 static unsigned long unmapped_area(struct vm_unmapped_area_info *info)
 {
 	/*
@@ -1927,12 +1932,12 @@ static unsigned long unmapped_area(struct vm_unmapped_area_info *info)
 	struct vm_area_struct *vma;
 	unsigned long length, low_limit, high_limit, gap_start, gap_end;
 
-	/* Adjust search length to account for worst case alignment overhead */
+	/* 按最坏对齐开销放大需求，避免后面频繁对齐失败 */
 	length = info->length + info->align_mask;
 	if (length < info->length)
 		return -ENOMEM;
 
-	/* Adjust search limits by the desired length */
+	/* 用放大后的 length 调整上下界 */
 	if (info->high_limit < length)
 		return -ENOMEM;
 	high_limit = info->high_limit - length;
@@ -1941,15 +1946,16 @@ static unsigned long unmapped_area(struct vm_unmapped_area_info *info)
 		return -ENOMEM;
 	low_limit = info->low_limit + length;
 
-	/* Check if rbtree root looks promising */
+	/* 如果 mm_rb 为空（当前没有 VMA），跳到 check_highest，直接尝试从 highest_vm_end 之后放置 */
 	if (RB_EMPTY_ROOT(&mm->mm_rb))
 		goto check_highest;
 	vma = rb_entry(mm->mm_rb.rb_node, struct vm_area_struct, vm_rb);
+	/*该子树里不可能容纳所需长度*/
 	if (vma->rb_subtree_gap < length)
 		goto check_highest;
 
 	while (true) {
-		/* Visit left subtree if it looks promising */
+		/* 先看左子树是否有 有就先深入左子树 */
 		gap_end = vm_start_gap(vma);
 		if (gap_end >= low_limit && vma->vm_rb.rb_left) {
 			struct vm_area_struct *left =
@@ -1960,17 +1966,17 @@ static unsigned long unmapped_area(struct vm_unmapped_area_info *info)
 				continue;
 			}
 		}
-
+        /*计算当前节点前面的空洞*/
 		gap_start = vma->vm_prev ? vm_end_gap(vma->vm_prev) : 0;
 check_current:
-		/* Check if current node has a suitable gap */
+		/* 检查当前空洞是否满足 */
 		if (gap_start > high_limit)
 			return -ENOMEM;
 		if (gap_end >= low_limit &&
 		    gap_end > gap_start && gap_end - gap_start >= length)
 			goto found;
 
-		/* Visit right subtree if it looks promising */
+		/* 再看右子树是否有希望 有就深入右子树 */
 		if (vma->vm_rb.rb_right) {
 			struct vm_area_struct *right =
 				rb_entry(vma->vm_rb.rb_right,
@@ -1981,7 +1987,7 @@ check_current:
 			}
 		}
 
-		/* Go back up the rbtree to find next candidate node */
+		/* 若左右都不行，沿父指针回溯，寻找下一个“当前节点之前的空洞”可检查的位置；若回到根仍无，则 goto check_highest */
 		while (true) {
 			struct rb_node *prev = &vma->vm_rb;
 			if (!rb_parent(prev))
@@ -1997,18 +2003,18 @@ check_current:
 	}
 
 check_highest:
-	/* Check highest gap, which does not precede any rbtree node */
+	/* 检查“最高端”的gap 最高空洞定义为从 mm->highest_vm_end 到地址空间上界 */
 	gap_start = mm->highest_vm_end;
 	gap_end = ULONG_MAX;  /* Only for VM_BUG_ON below */
 	if (gap_start > high_limit)
 		return -ENOMEM;
 
 found:
-	/* We found a suitable gap. Clip it with the original low_limit. */
+	/* 先把 gap_start 提升到原始的 info->low_limit */
 	if (gap_start < info->low_limit)
 		gap_start = info->low_limit;
 
-	/* Adjust gap address to the desired alignment */
+	/* 再做对齐 */
 	gap_start += (info->align_offset - gap_start) & info->align_mask;
 
 	VM_BUG_ON(gap_start + info->length > info->high_limit);
@@ -2265,9 +2271,9 @@ get_unmapped_area(struct file *file, unsigned long addr, unsigned long len,
 			get_area = file->f_op->get_unmapped_area;
 	} else if (flags & MAP_SHARED) {
 		/*
-		 * mmap_region() will call shmem_zero_setup() to create a file,
-		 * so use shmem's get_unmapped_area in case it can be huge.
-		 * do_mmap() will clear pgoff, so match alignment.
+		 * mmap_region() 会调用 shmem_zero_setup() 来创建一个文件，所以使用 shmem 的 get_unmapped_area，以防它可能非常大。
+		 * do_mmap() 会清除 pgoff，因此需要匹配对齐
+		 * 共享内存与这个一样
 		 */
 		pgoff = 0;
 		get_area = shmem_get_unmapped_area;
@@ -3393,8 +3399,7 @@ out:
 }
 
 /*
- * Return true if the calling process may expand its vm space by the passed
- * number of pages
+ * 在扩大进程虚拟内存（例如 mmap()、brk()、栈/堆增长）前做的配额检查函数。它根据 rlimit（资源限制）判断能不能再增加 npages 个页的映射空间
  */
 bool may_expand_vm(struct mm_struct *mm, vm_flags_t flags, unsigned long npages)
 {

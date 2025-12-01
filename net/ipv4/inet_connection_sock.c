@@ -360,9 +360,9 @@ void inet_csk_update_fastreuse(struct inet_bind_bucket *tb,
 	}
 }
 
-/* Obtain a reference to a local port for the given sock,
- * if snum is zero it means select any available local port.
- * We try to allocate an odd port (and leave even ports for connect())
+/* 为给定的 sock 获取一个本地端口引用，
+ * 如果 snum 为 0，则表示选择任意可用的本地端口。
+ * 我们会尝试分配一个奇数端口（并将偶数端口保留给 connect() 使用
  */
 int inet_csk_get_port(struct sock *sk, unsigned short snum)
 {
@@ -1125,6 +1125,7 @@ int inet_csk_listen_start(struct sock *sk, int backlog)
 		inet->inet_sport = htons(inet->inet_num);
 
 		sk_dst_reset(sk);
+        //inet_hash
 		err = sk->sk_prot->hash(sk);
 
 		if (likely(!err))

@@ -661,7 +661,7 @@ out_free_dio:
 	return NULL;
 }
 EXPORT_SYMBOL_GPL(__iomap_dio_rw);
-
+/* 发起一次 DIO */
 ssize_t
 iomap_dio_rw(struct kiocb *iocb, struct iov_iter *iter,
 		const struct iomap_ops *ops, const struct iomap_dio_ops *dops,

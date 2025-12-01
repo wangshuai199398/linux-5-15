@@ -2040,6 +2040,7 @@ DEFINE_PER_CPU(unsigned long, cpu_current_top_of_stack) = TOP_OF_INIT_STACK;
 void syscall_init(void)
 {
 	wrmsr(MSR_STAR, 0, (__USER32_CS << 16) | __KERNEL_CS);
+	//将 entry_SYSCALL_64 函数地址放到 MSR_LSTAR 中，执行syscall指令时，跳转到 entry_SYSCALL_64 中执行
 	wrmsrl(MSR_LSTAR, (unsigned long)entry_SYSCALL_64);
 
 #ifdef CONFIG_IA32_EMULATION

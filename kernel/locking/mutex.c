@@ -594,6 +594,7 @@ __mutex_lock_common(struct mutex *lock, unsigned int state, unsigned int subclas
 	}
 	// 禁用抢占
 	preempt_disable();
+	//用于在 调试/检测构建时追踪锁的嵌套关系、检测潜在死锁
 	mutex_acquire_nest(&lock->dep_map, subclass, 0, nest_lock, ip);
 	// 尝试加锁（无需休眠）
 	if (__mutex_trylock(lock) || mutex_optimistic_spin(lock, ww_ctx, NULL)) {

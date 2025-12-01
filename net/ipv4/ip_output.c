@@ -101,7 +101,7 @@ int __ip_local_out(struct net *net, struct sock *sk, struct sk_buff *skb)
 	struct iphdr *iph = ip_hdr(skb);
 
 	if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->ip_local_out skb->len %u\n", __func__, skb->len);
+		pr_debug("%s: ->ip_local_out skb->len %u\n", __func__, skb->len);
 
 	iph->tot_len = htons(skb->len);
 
@@ -115,7 +115,7 @@ int __ip_local_out(struct net *net, struct sock *sk, struct sk_buff *skb)
 	skb->protocol = htons(ETH_P_IP);
 
 	if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->ip_local_out iph->tot_len %u nf_hook\n", __func__, ntohs(iph->tot_len));
+		pr_debug("%s: ->ip_local_out iph->tot_len %u nf_hook\n", __func__, ntohs(iph->tot_len));
 	//netfilter过滤
 	return nf_hook(NFPROTO_IPV4, NF_INET_LOCAL_OUT,
 		       net, sk, skb, NULL, skb_dst(skb)->dev,
@@ -129,7 +129,7 @@ int ip_local_out(struct net *net, struct sock *sk, struct sk_buff *skb)
 	err = __ip_local_out(net, sk, skb);
 	if (likely(err == 1)) {
 		if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s: err==1 ->dst_output\n", __func__);
+			pr_debug("%s: err==1 ->dst_output\n", __func__);//会进来
 		err = dst_output(net, sk, skb);
 	}
 
@@ -234,7 +234,7 @@ static int ip_finish_output2(struct net *net, struct sock *sk, struct sk_buff *s
 		sock_confirm_neigh(skb, neigh);
 		/* if crossing protocols, can not use the cached header */
 		if (is_dst_k2pro(skb))
-			printk(KERN_INFO "%s: neigh_output\n", __func__);
+			pr_debug("%s: neigh_output\n", __func__);
 		res = neigh_output(neigh, skb, is_v6gw);
 		rcu_read_unlock_bh();
 		return res;
@@ -258,7 +258,7 @@ static int ip_finish_output_gso(struct net *net, struct sock *sk,
 	 */
 	if (skb_gso_validate_network_len(skb, mtu)) {
 		if (is_dst_k2pro(skb))
-			printk(KERN_INFO "%s: ip_finish_output_gso -> ip_finish_output2 \n", __func__);
+			pr_debug("%s: ip_finish_output_gso -> ip_finish_output2 \n", __func__);
 		return ip_finish_output2(net, sk, skb);
 	}
 
@@ -278,7 +278,7 @@ static int ip_finish_output_gso(struct net *net, struct sock *sk,
 	features = netif_skb_features(skb);
 	BUILD_BUG_ON(sizeof(*IPCB(skb)) > SKB_GSO_CB_OFFSET);
 	if (is_dst_k2pro(skb))
-		printk(KERN_INFO "%s: ip_finish_output_gso -> skb_gso_segment\n", __func__);
+		pr_debug("%s: ip_finish_output_gso -> skb_gso_segment\n", __func__);
 	segs = skb_gso_segment(skb, features & ~NETIF_F_GSO_MASK);
 	if (IS_ERR_OR_NULL(segs)) {
 		kfree_skb(skb);
@@ -291,7 +291,7 @@ static int ip_finish_output_gso(struct net *net, struct sock *sk,
 		int err;
 
 		skb_mark_not_on_list(segs);
-		printk(KERN_INFO "ip_finish_output_gso -> ip_fragment\n");
+		pr_debug("ip_finish_output_gso -> ip_fragment\n");
 		err = ip_fragment(net, sk, segs, mtu, ip_finish_output2);
 
 		if (err && ret == 0)
@@ -316,14 +316,14 @@ static int __ip_finish_output(struct net *net, struct sock *sk, struct sk_buff *
 
 	if (is_dst_k2pro(skb)) {
 		//dump_stack();
-		printk(KERN_INFO " ======== begin ========\n");
-		printk(KERN_INFO "IPCB(skb)->frag_max_size %hu\n", IPCB(skb)->frag_max_size);
+		pr_debug(" ======== begin ========\n");
+		pr_debug("IPCB(skb)->frag_max_size %hu\n", IPCB(skb)->frag_max_size);
 		skb_dump(KERN_INFO, skb, true);
 	}
 
 	if (skb_is_gso(skb)) {
 		if (is_dst_k2pro(skb))
-			printk(KERN_INFO "%s: ->ip_finish_output_gso skb->len %d mtu %d\n", __func__, skb->len, mtu);
+			pr_debug("%s: ->ip_finish_output_gso skb->len %d mtu %d\n", __func__, skb->len, mtu);
 		return ip_finish_output_gso(net, sk, skb, mtu);
 	}
 	//大于mtu进行分片
@@ -455,10 +455,10 @@ int ip_output(struct net *net, struct sock *sk, struct sk_buff *skb)
 	skb->protocol = htons(ETH_P_IP);
 
 	if (is_dst_k2pro(skb))
-		printk(KERN_INFO "%s: ->ip_finish_output skb->protocol 0x%x\n", __func__, ntohs(skb->protocol));
+		pr_debug("%s: ->ip_finish_output skb->protocol 0x%x\n", __func__, ntohs(skb->protocol));
 
 	if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->ip_finish_output 2 skb->protocol 0x%x\n", __func__, ntohs(skb->protocol));
+		pr_debug("%s: ->ip_finish_output 2 skb->protocol 0x%x\n", __func__, ntohs(skb->protocol));
 	//netfilter过滤
 	return NF_HOOK_COND(NFPROTO_IPV4, NF_INET_POST_ROUTING,
 			    net, sk, skb, indev, dev,
@@ -514,7 +514,7 @@ int __ip_queue_xmit(struct sock *sk, struct sk_buff *skb, struct flowi *fl,
 	
 	if (!rt) {
 		if (fl->u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s ->ip_route_output_ports\n", __func__);
+			pr_debug("%s ->ip_route_output_ports\n", __func__);
 
 		__be32 daddr;
 
@@ -548,11 +548,11 @@ packet_routed:
 	/* 我们知道要把它发送到哪里了，现在分配并构建 IP 头部 */
 	skb_push(skb, sizeof(struct iphdr) + (inet_opt ? inet_opt->opt.optlen : 0));
 	if (fl->u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->ip_local_out sizeof(struct iphdr) %zu inet_opt->opt.optlen %u\n", __func__, sizeof(struct iphdr), (inet_opt ? inet_opt->opt.optlen : 0));
+		pr_debug("%s: ->ip_local_out sizeof(struct iphdr) %zu inet_opt->opt.optlen %u\n", __func__, sizeof(struct iphdr), (inet_opt ? inet_opt->opt.optlen : 0));
 
 	skb_reset_network_header(skb);
 	if (fl->u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->skb->network_header %hu\n", __func__, skb->network_header);
+		pr_debug("%s: ->skb->network_header %hu\n", __func__, skb->network_header);
 	//设置ip头
 	iph = ip_hdr(skb);
 	*((__be16 *)iph) = htons((4 << 12) | (5 << 8) | (tos & 0xff));
@@ -561,7 +561,7 @@ packet_routed:
 	else
 		iph->frag_off = 0;
 	if (fl->u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->iph->frag_off 0x%x\n", __func__, ntohs(iph->frag_off));
+		pr_debug("%s: ->iph->frag_off 0x%x\n", __func__, ntohs(iph->frag_off));
 	iph->ttl      = ip_select_ttl(inet, &rt->dst);
 	iph->protocol = sk->sk_protocol;
 	//设置网络层ip地址
@@ -583,12 +583,12 @@ packet_routed:
 
 	if (((struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a) {
 		if (sk && inet_sk(sk)->inet_daddr) {
-			printk(KERN_INFO "%s: ->sk && inet_sk(sk)->inet_daddr\n", __func__);
+			pr_debug("%s: ->sk && inet_sk(sk)->inet_daddr\n", __func__);
 		}
 		if ((iph->frag_off & htons(IP_DF)) && !skb->ignore_df) {
-			printk(KERN_INFO "%s: ->iph->frag_off & htons(IP_DF)) ignore_df\n", __func__);
+			pr_debug("%s: ->iph->frag_off & htons(IP_DF)) ignore_df\n", __func__);
 		}
-		printk(KERN_INFO "%s: ->ip_local_out skb->priority %u skb->mark %u\n", __func__, skb->priority, skb->mark);
+		pr_debug("%s: ->ip_local_out skb->priority %u skb->mark %u\n", __func__, skb->priority, skb->mark);
 	}
 	//发送
 	res = ip_local_out(net, sk, skb);
@@ -641,7 +641,7 @@ static int ip_fragment(struct net *net, struct sock *sk, struct sk_buff *skb,
 
 	if ((iph->frag_off & htons(IP_DF)) == 0) {
 		if (is_dst_k2pro(skb)) 
-			printk(KERN_INFO "%s: ip_fragment is IP_DF \n", __func__);
+			pr_debug("%s: ip_fragment is IP_DF \n", __func__);
 		return ip_do_fragment(net, sk, skb, output);
 	}
 
@@ -920,7 +920,7 @@ int ip_do_fragment(struct net *net, struct sock *sk, struct sk_buff *skb,
 
 			skb->tstamp = tstamp;
 			if (is_dst_k2pro(skb))
-				printk(KERN_INFO "%s: ip_do_fragment -> output\n", __func__);
+				pr_debug("%s: ip_do_fragment -> output\n", __func__);
 			err = output(net, sk, skb);
 
 			if (!err)
@@ -956,7 +956,7 @@ slow_path:
 	 *	Fragment the datagram.
 	 */
 	if (is_dst_k2pro(skb))
-		printk(KERN_INFO "%s: slow_path \n", __func__);
+		pr_debug("%s: slow_path \n", __func__);
 	ip_frag_init(skb, hlen, ll_rs, mtu, IPCB(skb)->flags & IPSKB_FRAG_PMTU,
 		     &state);
 
@@ -978,7 +978,7 @@ slow_path:
 		 */
 		skb2->tstamp = tstamp;
 		if (is_dst_k2pro(skb2))
-			printk(KERN_INFO "output \n");
+		pr_debug("output \n");
 		err = output(net, sk, skb2);
 		if (err)
 			goto fail;

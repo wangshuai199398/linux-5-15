@@ -1063,7 +1063,7 @@ int __sk_backlog_rcv(struct sock *sk, struct sk_buff *skb);
 static inline int sk_backlog_rcv(struct sock *sk, struct sk_buff *skb)
 {
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: sk_backlog_rcv\n", __func__);
+		pr_debug("%s: sk_backlog_rcv\n", __func__);
 	if (sk_memalloc_socks() && skb_pfmemalloc(skb))
 		return __sk_backlog_rcv(sk, skb);
 
@@ -2046,12 +2046,15 @@ static inline void sock_orphan(struct sock *sk)
 static inline void sock_graft(struct sock *sk, struct socket *parent)
 {
 	WARN_ON(parent->sk);
+    //关闭软中断底半部
 	write_lock_bh(&sk->sk_callback_lock);
+    //用 RCU 安全地把 sk 的等待队列指针设为 socket 的等待队列
 	rcu_assign_pointer(sk->sk_wq, &parent->wq);
 	parent->sk = sk;
 	sk_set_socket(sk, parent);
 	sk->sk_uid = SOCK_INODE(parent)->i_uid;
 	security_sock_graft(sk, parent);
+    //释放锁并恢复底半部
 	write_unlock_bh(&sk->sk_callback_lock);
 }
 

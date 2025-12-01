@@ -420,9 +420,10 @@ static inline bool should_wake_ksoftirqd(void)
 
 static inline void invoke_softirq(void)
 {
+	//正在处理这些位
 	if (ksoftirqd_running(local_softirq_pending()))
 		return;
-
+	//不是强制线程化
 	if (!force_irqthreads() || !__this_cpu_read(ksoftirqd)) {
 #ifdef CONFIG_HAVE_IRQ_EXIT_ON_IRQ_STACK
 		/*
@@ -440,6 +441,7 @@ static inline void invoke_softirq(void)
 		do_softirq_own_stack();
 #endif
 	} else {
+		// 强制线程化软中断 或 当前 CPU 上没有 ksoftirqd 线程，让每 CPU 的 ksoftirqd在线程上下文里处理 softirq
 		wakeup_softirqd();
 	}
 }
@@ -697,7 +699,7 @@ inline void raise_softirq_irqoff(unsigned int nr)
 void raise_softirq(unsigned int nr)
 {
 	unsigned long flags;
-	//这里之所以要禁用中断是因为将要运行的 softirq 中断处理运行于中断上下文中
+	//保存了 eflags 寄存器中的 IF 标志位并且禁用当前处理器的中断,之所以要禁用中断是因为将要运行的 softirq 中断处理运行于中断上下文中
 	local_irq_save(flags);
 	raise_softirq_irqoff(nr);
 	local_irq_restore(flags);
@@ -712,7 +714,7 @@ void __raise_softirq_irqoff(unsigned int nr)
 	or_softirq_pending(1UL << nr);
 }
 
-//注册软中断对呀的处理函数 softirq_wangs
+//注册软中断对应的处理函数 softirq_wangs
 void open_softirq(int nr, void (*action)(struct softirq_action *))
 {
 	softirq_vec[nr].action = action;

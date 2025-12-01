@@ -824,7 +824,7 @@ static int do_dentry_open(struct file *f,
 	if (!open)
 		open = f->f_op->open;
 	if (open) {
-		// ext4_file_open
+		// ext4_file_open chrdev_open
 		error = open(inode, f);
 		if (error)
 			goto cleanup_all;

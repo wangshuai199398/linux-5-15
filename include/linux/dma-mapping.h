@@ -35,6 +35,7 @@
  * DMA_ATTR_SKIP_CPU_SYNC: Allows platform code to skip synchronization of
  * the CPU cache for the given buffer assuming that it has been already
  * transferred to 'device' domain.
+ * 调用者自己已经处理或保证了缓存一致性，不需要 DMA 子系统再做一次
  */
 #define DMA_ATTR_SKIP_CPU_SYNC		(1UL << 5)
 /*

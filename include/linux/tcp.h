@@ -90,7 +90,7 @@ struct tcp_options_received {
 		wscale_ok : 1,	/* Wscale seen on SYN packet		*/
 		sack_ok : 3,	/* SACK seen on SYN packet		*/
 		smc_ok : 1,	/* SMC seen on SYN packet		*/
-		snd_wscale : 4,	/* Window scaling received from sender	*/
+		snd_wscale : 4,	/* 发送过来的接收窗口缩放因子	*/
 		rcv_wscale : 4;	/* Window scaling to send to receiver	*/
 	u8	saw_unknown:1,	/* Received unknown option		*/
 		unused:7;
@@ -169,9 +169,11 @@ struct tcp_sock {
 	u32	data_segs_in;	/* RFC4898 tcpEStatsPerfDataSegsIn
 				 * total number of data segments in.
 				 */
- 	u32	rcv_nxt;	/* What we want to receive next 下一个待接收序列号（按序接收指针）*/
+ 	u32	rcv_nxt;	/* What we want to receive next 下一个期望接收的 TCP 字节序号（即已经收到的数据的右边界） */
 	u32	copied_seq;	/* Head of yet unread data		*/
+    //接收窗口更新点，上次通告窗口时对应的 TCP 序号（起始序号）
 	u32	rcv_wup;	/* rcv_nxt on last window update sent	*/
+    //已发送的数据尾部
  	u32	snd_nxt;	/* Next sequence we send		*/
 	u32	segs_out;	/* RFC4898 tcpEStatsPerfSegsOut
 				 * The total number of segments sent.
@@ -204,6 +206,7 @@ struct tcp_sock {
 	struct list_head tsorted_sent_queue; /* time-sorted sent but un-SACKed skbs */
 
 	u32	snd_wl1;	/* Sequence for window update		*/
+	// 滑动窗口大小（send window），即在未收到 ACK 之前还能继续发送多少字节，已经放大后的真实发送窗口
 	u32	snd_wnd;	/* The window we expect to receive	*/
 	u32	max_window;	/* Maximal window ever seen from peer	*/
 	u32	mss_cache;	/* Cached effective mss, not including SACKS */
@@ -286,7 +289,7 @@ struct tcp_sock {
  *	Slow start and congestion control (see also Nagle, and Karn & Partridge)
  */
  	u32	snd_ssthresh;	/* Slow start size threshold		*/
-	//TCP 连接的发送拥塞窗口值
+	//发送拥塞窗口值,发送方维护,一开始是mss,翻倍增长,然后在线性增长
  	u32	snd_cwnd;	/* Sending congestion window		*/
 	u32	snd_cwnd_cnt;	/* Linear increase counter		*/
 	u32	snd_cwnd_clamp; /* Do not allow snd_cwnd to grow above this */
@@ -304,7 +307,7 @@ struct tcp_sock {
 	u64	delivered_mstamp; /* time we reached "delivered" */
 	u32	rate_delivered;    /* saved rate sample: packets delivered */
 	u32	rate_interval_us;  /* saved rate sample: time elapsed */
-
+    //接收窗口
  	u32	rcv_wnd;	/* Current receiver window		*/
 	u32	write_seq;	/* Tail(+1) of data held in tcp send buffer */
 	u32	notsent_lowat;	/* TCP_NOTSENT_LOWAT */
@@ -319,7 +322,7 @@ struct tcp_sock {
 	struct sk_buff* lost_skb_hint;
 	struct sk_buff *retransmit_skb_hint;
 
-	/* OOO segments go in this rbtree. Socket lock must be held. */
+	/* OOO segments go in this rbtree. Socket lock must be held. 保存乱序的包，5还没到，67先到了 */
 	struct rb_root	out_of_order_queue;
 	struct sk_buff	*ooo_last_skb; /* cache rb_last(out_of_order_queue) */
 

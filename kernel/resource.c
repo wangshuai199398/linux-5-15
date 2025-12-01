@@ -29,7 +29,7 @@
 #include <uapi/linux/magic.h>
 #include <asm/io.h>
 
-// ioport_wangs
+// 每一个资源的子集都有一个根节点 ioport_wangs
 struct resource ioport_resource = {
 	.name	= "PCI IO",
 	.start	= 0,

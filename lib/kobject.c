@@ -143,7 +143,7 @@ static int get_kobj_path_length(const struct kobject *kobj)
 	} while (parent);
 	return length;
 }
-
+/* ysk_unic3.eth.0' (000000000dd73390): fill_kobj_path: path = '/devices/pci0000:00/0000:00:01.0/0000:01:00.0/ysk_unic3.eth.0' */
 static int fill_kobj_path(const struct kobject *kobj, char *path, int length)
 {
 	const struct kobject *parent;
@@ -229,7 +229,10 @@ static void kobject_init_internal(struct kobject *kobj)
 	kobj->state_initialized = 1;
 }
 
-
+/*
+1. 将kobject加入kset集合中，设置kobject的parent，如果不存在设置parent为kset的kobject
+2. 在sysfs中为kobject创建目录，并添加默认属性和属性组
+*/
 static int kobject_add_internal(struct kobject *kobj)
 {
 	int error = 0;
@@ -430,6 +433,7 @@ static __printf(3, 0) int kobject_add_varg(struct kobject *kobj,
  *         In short, once this function is called, kobject_put() MUST be called
  *         when the use of the object is finished in order to properly free
  *         everything.
+ * /sys/devices/pci0000:00/0000:00:01.0/0000:01:00.0/ysk_unic3.eth.0
  */
 int kobject_add(struct kobject *kobj, struct kobject *parent,
 		const char *fmt, ...)

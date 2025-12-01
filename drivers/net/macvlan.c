@@ -1708,7 +1708,7 @@ static struct net *macvlan_get_link_net(const struct net_device *dev)
 {
 	return dev_net(macvlan_dev_real_dev(dev));
 }
-// mac_vxlan
+// macvlan_wangs
 static struct rtnl_link_ops macvlan_link_ops = {
 	.kind		= "macvlan",
 	.setup		= macvlan_setup,

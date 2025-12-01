@@ -450,6 +450,7 @@ int bus_add_device(struct device *dev)
 		error = device_add_groups(dev, bus->dev_groups);
 		if (error)
 			goto out_put;
+		// /sys/bus/auxiliary/drivers/ysk_unic3.eth/ysk_unic3.eth.0
 		error = sysfs_create_link(&bus->p->devices_kset->kobj,
 						&dev->kobj, dev_name(dev));
 		if (error)

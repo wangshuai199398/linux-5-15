@@ -357,7 +357,7 @@ enum {
 	NAPI_STATE_SCHED,		/* Poll is scheduled */
 	NAPI_STATE_MISSED,		/* reschedule a napi */
 	NAPI_STATE_DISABLE,		/* Disable pending */
-	NAPI_STATE_NPSVC,		/* Netpoll - don't dequeue from poll_list */
+	NAPI_STATE_NPSVC,		/* Netpoll - don't dequeue from poll_list 特殊轮训状态 */
 	NAPI_STATE_LISTED,		/* NAPI added to system lists */
 	NAPI_STATE_NO_BUSY_POLL,	/* Do not add in napi_hash, no busy polling */
 	NAPI_STATE_IN_BUSY_POLL,	/* sk_busy_loop() owns this NAPI */
@@ -367,9 +367,9 @@ enum {
 };
 
 enum {
-	NAPIF_STATE_SCHED		= BIT(NAPI_STATE_SCHED),
-	NAPIF_STATE_MISSED		= BIT(NAPI_STATE_MISSED),
-	NAPIF_STATE_DISABLE		= BIT(NAPI_STATE_DISABLE),
+	NAPIF_STATE_SCHED		= BIT(NAPI_STATE_SCHED),//这个 NAPI 当前已经被调度了（正在队列上等着被 poll，或马上就要被处理）
+	NAPIF_STATE_MISSED		= BIT(NAPI_STATE_MISSED),//在它已经处于 SCHED 状态的时候，有新的收包事件“错过”了一次调度 —— 说白了就是又有活，但此时已经在调度中了，所以只记个标记，之后 poll 完成时可以再检查
+	NAPIF_STATE_DISABLE		= BIT(NAPI_STATE_DISABLE),//这个 NAPI 被关闭/禁用了，不能再调度
 	NAPIF_STATE_NPSVC		= BIT(NAPI_STATE_NPSVC),
 	NAPIF_STATE_LISTED		= BIT(NAPI_STATE_LISTED),
 	NAPIF_STATE_NO_BUSY_POLL	= BIT(NAPI_STATE_NO_BUSY_POLL),
@@ -3306,9 +3306,9 @@ struct softnet_data {
 	struct sd_flow_limit __rcu *flow_limit;
 #endif
 	//用于网络包的发送
-	struct Qdisc		*output_queue;
+	struct Qdisc		*output_queue;//本CPU待调度的qdisc列表,fq_codel、mq、pfifo_fast等
 	struct Qdisc		**output_queue_tailp;
-	struct sk_buff		*completion_queue;
+	struct sk_buff		*completion_queue;//驱动发送完成后挂进来的带释放skb链表
 #ifdef CONFIG_XFRM_OFFLOAD
 	struct sk_buff_head	xfrm_backlog;
 #endif

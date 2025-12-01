@@ -84,9 +84,10 @@ int register_refined_jiffies(long cycles_per_second)
 
 	refined_jiffies = clocksource_jiffies;
 	refined_jiffies.name = "refined-jiffies";
+	//之前是1,现在提升到2,这意味着 refined_jiffies 将成为 时钟源管理代码的最佳选择
 	refined_jiffies.rating++;
 
-	/* Calc cycles per tick */
+	/* 计算每个节拍（tick）对应的周期数 */
 	cycles_per_tick = (cycles_per_second + HZ/2)/HZ;
 	/* shift_hz stores hz<<8 for extra accuracy */
 	shift_hz = (u64)cycles_per_second << 8;
@@ -98,7 +99,7 @@ int register_refined_jiffies(long cycles_per_second)
 	do_div(nsec_per_tick, (u32)shift_hz);
 
 	refined_jiffies.mult = ((u32)nsec_per_tick) << JIFFIES_SHIFT;
-	// 注册时间源
+	// 注册时间源，会根据clocksource.rating的值来选择最合适的时间源
 	__clocksource_register(&refined_jiffies);
 	return 0;
 }

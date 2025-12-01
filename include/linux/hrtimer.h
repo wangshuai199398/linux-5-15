@@ -391,7 +391,11 @@ static inline void hrtimer_init_on_stack(struct hrtimer *timer,
 {
 	hrtimer_init(timer, which_clock, mode);
 }
-
+/*
+初始化内部的 hrtimer 对象
+将当前进程 (current) 记录进 sleeper
+准备好让当前线程能够被定时器唤醒
+*/
 static inline void hrtimer_init_sleeper_on_stack(struct hrtimer_sleeper *sl,
 						 clockid_t clock_id,
 						 enum hrtimer_mode mode)

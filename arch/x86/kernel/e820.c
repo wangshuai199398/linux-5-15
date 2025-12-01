@@ -1165,7 +1165,7 @@ static bool __init do_mark_busy(enum e820_type type, struct resource *res)
  */
 
 static struct resource __initdata *e820_res;
-
+// 遍历了 e820 的映射然后将内存区域插入了根 iomen 结构体中
 void __init e820__reserve_resources(void)
 {
 	int i;

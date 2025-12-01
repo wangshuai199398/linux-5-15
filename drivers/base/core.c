@@ -3012,6 +3012,8 @@ static struct kobject *get_device_parent(struct device *dev,
 		}
 
 		/* or create a new class-directory at the parent device */
+		// net_class会创建/sys/devices/pci0000:00/0000:00:01.0/0000:01:00.0/net目录
+		// misc_class会创建/sys/devices/pci0000:00/0000:00:01.0/0000:01:00.0/misc
 		k = class_dir_create_and_add(dev->class, parent_kobj);
 		/* do not emit an uevent for this simple "glue" directory */
 		mutex_unlock(&gdp_mutex);
@@ -3124,7 +3126,7 @@ static int device_add_class_symlinks(struct device *dev)
 
 	if (!dev->class)
 		return 0;
-
+	//sys/devices/pci0000:00/0000:00:01.0/0000:01:00.0/ysk_unic3.eth.0/subsystem
 	error = sysfs_create_link(&dev->kobj,
 				  &dev->class->p->subsys.kobj,
 				  "subsystem");
@@ -3281,11 +3283,11 @@ int device_add(struct device *dev)
 	struct class_interface *class_intf;
 	int error = -EINVAL;
 	struct kobject *glue_dir = NULL;
-
+	//提高引用计数，防止中途被释放
 	dev = get_device(dev);
 	if (!dev)
 		goto done;
-
+	//创建device_private
 	if (!dev->p) {
 		error = device_private_init(dev);
 		if (error)
@@ -3314,6 +3316,7 @@ int device_add(struct device *dev)
 	pr_info("%s: device: '%s' init_name %s\n", __func__, dev_name(dev), dev->init_name);
 
 	parent = get_device(dev->parent);
+	//决定 sysfs 层级 的辅助函数
 	kobj = get_device_parent(dev, parent);
 	if (IS_ERR(kobj)) {
 		error = PTR_ERR(kobj);
@@ -3322,25 +3325,25 @@ int device_add(struct device *dev)
 	if (kobj)
 		dev->kobj.parent = kobj;
 
-	/* use parent numa_node */
+	/* use parent numa_node 如果自己没设置 NUMA node，就继承 parent 的 NUMA node */
 	if (parent && (dev_to_node(dev) == NUMA_NO_NODE))
 		set_dev_node(dev, dev_to_node(parent));
 
 	/* first, register with generic layer. */
-	/* we require the name to be set before, and pass NULL */
+	/* we require the name to be set before, and pass NULL 这一步是真正把 dev->kobj 注册到 kobject 树 */
 	error = kobject_add(&dev->kobj, dev->kobj.parent, NULL);
 	if (error) {
 		glue_dir = kobj;
 		goto Error;
 	}
 
-	/* notify platform of device entry */
+	/* notify platform of device entry 平台相关的 hook，某些架构/平台可以在设备添加时做额外事情 */
 	device_platform_notify(dev);
-
+	// 在 sysfs 下给这个 device 创建 uevent 文件，用户空间可以往里写 add、remove 等触发 uevent
 	error = device_create_file(dev, &dev_attr_uevent);
 	if (error)
 		goto attrError;
-
+	// 如果 dev->class 不为空，会在 /sys/class/<class>/ 下面建立指向这个 device 的符号链接，形成 class 视图
 	error = device_add_class_symlinks(dev);
 	if (error)
 		goto SymlinkError;

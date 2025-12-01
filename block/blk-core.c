@@ -1017,12 +1017,13 @@ blk_qc_t submit_bio_noacct(struct bio *bio)
 	 * usage with stacked devices could be a problem.  Use current->bio_list
 	 * to collect a list of requests submited by a ->submit_bio method while
 	 * it is active, and then process them after it returned.
+	 * 如果它非空，说明当前进程已经在执行一个设备的 ->submit_bio 回调
 	 */
 	if (current->bio_list) {
 		bio_list_add(&current->bio_list[0], bio);
 		return BLK_QC_T_NONE;
 	}
-
+    //从 bio 中取出块设备, bio->bi_bdev 获取它的 gendisk 结构, 看它的文件操作表（fops）里有没有定义 submit_bio 函数
 	if (!bio->bi_bdev->bd_disk->fops->submit_bio)
 		return __submit_bio_noacct_mq(bio);
 	return __submit_bio_noacct(bio);
@@ -1045,12 +1046,14 @@ EXPORT_SYMBOL(submit_bio_noacct);
  */
 blk_qc_t submit_bio(struct bio *bio)
 {
+    //检查该 I/O 是否需要被转交(punt)到另一个上下文（比如另一个 blkcg 工作队列）
 	if (blkcg_punt_bio_submit(bio))
 		return BLK_QC_T_NONE;
 
 	/*
 	 * If it's a regular read/write or a barrier with data attached,
 	 * go through the normal accounting stuff before submission.
+	 * 如果这个 bio 带有数据（不是纯控制命令，比如 flush），则进入统计逻辑
 	 */
 	if (bio_has_data(bio)) {
 		unsigned int count;
@@ -1074,6 +1077,8 @@ blk_qc_t submit_bio(struct bio *bio)
 	 * submission time as memory stall.  When the device is congested, or
 	 * the submitting cgroup IO-throttled, submission can be a significant
 	 * part of overall IO time.
+	 * 当这是一个 读请求，并且带有 BIO_WORKINGSET 标志（即这次读属于用户空间的活跃工作集，例如因为 page fault 触发的读）
+	 * 则认为这次 I/O 延迟属于内存压力的一部分（memory stall），所以调用 psi_memstall_enter() / psi_memstall_leave() 标记这段时间为 memory stall
 	 */
 	if (unlikely(bio_op(bio) == REQ_OP_READ &&
 	    bio_flagged(bio, BIO_WORKINGSET))) {

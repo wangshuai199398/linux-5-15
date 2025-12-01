@@ -601,10 +601,11 @@ static int inet_reuseport_add_sock(struct sock *sk,
 
 int __inet_hash(struct sock *sk, struct sock *osk)
 {
+    //取出本协议族（IPv4/IPv6 上的 TCP）共享的哈希表元信息
 	struct inet_hashinfo *hashinfo = sk->sk_prot->h.hashinfo;
 	struct inet_listen_hashbucket *ilb2;
 	int err = 0;
-
+    //非监听 socket, 关本地软中断, 防止软中断上下文并发干扰, 把 sk 插入已建立/非监听的 ehash
 	if (sk->sk_state != TCP_LISTEN) {
 		local_bh_disable();
 		inet_ehash_nolisten(sk, osk, NULL);
@@ -612,15 +613,18 @@ int __inet_hash(struct sock *sk, struct sock *osk)
 		return 0;
 	}
 	WARN_ON(!sk_unhashed(sk));
+    //找到监听哈希表 lhash2 中对应的桶并加自旋锁保护
 	ilb2 = inet_lhash2_bucket_sk(hashinfo, sk);
 
 	spin_lock(&ilb2->lock);
+    //如果套接字开启了 SO_REUSEPORT，先把它加入同端口的复用组
 	if (sk->sk_reuseport) {
 		err = inet_reuseport_add_sock(sk, ilb2);
 		if (err)
 			goto unlock;
 	}
 	sock_set_flag(sk, SOCK_RCU_FREE);
+    //加入监听桶的nulls hash链表
 	if (IS_ENABLED(CONFIG_IPV6) && sk->sk_reuseport &&
 		sk->sk_family == AF_INET6)
 		__sk_nulls_add_node_tail_rcu(sk, &ilb2->nulls_head);
@@ -774,7 +778,7 @@ other_parity_scan:
 				goto next_port;
 			}
 		}
-		//没有找到冲突，创建新的 bind_bucket
+		//没有冲突，创建新的 bind_bucket
 		tb = inet_bind_bucket_create(hinfo->bind_bucket_cachep,
 					     net, head, port, l3mdev);
 		if (!tb) {

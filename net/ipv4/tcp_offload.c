@@ -83,10 +83,10 @@ struct sk_buff *tcp_gso_segment(struct sk_buff *skb,
 	if (unlikely(skb->len <= mss))
 		goto out;
 	if (is_dst_k2pro(skb))
-		printk(KERN_INFO "%s: tcp_gso_segment: skb->len %u > mss %u\n", __func__, skb->len, mss);
+		pr_debug("%s: tcp_gso_segment: skb->len %u > mss %u\n", __func__, skb->len, mss);
 	if (skb_gso_ok(skb, features | NETIF_F_GSO_ROBUST)) {
 		/* Packet is from an untrusted source, reset gso_segs. */
-		printk(KERN_INFO "goto out\n");
+		pr_debug("goto out\n");
 		skb_shinfo(skb)->gso_segs = DIV_ROUND_UP(skb->len, mss);
 
 		segs = NULL;
@@ -126,7 +126,7 @@ struct sk_buff *tcp_gso_segment(struct sk_buff *skb,
 
 	while (skb->next) {
 		if (is_dst_k2pro(skb))
-			printk(KERN_INFO "%s: while (skb->next) \n", __func__);
+			pr_debug("%s: while (skb->next) \n", __func__);
 		th->fin = th->psh = 0;
 		th->check = newcheck;
 
@@ -155,7 +155,7 @@ struct sk_buff *tcp_gso_segment(struct sk_buff *skb,
 	 */
 	if (copy_destructor) {
 		if (is_dst_k2pro(skb))
-			printk(KERN_INFO "%s: tcp_gso_segment: copy_destructor %d\n", __func__, copy_destructor);
+			pr_debug("%s: tcp_gso_segment: copy_destructor %d\n", __func__, copy_destructor);
 		int delta;
 
 		swap(gso_skb->sk, skb->sk);
@@ -171,7 +171,7 @@ struct sk_buff *tcp_gso_segment(struct sk_buff *skb,
 			WARN_ON_ONCE(refcount_sub_and_test(-delta, &skb->sk->sk_wmem_alloc));
 	}
 	if (is_dst_k2pro(skb))
-		printk(KERN_INFO "%s: tcp_gso_segment: skb->len %u <= mss %u\n", __func__, skb->len, mss);
+		pr_debug("%s: tcp_gso_segment: skb->len %u <= mss %u\n", __func__, skb->len, mss);
 
 	delta = htonl(oldlen + (skb_tail_pointer(skb) -
 				skb_transport_header(skb)) +
@@ -272,7 +272,7 @@ found:
 	flush |= p->decrypted ^ skb->decrypted;
 #endif
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: ->skb_gro_receive \n", __func__);
+		pr_debug("%s: ->skb_gro_receive \n", __func__);
 	if (flush || skb_gro_receive(p, skb)) {
 		mss = 1;
 		goto out_check_final;

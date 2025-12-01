@@ -385,7 +385,7 @@ lookup_protocol:
 	}
 
 	if (sk->sk_prot->init) {
-		err = sk->sk_prot->init(sk);
+		err = sk->sk_prot->init(sk);// tcp_v4_init_sock
 		if (err)
 			goto out_sk_release;
 	}
@@ -596,7 +596,7 @@ int inet_dgram_connect(struct socket *sock, struct sockaddr *uaddr,
 	return prot->connect(sk, uaddr, addr_len);
 }
 EXPORT_SYMBOL(inet_dgram_connect);
-
+// 睡眠等待连接完成
 static long inet_wait_for_connect(struct sock *sk, long timeo, int writebias)
 {
 	DEFINE_WAIT_FUNC(wait, woken_wake_function);
@@ -679,7 +679,7 @@ int __inet_stream_connect(struct socket *sock, struct sockaddr *uaddr,
 				goto out;
 		}
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "sk->sk_prot->connect  \n");
+			pr_debug("sk->sk_prot->connect  \n");
 		err = sk->sk_prot->connect(sk, uaddr, addr_len); //tcp_v4_connect
 		if (err < 0)
 			goto out;
@@ -843,7 +843,7 @@ int inet_sendmsg(struct socket *sock, struct msghdr *msg, size_t size)
 	if (unlikely(inet_send_prepare(sk)))
 		return -EAGAIN;
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->tcp_sendmsg size %lu\n", __func__, size);
+		pr_debug("%s: ->tcp_sendmsg size %lu\n", __func__, size);
 
 	return INDIRECT_CALL_2(sk->sk_prot->sendmsg, tcp_sendmsg, udp_sendmsg,
 			       sk, msg, size);
@@ -1407,7 +1407,7 @@ struct sk_buff *inet_gso_segment(struct sk_buff *skb,
 			goto out;
 	}
 	if (is_dst_k2pro(skb))
-		printk(KERN_INFO "%s: inet_gso_segment -> gso_segment\n", __func__);
+		pr_debug("%s: inet_gso_segment -> gso_segment\n", __func__);
 	ops = rcu_dereference(inet_offloads[proto]);
 	if (likely(ops && ops->callbacks.gso_segment)) {
 		segs = ops->callbacks.gso_segment(skb, features); // tcp4_gso_segment
@@ -1423,7 +1423,7 @@ struct sk_buff *inet_gso_segment(struct sk_buff *skb,
 	skb = segs;
 	do {
 		if (is_dst_k2pro(skb))
-			printk(KERN_INFO "%s: do inet_gso_segment \n", __func__);
+			pr_debug("%s: do inet_gso_segment \n", __func__);
 		iph = (struct iphdr *)(skb_mac_header(skb) + nhoff);
 		if (udpfrag) {
 			iph->frag_off = htons(offset >> 3);
@@ -1580,7 +1580,7 @@ struct sk_buff *inet_gro_receive(struct list_head *head, struct sk_buff *skb)
 	skb_gro_pull(skb, sizeof(*iph));
 	skb_set_transport_header(skb, skb_gro_offset(skb));
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: ->indirect_call_gro_receive %p flush %hu\n", __func__, ops->callbacks.gro_receive, NAPI_GRO_CB(skb)->flush);
+		pr_debug("%s: ->indirect_call_gro_receive %p flush %hu\n", __func__, ops->callbacks.gro_receive, NAPI_GRO_CB(skb)->flush);
 	//如果ops->callbacks.gro_receive不为空，调用它，为空调用tcp4_gro_receive, udp4_gro_receive
 	pp = indirect_call_gro_receive(tcp4_gro_receive, udp4_gro_receive,
 				       ops->callbacks.gro_receive, head, skb);

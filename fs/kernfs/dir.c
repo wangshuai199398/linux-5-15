@@ -589,13 +589,14 @@ static struct kernfs_node *__kernfs_new_node(struct kernfs_root *root,
 	name = kstrdup_const(name, GFP_KERNEL);
 	if (!name)
 		return NULL;
-
+	//从 slab 分配一个 kernfs_node
 	kn = kmem_cache_zalloc(kernfs_node_cache, GFP_KERNEL);
 	if (!kn)
 		goto err_out1;
-
+	//先在能睡眠的上下文里，用 GFP_KERNEL 把 idr_alloc_*() 可能需要用的内存“预先分配好”
 	idr_preload(GFP_KERNEL);
 	spin_lock(&kernfs_idr_lock);
+	//在 root->ino_idr 这棵 idr 树里，为这个 kn 分配一个递增的整数 ID（从 1 开始）
 	ret = idr_alloc_cyclic(&root->ino_idr, kn, 1, 0, GFP_ATOMIC);
 	if (ret >= 0 && ret < root->last_id_lowbits)
 		root->id_highbits++;
@@ -761,9 +762,9 @@ int kernfs_add_one(struct kernfs_node *kn)
 
 	if ((parent->flags & KERNFS_ACTIVATED) && !kernfs_active(parent))
 		goto out_unlock;
-
+	//根据节点名字（和 namespace）计算一个哈希值，用来加速在同一个目录下查找
 	kn->hash = kernfs_name_hash(kn->name, kn->ns);
-
+	//把这个节点插入到父目录的 children 结构里
 	ret = kernfs_link_sibling(kn);
 	if (ret)
 		goto out_unlock;
@@ -983,12 +984,12 @@ void kernfs_destroy_root(struct kernfs_root *root)
 
 /**
  * kernfs_create_dir_ns - create a directory
- * @parent: parent in which to create a new directory
- * @name: name of the new directory
+ * @parent: 父目录的 kernfs_node，也就是新目录要挂在哪个目录下面
+ * @name: 新目录的名字
  * @mode: mode of the new directory
  * @uid: uid of the new directory
  * @gid: gid of the new directory
- * @priv: opaque data associated with the new directory
+ * @priv: 和这个目录关联的私有数据
  * @ns: optional namespace tag of the directory
  *
  * Returns the created node on success, ERR_PTR() value on failure.
@@ -1001,17 +1002,17 @@ struct kernfs_node *kernfs_create_dir_ns(struct kernfs_node *parent,
 	struct kernfs_node *kn;
 	int rc;
 
-	/* allocate */
+	/* 创建一个 目录类型 的 kernfs 节点，在传入的权限基础上加上目录S_IFDIR */
 	kn = kernfs_new_node(parent, name, mode | S_IFDIR,
 			     uid, gid, KERNFS_DIR);
 	if (!kn)
 		return ERR_PTR(-ENOMEM);
-
+	// 标记这个节点属于和父节点同一个 kernfs 根
 	kn->dir.root = parent->dir.root;
 	kn->ns = ns;
 	kn->priv = priv;
 
-	/* link in */
+	/* 把新节点真正挂到 parent 下面，并做各种检查（重名、RB tree / 哈希结构维护等） */
 	rc = kernfs_add_one(kn);
 	if (!rc)
 		return kn;
@@ -1314,13 +1315,14 @@ void kernfs_activate(struct kernfs_node *kn)
 	down_write(&kernfs_rwsem);
 
 	pos = NULL;
+	//后序遍历所有节点
 	while ((pos = kernfs_next_descendant_post(pos, kn))) {
 		if (pos->flags & KERNFS_ACTIVATED)
 			continue;
 
 		WARN_ON_ONCE(pos->parent && RB_EMPTY_NODE(&pos->rb));
 		WARN_ON_ONCE(atomic_read(&pos->active) != KN_DEACTIVATED_BIAS);
-
+		//激活
 		atomic_sub(KN_DEACTIVATED_BIAS, &pos->active);
 		pos->flags |= KERNFS_ACTIVATED;
 	}

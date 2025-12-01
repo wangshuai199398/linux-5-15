@@ -36,6 +36,7 @@ void sysfs_warn_dup(struct kernfs_node *parent, const char *name)
  * sysfs_create_dir_ns - create a directory for an object with a namespace tag
  * @kobj: object we're creating directory for
  * @ns: the namespace tag to use
+ * /sys/bus/auxiliary/drivers/ysk_unic3.eth/ysk_unic3.eth.0
  */
 int sysfs_create_dir_ns(struct kobject *kobj, const void *ns)
 {

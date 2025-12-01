@@ -674,8 +674,7 @@ static u64 __sched_period(unsigned long nr_running)
 }
 
 /*
- * We calculate the wall-time slice from the period by taking a part
- * proportional to the weight.
+ * 我们从调度周期（period）中，为任务分配与其权重（weight）成比例的 CPU 运行时间片（wall-time slice）
  *
  * s = p*P[w/rw]
  * 调度器分配给每个任务的理论 CPU 时间份额
@@ -4340,7 +4339,7 @@ static void check_spread(struct cfs_rq *cfs_rq, struct sched_entity *se)
 		schedstat_inc(cfs_rq->nr_spread_over);
 #endif
 }
-
+// 某个任务（调度实体 sched_entity）是否“睡得太久”，即它的 vruntime 与当前运行队列的 min_vruntime 相差非常大
 static inline bool entity_is_long_sleeper(struct sched_entity *se)
 {
 	struct cfs_rq *cfs_rq;
@@ -4370,10 +4369,9 @@ place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int initial)
 	u64 vruntime = cfs_rq->min_vruntime;
 
 	/*
-	 * The 'current' period is already promised to the current tasks,
-	 * however the extra weight of the new task will slow them down a
-	 * little, place the new task so that it fits in the slot that
-	 * stays open at the end.
+	 * 当前调度周期中的 CPU 运行时间已经“承诺”给现有任务（即当前队列里的任务）。
+	 * 但是新任务的加入会带来额外的权重，从而稍微拖慢这些现有任务的速度。
+	 * 因此，应当将新任务放置在时间片队列的末尾空档位置，使其自然融入当前时间窗口，而不破坏现有任务的分配节奏
 	 */
 	if (initial && sched_feat(START_DEBIT))
 		vruntime += sched_vslice(cfs_rq, se);
@@ -4393,23 +4391,13 @@ place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int initial)
 	}
 
 	/*
-	 * Pull vruntime of the entity being placed to the base level of
-	 * cfs_rq, to prevent boosting it if placed backwards.
-	 * However, min_vruntime can advance much faster than real time, with
-	 * the extreme being when an entity with the minimal weight always runs
-	 * on the cfs_rq. If the waking entity slept for a long time, its
-	 * vruntime difference from min_vruntime may overflow s64 and their
-	 * comparison may get inversed, so ignore the entity's original
-	 * vruntime in that case.
-	 * The maximal vruntime speedup is given by the ratio of normal to
-	 * minimal weight: scale_load_down(NICE_0_LOAD) / MIN_SHARES.
-	 * When placing a migrated waking entity, its exec_start has been set
-	 * from a different rq. In order to take into account a possible
-	 * divergence between new and prev rq's clocks task because of irq and
-	 * stolen time, we take an additional margin.
-	 * So, cutting off on the sleep time of
-	 *     2^63 / scale_load_down(NICE_0_LOAD) ~ 104 days
-	 * should be safe.
+	 * 将要被放入 CFS 队列的任务的 vruntime 拉回到该 cfs_rq 的基准线上（即相对于 min_vruntime 归一化），以避免把它放到时间线后方时出现不合理的“加速”现象
+	 * 但需要注意：min_vruntime 的推进速度可能远快于真实时间 —— 最极端的情况是：如果一直由 权重最小的任务运行，它的 vruntime 会按最慢速增长，从而导致 min_vruntime 以相对极快的速度前进。
+	 * 如果一个任务睡眠时间特别长，它的原始 vruntime 与当前 min_vruntime 之间的差值可能大到溢出 s64，从而在比较 vruntime 时发生“符号翻转”，导致调度顺序颠倒，因此在这种情况下需要忽略其原始 vruntime。
+	 * vruntime 可能被推快的最大比例 = 普通权重 / 最小权重：
+	 * scale_load_down(NICE_0_LOAD) / MIN_SHARES。
+	 * 对于从其它 CPU runqueue 迁移后再被唤醒的任务，它的 exec_start 来自不同的 rq，为了考虑两个 CPU 调度时钟在 irq、stolen time 等情况下可能存在的偏差，这里需要留一个额外安全裕度。
+	 * 因此，只要把睡眠超过 2^63 / scale_load_down(NICE_0_LOAD)（约 104 天）的任务特殊处理掉，就能保证安全，避免比较错误。
 	 * 调整醒来后进程的vruntime
 	 */
 	if (entity_is_long_sleeper(se))
@@ -11661,7 +11649,7 @@ static void task_fork_fair(struct task_struct *p)
 		//子进程和父进程的 vruntime 设成一样
 		se->vruntime = curr->vruntime;
 	}
-	// 初始化 sched_entity
+	// 
 	place_entity(cfs_rq, se, 1);
 
 	if (sysctl_sched_child_runs_first && curr && entity_before(curr, se)) {

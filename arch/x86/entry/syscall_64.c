@@ -35,7 +35,13 @@ const sys_call_ptr_t sys_call_table[] = {
 #undef __SYSCALL
 
 #define __SYSCALL(nr, sym) case nr: return __x64_##sym(regs);
-//基于系统调用号 nr 的系统调用分发器（dispatcher）
+/*
+基于系统调用号 nr 的系统调用分发器（dispatcher）
+编译后生成 /usr/src/linux-5-15/arch/x86/include/generated/asm/syscalls_64.h
+/usr/src/linux-5-15/arch/x86/include/generated/uapi/asm/unistd_64.h
+__SYSCALL(0, sys_read)
+__SYSCALL(448, sys_process_mrelease)
+*/
 long x64_sys_call(const struct pt_regs *regs, unsigned int nr)
 {
 	switch (nr) {

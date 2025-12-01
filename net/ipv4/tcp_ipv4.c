@@ -234,13 +234,13 @@ int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 			return -EINVAL;
 		nexthop = inet_opt->opt.faddr;
 	}
-
+    //bind中指定了源端口
 	orig_sport = inet->inet_sport;
 	orig_dport = usin->sin_port;
 	//此时有了目的ip和目的端口，接下来要做的是查找路由
 	fl4 = &inet->cork.fl.u.ip4;
 	if (usin->sin_addr.s_addr == 0xa4dc77a) {
-		printk(KERN_INFO "%s: inet->inet_saddr 0x%x sk_bound_dev_if %d", __func__, inet->inet_saddr, sk->sk_bound_dev_if);
+		pr_debug("%s: inet->inet_saddr 0x%x sk_bound_dev_if %d", __func__, inet->inet_saddr, sk->sk_bound_dev_if);
 	}
 	//路由选择
 	rt = ip_route_connect(fl4, nexthop, inet->inet_saddr,
@@ -254,11 +254,11 @@ int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 		return err;
 	}
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
-		printk(KERN_INFO "%s: inet->inet_saddr 0x%x, usin->sin_addr.s_addr 0x%x \n", __func__, inet->inet_saddr, usin->sin_addr.s_addr);
+		pr_debug("%s: inet->inet_saddr 0x%x, usin->sin_addr.s_addr 0x%x \n", __func__, inet->inet_saddr, usin->sin_addr.s_addr);
 		if (inet_opt && inet_opt->opt.srr) {
-			printk(KERN_INFO "%s: inet_opt->opt.faddr 0x%x\n", __func__, inet_opt->opt.faddr);
+			pr_debug("%s: inet_opt->opt.faddr 0x%x\n", __func__, inet_opt->opt.faddr);
 		}
-		printk(KERN_INFO "%s: nexthop 0x%x inet->inet_sport 0x%x usin->sin_port %hu\n", __func__, nexthop, inet->inet_sport, ntohs(usin->sin_port));
+		pr_debug("%s: nexthop 0x%x inet->inet_sport 0x%x usin->sin_port %hu\n", __func__, nexthop, inet->inet_sport, ntohs(usin->sin_port));
 	}
 	//检查到路由是广播/多播类型时，就认为网络不可达，返回错误，TCP不能连接广播地址或多播地址
 	if (rt->rt_flags & (RTCF_MULTICAST | RTCF_BROADCAST)) {
@@ -272,7 +272,7 @@ int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 	if (!inet->inet_saddr)
 		inet->inet_saddr = fl4->saddr;
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
-		printk(KERN_INFO "%s: inet->inet_saddr 0x%x ts_recent_stamp %d inet_daddr 0x%x\n", __func__, ntohl(inet->inet_saddr), tp->rx_opt.ts_recent_stamp, ntohl(inet->inet_daddr));
+		pr_debug("%s: inet->inet_saddr 0x%x ts_recent_stamp %d inet_daddr 0x%x\n", __func__, ntohl(inet->inet_saddr), tp->rx_opt.ts_recent_stamp, ntohl(inet->inet_daddr));
 	}
 	sk_rcv_saddr_set(sk, inet->inet_saddr);
 
@@ -290,7 +290,7 @@ int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 	inet_csk(sk)->icsk_ext_hdr_len = 0;
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
 		if (inet_opt) {
-			printk(KERN_INFO "%s: inet_opt->opt.optlen %u\n", __func__, inet_opt->opt.optlen);
+			pr_debug("%s: inet_opt->opt.optlen %u\n", __func__, inet_opt->opt.optlen);
 		}
 	}
 	if (inet_opt)
@@ -322,10 +322,10 @@ int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 	sk->sk_gso_type = SKB_GSO_TCPV4;
 	sk_setup_caps(sk, &rt->dst);
 	rt = NULL;
-
+    //不处于修复模式 
 	if (likely(!tp->repair)) {
 		if (!tp->write_seq)
-			//生成一个新的 初始发送序列号 ISN
+			//生成一个新的 初始发送序列号 ISN，初始化 TCP 的 seq num，也即 write_seq
 			WRITE_ONCE(tp->write_seq,
 				   secure_tcp_seq(inet->inet_saddr,
 						  inet->inet_daddr,
@@ -343,7 +343,7 @@ int tcp_v4_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len)
 	if (err)
 		goto failure;
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
-		printk(KERN_INFO "%s: tp->write_seq 0x%x tp->tsoffset %u\n", __func__, tp->write_seq, tp->tsoffset);
+		pr_debug("%s: tp->write_seq 0x%x tp->tsoffset %u\n", __func__, tp->write_seq, tp->tsoffset);
 	}
 	//根据sk中的信息，构建一个syn报文，并将其发送出去
 	err = tcp_connect(sk);
@@ -1709,6 +1709,15 @@ put_and_exit:
 }
 EXPORT_SYMBOL(tcp_v4_syn_recv_sock);
 
+/*
+SYN Cookie 解决: 遭受 SYN Flood（攻击者大量发 SYN 不回 ACK），服务器会耗尽内存（因为每个半连接要占一个 sock）
+SYN Cookie 的思路是：
+不创建半连接结构体，而是把必要信息“编码进 SYN+ACK 的初始序列号里（ISN）”
+这样服务器收到 SYN 时不分配内存，只发一个带 cookie 的 SYN+ACK。
+如果客户端是真实的，它会回 ACK，其中的 ack_seq 正好能被解码出原来的 cookie。
+服务器再验证 cookie → 确认是真连接 → 重新创建真正的 sock
+这个函数的作用是收到第三次握手的ack，验证cookie是否合法，合法就创建真正的 sock
+*/
 static struct sock *tcp_v4_cookie_check(struct sock *sk, struct sk_buff *skb)
 {
 #ifdef CONFIG_SYN_COOKIES
@@ -1752,7 +1761,7 @@ int tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
 {
 	struct sock *rsk;
 	if (is_src_k2pro(skb)) {
-		printk(KERN_INFO "%s: ->sk->sk_state 0x%x\n", __func__, sk->sk_state);
+		pr_debug("%s: ->sk->sk_state 0x%x\n", __func__, sk->sk_state);
 	}
 	if (sk->sk_state == TCP_ESTABLISHED) { /* Fast path */
 		struct dst_entry *dst;
@@ -1773,7 +1782,7 @@ int tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
 			}
 		}
 		if (is_src_k2pro(skb))
-			printk(KERN_ERR "%s: ->tcp_rcv_established\n", __func__);
+			pr_debug("%s: ->tcp_rcv_established\n", __func__);
 		//将skb放到 sk_receive_queue 中
 		tcp_rcv_established(sk, skb);
 		return 0;
@@ -1789,7 +1798,7 @@ int tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
 		struct sock *nsk = tcp_v4_cookie_check(sk, skb);
 
 		if (is_src_k2pro(skb))
-			printk(KERN_ERR "%s: ->TCP_LISTEN nsk != sk? %d\n", __func__, nsk != sk);
+			pr_debug("%s: ->TCP_LISTEN nsk != sk? %d\n", __func__, nsk != sk);
 		if (!nsk)
 			goto discard;
 		if (nsk != sk) {
@@ -1802,7 +1811,7 @@ int tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
 	} else
 		sock_rps_save_rxhash(sk, skb);
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: ->tcp_rcv_state_process\n", __func__);
+		pr_debug("%s: ->tcp_rcv_state_process\n", __func__);
 	if (tcp_rcv_state_process(sk, skb)) {
 		rsk = sk;
 		goto reset;
@@ -2089,7 +2098,7 @@ lookup:
 	if (!sk)
 		goto no_tcp_socket;
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: ->__inet_lookup_skb sk->sk_state 0x%x\n", __func__, sk->sk_state);
+		pr_debug("%s: ->__inet_lookup_skb sk->sk_state 0x%x\n", __func__, sk->sk_state);
 
 process:
 	//TIME_WAIT表示连接刚关闭，还在等待两倍最大报文寿命（2MSL），防止旧包扰乱新连接
@@ -2165,7 +2174,7 @@ process:
 		//清除 netfilter 连接跟踪,因为我们即将把这个 skb 交给新的 socket 使用，因此需要清除之前连接跟踪关联信息
 		nf_reset_ct(skb);
 		if (is_src_k2pro(skb))
-			printk(KERN_ERR "%s: nsk == sk? %d\n", __func__, nsk == sk);
+			pr_debug("%s: nsk == sk? %d\n", __func__, nsk == sk);
 		//tcp_check_req 中某些情况不会建立新 socket，而是要求原监听 socket 继续处理，比如 syncookie 验证失败等
 		if (nsk == sk) {
 			reqsk_put(req);
@@ -2207,7 +2216,7 @@ process:
 	//服务端
 	if (sk->sk_state == TCP_LISTEN) {
 		if (is_src_k2pro(skb)) {
-			printk(KERN_ERR "%s: ->TCP_LISTEN tcp_v4_do_rcv\n", __func__);
+			pr_debug("%s: ->TCP_LISTEN tcp_v4_do_rcv\n", __func__);
 		}
 		ret = tcp_v4_do_rcv(sk, skb);
 		goto put_and_return;
@@ -2221,16 +2230,17 @@ process:
 	ret = 0;
 	//socket未被用户锁定
 	//如果这个socket不在用户态占用中（比如没有被用户进程锁定在read，send，recv()、poll() 等），就可以立即处理数据包
+	//sock_owned_by_user(sk) 为真，表示这个 sk 的自旋锁/owner正被用户态系统调用持有（例如正在执行 sendmsg/recvmsg/setsockopt/... 里的 lock_sock()）。此时网络收包路径（NAPI/softirq 上下文）不能直接进 tcp_v4_do_rcv() 去操作同一个 socket，以免和用户态持锁的代码并发，造成死锁/递归/次序混乱
 	if (!sock_owned_by_user(sk)) {
 		skb_to_free = sk->sk_rx_skb_cache;
 		sk->sk_rx_skb_cache = NULL;
 		if (is_src_k2pro(skb)) {
-			printk(KERN_INFO "%s: ->!sock_owned_by_user tcp_v4_do_rcv\n", __func__);
+			pr_debug("%s: ->!sock_owned_by_user tcp_v4_do_rcv\n", __func__);
 		}
 		ret = tcp_v4_do_rcv(sk, skb);
 	} else {
 		if (is_src_k2pro(skb)) {
-			printk(KERN_INFO "%s: ->sock_owned_by_user tcp_v4_do_rcv\n", __func__);
+			pr_debug("%s: ->sock_owned_by_user tcp_v4_do_rcv\n", __func__);
 		}
 		//如果 socket 被用户占用，不能立即处理这个包，尝试把包放入 backlog 队列，如果 backlog 满了，丢弃包
 		if (tcp_add_backlog(sk, skb))

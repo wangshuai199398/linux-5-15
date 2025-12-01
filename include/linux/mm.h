@@ -1641,7 +1641,7 @@ void page_address_init(void);
 #endif
 
 #if !defined(HASHED_PAGE_VIRTUAL) && !defined(WANT_PAGE_VIRTUAL)
-//
+//page的虚拟地址
 #define page_address(page) lowmem_page_address(page)
 #define set_page_address(page, address)  do { } while(0)
 #define page_address_init()  do { } while(0)
@@ -2667,11 +2667,11 @@ extern unsigned long __must_check vm_mmap(struct file *, unsigned long,
 struct vm_unmapped_area_info {
 #define VM_UNMAPPED_AREA_TOPDOWN 1
 	unsigned long flags;
-	unsigned long length;
-	unsigned long low_limit;
+	unsigned long length;/*需要的映射长度*/
+	unsigned long low_limit;/*允许的地址范围*/
 	unsigned long high_limit;
 	unsigned long align_mask;
-	unsigned long align_offset;
+	unsigned long align_offset;/*要求返回地址满足 (addr - align_offset) & align_mask == 0*/
 };
 
 extern unsigned long vm_unmapped_area(struct vm_unmapped_area_info *info);
@@ -2748,7 +2748,7 @@ struct vm_area_struct *vma_lookup(struct mm_struct *mm, unsigned long addr)
 
 	return vma;
 }
-
+/*“如果这是一个栈（VM_GROWSDOWN），那它的有效起点不是 vm_start，而是要在它前面再保留一个额外的 gap（stack guard gap），防止 mmap 或其他 VMA 紧贴栈区域。”*/
 static inline unsigned long vm_start_gap(struct vm_area_struct *vma)
 {
 	unsigned long vm_start = vma->vm_start;

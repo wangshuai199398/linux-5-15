@@ -1035,7 +1035,7 @@ static void tcp_tsq_write(struct sock *sk)
 			tcp_xmit_retransmit_queue(sk);
 		}
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "tcp_tsq_write\n");
+			pr_debug("tcp_tsq_write\n");
 		tcp_write_xmit(sk, tcp_current_mss(sk), tp->nonagle,
 			       0, GFP_ATOMIC);
 	}
@@ -1273,7 +1273,7 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	tp->tcp_wstamp_ns = max(tp->tcp_wstamp_ns, tp->tcp_clock_cache);
 	skb->skb_mstamp_ns = tp->tcp_wstamp_ns;
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->clone_it %d prior_wstamp %llu tp->tcp_wstamp_ns %llu skb->skb_mstamp_ns %llu\n", __func__, clone_it, prior_wstamp, tp->tcp_wstamp_ns, skb->skb_mstamp_ns);
+		pr_debug("%s: ->clone_it %d prior_wstamp %llu tp->tcp_wstamp_ns %llu skb->skb_mstamp_ns %llu\n", __func__, clone_it, prior_wstamp, tp->tcp_wstamp_ns, skb->skb_mstamp_ns);
 	//克隆新skb
 	if (clone_it) {
 		TCP_SKB_CB(skb)->tx.in_flight = TCP_SKB_CB(skb)->end_seq
@@ -1301,7 +1301,7 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	memset(&opts, 0, sizeof(opts));
 
 	if (inet->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->inet_sk tcb->tcp_flags 0x%x\n", __func__, tcb->tcp_flags);
+		pr_debug("%s: ->inet_sk tcb->tcp_flags 0x%x\n", __func__, tcb->tcp_flags);
 	if (unlikely(tcb->tcp_flags & TCPHDR_SYN)) {
 		tcp_options_size = tcp_syn_options(sk, skb, &opts, &md5);
 	} else {
@@ -1320,7 +1320,7 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	}
 	tcp_header_size = tcp_options_size + sizeof(struct tcphdr);
 	if (inet->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->inet_sk tcp_header_size %u tcp_options_size %u tcb->tcp_flags 0x%x sk_wmem_alloc_get(sk) %d\n", __func__,
+		pr_debug("%s: ->inet_sk tcp_header_size %u tcp_options_size %u tcb->tcp_flags 0x%x sk_wmem_alloc_get(sk) %d\n", __func__,
 											tcp_header_size, tcp_options_size, tcb->tcp_flags, sk_wmem_alloc_get(sk));
 
 	/* if no packet is in qdisc/device queue, then allow XPS to select
@@ -1345,7 +1345,7 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	skb_reset_transport_header(skb);
 
 	if (inet->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->skb->transport_header %hu skb->data %p skb->head %p skb_is_tcp_pure_ack(skb) %d\n", __func__,
+		pr_debug("%s: ->skb->transport_header %hu skb->data %p skb->head %p skb_is_tcp_pure_ack(skb) %d\n", __func__,
 											skb->transport_header, skb->data, skb->head, skb_is_tcp_pure_ack(skb));
 
 	skb_orphan(skb);
@@ -1395,10 +1395,10 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	}
 
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
-		printk(KERN_INFO "%s: ->tcb->seq 0x%x tp->snd_up 0x%x th->urg %hu\n", __func__, tcb->seq, tp->snd_up, th->urg);
-		printk(KERN_INFO "%s: ->th->source %hu th->dest %hu th->seq 0x%x th->ack_seq 0x%x tp->rcv_wnd 0x%x\n", __func__,
+		pr_debug("%s: ->tcb->seq 0x%x tp->snd_up 0x%x th->urg %hu\n", __func__, tcb->seq, tp->snd_up, th->urg);
+		pr_debug("%s: ->th->source %hu th->dest %hu th->seq 0x%x th->ack_seq 0x%x tp->rcv_wnd 0x%x\n", __func__,
 										ntohs(th->source), ntohs(th->dest), th->seq, th->ack_seq, tp->rcv_wnd);
-		printk(KERN_INFO "%s: sk->sk_gso_type %d tp->rcv_wnd 0x%x CONFIG_TCP_MD5SIG %d md5 %p\n", __func__, sk->sk_gso_type, ntohs(th->window), CONFIG_TCP_MD5SIG, md5);
+		pr_debug("%s: sk->sk_gso_type %d tp->rcv_wnd 0x%x CONFIG_TCP_MD5SIG %d md5 %p\n", __func__, sk->sk_gso_type, ntohs(th->window), CONFIG_TCP_MD5SIG, md5);
 	}
 	//将 TCP 选项写入到 TCP 首部中
 	tcp_options_write((__be32 *)(th + 1), tp, &opts);
@@ -1416,16 +1416,16 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	bpf_skops_write_hdr_opt(sk, skb, NULL, NULL, 0, &opts);
 
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
-		printk(KERN_INFO "%s: ->th->check 0x%x skb->csum_start 0x%x skb->csum_offset 0x%x\n", __func__, th->check, skb->csum_start, skb->csum_offset);
+		pr_debug("%s: ->th->check 0x%x skb->csum_start 0x%x skb->csum_offset 0x%x\n", __func__, th->check, skb->csum_start, skb->csum_offset);
 	}
 	//填充check, csum_start,csum_offset就是csum联合体
 	INDIRECT_CALL_INET(icsk->icsk_af_ops->send_check,
 			   tcp_v6_send_check, tcp_v4_send_check,
 			   sk, skb);
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
-		printk(KERN_INFO "%s: ->th->check 0x%x skb->csum_start 0x%x skb->csum_offset 0x%x\n", __func__, ntohs(th->check), skb->csum_start, skb->csum_offset);
-		printk(KERN_INFO "%s: ->skb->len %u tcp_header_size %u tp->data_segs_out %u tp->bytes_sent %llu\n", __func__, skb->len, tcp_header_size, tp->data_segs_out, tp->bytes_sent);
-		printk(KERN_INFO "%s: ->tp->lsndtime %u inet_csk(sk)->icsk_ack.pingpong 0x%x\n", __func__, tp->lsndtime, inet_csk(sk)->icsk_ack.pingpong);
+		pr_debug("%s: ->th->check 0x%x skb->csum_start 0x%x skb->csum_offset 0x%x\n", __func__, ntohs(th->check), skb->csum_start, skb->csum_offset);
+		pr_debug("%s: ->skb->len %u tcp_header_size %u tp->data_segs_out %u tp->bytes_sent %llu\n", __func__, skb->len, tcp_header_size, tp->data_segs_out, tp->bytes_sent);
+		pr_debug("%s: ->tp->lsndtime %u inet_csk(sk)->icsk_ack.pingpong 0x%x\n", __func__, tp->lsndtime, inet_csk(sk)->icsk_ack.pingpong);
 	}
 	//更新TCP状态机中与ACK发送有关的状态变量，比如统计信息、拥塞控制、RTT 测量等
 	if (likely(tcb->tcp_flags & TCPHDR_ACK))
@@ -1438,28 +1438,28 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	}
 
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
-		printk(KERN_INFO "%s: ->tp->lsndtime %u inet_csk(sk)->icsk_ack.pingpong 0x%x\n", __func__, tp->lsndtime, inet_csk(sk)->icsk_ack.pingpong);
-		printk(KERN_INFO "%s: ->tcb->end_seq 0x%x tp->snd_nxt 0x%x tcb->seq 0x%x\n", __func__, tcb->end_seq, tp->snd_nxt, tcb->seq);
+		pr_debug("%s: ->tp->lsndtime %u inet_csk(sk)->icsk_ack.pingpong 0x%x\n", __func__, tp->lsndtime, inet_csk(sk)->icsk_ack.pingpong);
+		pr_debug("%s: ->tcb->end_seq 0x%x tp->snd_nxt 0x%x tcb->seq 0x%x\n", __func__, tcb->end_seq, tp->snd_nxt, tcb->seq);
 	}
 
 	if (after(tcb->end_seq, tp->snd_nxt) || tcb->seq == tcb->end_seq)
 		TCP_ADD_STATS(sock_net(sk), TCP_MIB_OUTSEGS, tcp_skb_pcount(skb));
 
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: tp->segs_out %d tcp_skb_pcount(skb) %d\n", __func__, tp->segs_out, tcp_skb_pcount(skb));
+		pr_debug("%s: tp->segs_out %d tcp_skb_pcount(skb) %d\n", __func__, tp->segs_out, tcp_skb_pcount(skb));
 	tp->segs_out += tcp_skb_pcount(skb);
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: tp->segs_out %d tcp_skb_pcount(skb) %d skb->l4_hash %u skb->hash %u\n", __func__, tp->segs_out, tcp_skb_pcount(skb), skb->l4_hash, skb->hash);
+		pr_debug("%s: tp->segs_out %d tcp_skb_pcount(skb) %d skb->l4_hash %u skb->hash %u\n", __func__, tp->segs_out, tcp_skb_pcount(skb), skb->l4_hash, skb->hash);
 
 	skb_set_hash_from_sk(skb, sk);
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: skb->l4_hash %u skb->hash 0x%x\n", __func__, skb->l4_hash, skb->hash);
+		pr_debug("%s: skb->l4_hash %u skb->hash 0x%x\n", __func__, skb->l4_hash, skb->hash);
 	/* OK, its time to fill skb_shinfo(skb)->gso_{segs|size} */
 	skb_shinfo(skb)->gso_segs = tcp_skb_pcount(skb);
 	skb_shinfo(skb)->gso_size = tcp_skb_mss(skb);
 
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: skb_shinfo(skb)->gso_segs %d skb_shinfo(skb)->gso_size %d skb->skb_mstamp_ns %llu\n", __func__,
+		pr_debug("%s: skb_shinfo(skb)->gso_segs %d skb_shinfo(skb)->gso_size %d skb->skb_mstamp_ns %llu\n", __func__,
 									skb_shinfo(skb)->gso_segs, skb_shinfo(skb)->gso_size, skb->skb_mstamp_ns);
 
 	/* Leave earliest departure time in skb->tstamp (skb->skb_mstamp_ns) */
@@ -1471,7 +1471,7 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	tcp_add_tx_delay(skb, tp);
 
 	if (inet->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->ip_queue_xmit skb->skb_mstamp_ns %llu\n", __func__, skb->skb_mstamp_ns);
+		pr_debug("%s: ->ip_queue_xmit skb->skb_mstamp_ns %llu\n", __func__, skb->skb_mstamp_ns);
 	//调用网络层发送接口
 	err = INDIRECT_CALL_INET(icsk->icsk_af_ops->queue_xmit,
 				 inet6_csk_xmit, ip_queue_xmit,
@@ -1484,10 +1484,10 @@ static int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	if (!err && oskb) {
 		if (inet->cork.fl.u.ip4.daddr == 0xa4dc77a) {
 			if (sk->sk_pacing_status != SK_PACING_NONE) {
-				printk(KERN_INFO "%s: ->sk->sk_pacing_status != SK_PACING_NONE\n", __func__);
+				pr_debug("%s: ->sk->sk_pacing_status != SK_PACING_NONE\n", __func__);
 			}
 			if (!tp->packets_out) {
-				printk(KERN_INFO "%s: ->!tp->packets_out\n", __func__);
+				pr_debug("%s: ->!tp->packets_out\n", __func__);
 			}
 		}
 		tcp_update_skb_after_send(sk, oskb, prior_wstamp);
@@ -1503,7 +1503,7 @@ static int tcp_transmit_skb(struct sock *sk, struct sk_buff *skb, int clone_it,
 			    gfp_t gfp_mask)
 {
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s ->__tcp_transmit_skb clone_it: %d\n", __func__, clone_it);
+		pr_debug("%s ->__tcp_transmit_skb clone_it: %d\n", __func__, clone_it);
 	return __tcp_transmit_skb(sk, skb, clone_it, gfp_mask,
 				  tcp_sk(sk)->rcv_nxt);
 }
@@ -1625,7 +1625,7 @@ int tcp_fragment(struct sock *sk, enum tcp_queue tcp_queue,
 	int nlen;
 	u8 flags;
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->skb->len %d len %u\n", __func__, skb->len, len);
+		pr_debug("%s: ->skb->len %d len %u\n", __func__, skb->len, len);
 	if (WARN_ON(len > skb->len))
 		return -EINVAL;
 
@@ -1788,7 +1788,7 @@ static inline int __tcp_mtu_to_mss(struct sock *sk, int pmtu)
 	/* 用 pmtu 减去 IP 头 + 基础 TCP 头 1500-20-20*/
 	mss_now = pmtu - icsk->icsk_af_ops->net_header_len - sizeof(struct tcphdr);
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: icsk->icsk_af_ops->net_header_len %hu mss_now %d ->net_frag_header_len %d\n", __func__, icsk->icsk_af_ops->net_header_len, mss_now, icsk->icsk_af_ops->net_frag_header_len);
+		pr_debug("%s: icsk->icsk_af_ops->net_header_len %hu mss_now %d ->net_frag_header_len %d\n", __func__, icsk->icsk_af_ops->net_header_len, mss_now, icsk->icsk_af_ops->net_frag_header_len);
 
 	/* IPv6 adds a frag_hdr in case RTAX_FEATURE_ALLFRAG is set */
 	if (icsk->icsk_af_ops->net_frag_header_len) {
@@ -1798,7 +1798,7 @@ static inline int __tcp_mtu_to_mss(struct sock *sk, int pmtu)
 			mss_now -= icsk->icsk_af_ops->net_frag_header_len;
 	}
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s:tp->rx_opt.mss_clamp %hu icsk->icsk_ext_hdr_len %hu\n", __func__, tp->rx_opt.mss_clamp, icsk->icsk_ext_hdr_len);
+		pr_debug("%s:tp->rx_opt.mss_clamp %hu icsk->icsk_ext_hdr_len %hu\n", __func__, tp->rx_opt.mss_clamp, icsk->icsk_ext_hdr_len);
 
 	/* Clamp it (mss_clamp does not include tcp options) */
 	if (mss_now > tp->rx_opt.mss_clamp)
@@ -1895,7 +1895,7 @@ unsigned int tcp_sync_mss(struct sock *sk, u32 pmtu)
 
 	mss_now = tcp_mtu_to_mss(sk, pmtu);
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: -> mss_now %u tcp_header_len %hu\n", __func__, mss_now, tp->tcp_header_len);
+		pr_debug("%s: -> mss_now %u tcp_header_len %hu\n", __func__, mss_now, tp->tcp_header_len);
 	//根据发送窗口大小进一步限制 MSS
 	mss_now = tcp_bound_to_half_wnd(tp, mss_now);
 
@@ -1908,7 +1908,7 @@ unsigned int tcp_sync_mss(struct sock *sk, u32 pmtu)
 	//更新 TCP MSS 缓存
 	tp->mss_cache = mss_now;
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: -> mss_now %u\n", __func__, mss_now);
+		pr_debug("%s: -> mss_now %u\n", __func__, mss_now);
 
 	return mss_now;
 }
@@ -2229,7 +2229,7 @@ static int tso_fragment(struct sock *sk, struct sk_buff *skb, unsigned int len,
 				    skb, len, mss_now, gfp);
 
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->skb->len %d skb->data_len %u\n", __func__, skb->len, skb->data_len);
+		pr_debug("%s: ->skb->len %d skb->data_len %u\n", __func__, skb->len, skb->data_len);
 	buff = sk_stream_alloc_skb(sk, 0, gfp, true);
 	if (unlikely(!buff))
 		return -ENOMEM;
@@ -2462,7 +2462,7 @@ static int tcp_mtu_probe(struct sock *sk)
 		   tp->rx_opt.num_sacks || tp->rx_opt.dsack))
 		return -1;
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->return -1\n", __func__);
+		pr_debug("%s: ->return -1\n", __func__);
 	/* Use binary search for probe_size between tcp_mss_base,
 	 * and current mss_clamp. if (search_high - search_low)
 	 * smaller than a threshold, backoff from probing.
@@ -2586,19 +2586,19 @@ static bool tcp_pacing_check(struct sock *sk)
 
 	if (!tcp_needs_internal_pacing(sk)) {
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s: ->!tcp_needs_internal_pacing\n", __func__);
+			pr_debug("%s: ->!tcp_needs_internal_pacing\n", __func__);
 		return false;
 	}
 
 	if (tp->tcp_wstamp_ns <= tp->tcp_clock_cache) {
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s: ->tp->tcp_wstamp_ns %llu tp->tcp_clock_cache %llu\n", __func__, tp->tcp_wstamp_ns, tp->tcp_clock_cache);
+			pr_debug("%s: ->tp->tcp_wstamp_ns %llu tp->tcp_clock_cache %llu\n", __func__, tp->tcp_wstamp_ns, tp->tcp_clock_cache);
 		return false;
 	}
 
 	if (!hrtimer_is_queued(&tp->pacing_timer)) {
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s: ->!hrtimer_is_queued\n", __func__);
+			pr_debug("%s: ->!hrtimer_is_queued\n", __func__);
 		hrtimer_start(&tp->pacing_timer,
 			      ns_to_ktime(tp->tcp_wstamp_ns),
 			      HRTIMER_MODE_ABS_PINNED_SOFT);
@@ -2749,7 +2749,7 @@ static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 		/* Do MTU probing. */
 		result = tcp_mtu_probe(sk);
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s: ->tcp_mtu_probe result %d\n", __func__, result);
+			pr_debug("%s: ->tcp_mtu_probe result %d\n", __func__, result);
 		if (!result) {
 			return false;
 		} else if (result > 0) {
@@ -2759,7 +2759,7 @@ static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 
 	max_segs = tcp_tso_segs(sk, mss_now);
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->gfp 0x%x max_segs %u sk->sk_gso_max_segs %u\n", __func__, gfp, max_segs, sk->sk_gso_max_segs);
+		pr_debug("%s: ->gfp 0x%x max_segs %u sk->sk_gso_max_segs %u\n", __func__, gfp, max_segs, sk->sk_gso_max_segs);
 	//循环获取待发送skb，发送队列中的第一个尚未发送的报文段
 	while ((skb = tcp_send_head(sk))) {
 		unsigned int limit;
@@ -2776,14 +2776,14 @@ static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 			break;
 
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s: tcp_skb_pcount(skb) %d\n", __func__, tcp_skb_pcount(skb));
+			pr_debug("%s: tcp_skb_pcount(skb) %d\n", __func__, tcp_skb_pcount(skb));
 
 		tso_segs = tcp_init_tso_segs(skb, mss_now);
 		BUG_ON(!tso_segs);
 		//拥塞窗口：当前发送的包数量小于拥塞窗口，就可以发送新数据，否则不能发送，需要等待ACK回来释放窗口
 		cwnd_quota = tcp_cwnd_test(tp, skb);
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s: cwnd_quota %d tcp_packets_in_flight: %u tcp_snd_cwnd: %u\n", __func__, cwnd_quota, tcp_packets_in_flight(tp), tcp_snd_cwnd(tp));
+			pr_debug("%s: cwnd_quota %d tcp_packets_in_flight: %u tcp_snd_cwnd: %u\n", __func__, cwnd_quota, tcp_packets_in_flight(tp), tcp_snd_cwnd(tp));
 
 		if (!cwnd_quota) {
 			if (push_one == 2)
@@ -2796,14 +2796,14 @@ static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 		//接收方 snd_wnd 告诉发送方“我还能接多少”
 		//发送方 cwnd    根据拥塞算法控制“最多发这么多”
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s: TCP_SKB_CB(skb)->end_seq %u TCP_SKB_CB(skb)->seq %u tcp_wnd_end(tp) %u\n", __func__, TCP_SKB_CB(skb)->end_seq, TCP_SKB_CB(skb)->seq, tcp_wnd_end(tp));
+			pr_debug("%s: TCP_SKB_CB(skb)->end_seq %u TCP_SKB_CB(skb)->seq %u tcp_wnd_end(tp) %u\n", __func__, TCP_SKB_CB(skb)->end_seq, TCP_SKB_CB(skb)->seq, tcp_wnd_end(tp));
 		if (unlikely(!tcp_snd_wnd_test(tp, skb, mss_now))) {
 			is_rwnd_limited = true;
 			break;
 		}
 
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s: ->skb->len = %d tso_segs %u tp->snd_una %u tp->snd_up %u\n", __func__, skb->len, tso_segs, tp->snd_una, tp->snd_up);
+			pr_debug("%s: ->skb->len = %d tso_segs %u tp->snd_una %u tp->snd_up %u\n", __func__, skb->len, tso_segs, tp->snd_una, tp->snd_up);
 
 		if (tso_segs == 1) {
 			//决定当前 TCP 包是否受 Nagle 算法限制，是否应该延迟发送以合并更大的包
@@ -2829,11 +2829,11 @@ static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 							  max_segs),
 						    nonagle);
 			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-				printk(KERN_INFO "%s: ->limit %u\n", __func__, limit);
+				pr_debug("%s: ->limit %u\n", __func__, limit);
 		}
 
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s: ->skb->len %d limit %u\n", __func__, skb->len, limit);
+			pr_debug("%s: ->skb->len %d limit %u\n", __func__, skb->len, limit);
 		if (skb->len > limit && unlikely(tso_fragment(sk, skb, limit, mss_now, gfp)))
 			break;
 		//检查TCP发送队列是否满足一定的条件（比如是否过小或拥塞），以决定是否需要采取某些拥塞控制或流量控制措施
@@ -2849,7 +2849,7 @@ static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 			break;
 		
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s ->tcp_transmit_skb: skb->len = %d TCP_SKB_CB(skb)->end_seq %u TCP_SKB_CB(skb)->seq %u\n", __func__, skb->len, TCP_SKB_CB(skb)->end_seq, TCP_SKB_CB(skb)->seq);
+			pr_debug("%s ->tcp_transmit_skb: skb->len = %d TCP_SKB_CB(skb)->end_seq %u TCP_SKB_CB(skb)->seq %u\n", __func__, skb->len, TCP_SKB_CB(skb)->end_seq, TCP_SKB_CB(skb)->seq);
 		//真正开启发送
 		if (unlikely(tcp_transmit_skb(sk, skb, 1, gfp)))
 			break;
@@ -2875,14 +2875,14 @@ repair:
 
 	is_cwnd_limited |= (tcp_packets_in_flight(tp) >= tcp_snd_cwnd(tp));
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s ->is_rwnd_limited %d sent_pkts %u is_cwnd_limited %d\n", __func__, is_rwnd_limited, sent_pkts, is_cwnd_limited);
+		pr_debug("%s ->is_rwnd_limited %d sent_pkts %u is_cwnd_limited %d\n", __func__, is_rwnd_limited, sent_pkts, is_cwnd_limited);
 
 	if (likely(sent_pkts || is_cwnd_limited))
 		tcp_cwnd_validate(sk, is_cwnd_limited);
 
 	if (likely(sent_pkts)) {
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s ->tcp_in_cwnd_reduction(sk) %d tp->prr_out %u\n", __func__, tcp_in_cwnd_reduction(sk), tp->prr_out);
+			pr_debug("%s ->tcp_in_cwnd_reduction(sk) %d tp->prr_out %u\n", __func__, tcp_in_cwnd_reduction(sk), tp->prr_out);
 		if (tcp_in_cwnd_reduction(sk))
 			tp->prr_out += sent_pkts;
 
@@ -2907,13 +2907,13 @@ bool tcp_schedule_loss_probe(struct sock *sk, bool advancing_rto)
 
 	// 在Fast Open连接完成三次握手（3WHS）之前，不要进行任何丢包探测
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->rcu_access_pointer(tp->fastopen_rsk) %p\n", __func__, rcu_access_pointer(tp->fastopen_rsk));
+		pr_debug("%s: ->rcu_access_pointer(tp->fastopen_rsk) %p\n", __func__, rcu_access_pointer(tp->fastopen_rsk));
 	if (rcu_access_pointer(tp->fastopen_rsk))
 		return false;
 	// TCP Early Retransmit（早期重传）机制
 	early_retrans = READ_ONCE(sock_net(sk)->ipv4.sysctl_tcp_early_retrans);
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s early_retrans %d tp->packets_out %u tcp_is_sack %d icsk->icsk_ca_state %u\n", __func__, early_retrans, tp->packets_out, tcp_is_sack(tp), icsk->icsk_ca_state);
+		pr_debug("%s early_retrans %d tp->packets_out %u tcp_is_sack %d icsk->icsk_ca_state %u\n", __func__, early_retrans, tp->packets_out, tcp_is_sack(tp), icsk->icsk_ca_state);
 	// 对于启用 SACK 的连接，如果当前不处于丢包恢复阶段，并且连接受限于拥塞窗口（cwnd）或应用层限制，则在 2 倍 RTT 时间后调度一个丢包探测。
 	if ((early_retrans != 3 && early_retrans != 4) ||
 	    !tp->packets_out || !tcp_is_sack(tp) ||
@@ -2921,7 +2921,7 @@ bool tcp_schedule_loss_probe(struct sock *sk, bool advancing_rto)
 	     icsk->icsk_ca_state != TCP_CA_CWR))
 		return false;
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s ->tp->srtt_us %d\n", __func__, tp->srtt_us);
+		pr_debug("%s ->tp->srtt_us %d\n", __func__, tp->srtt_us);
 	//丢包探测（TLP）的超时时间是 2 倍的 RTT。如果当前只有一个未确认的包，为了考虑对端的延迟确认（Delayed ACK），则额外加上最小 RTO。
 	//如果当前还没有 RTT 样本（即 srtt_us 还没被初始化），则使用默认的 TCP_TIMEOUT_INIT 作为探测超时
 	//平滑RTT/4
@@ -2989,7 +2989,7 @@ void tcp_send_loss_probe(struct sock *sk)
 	if (skb && tcp_snd_wnd_test(tp, skb, mss)) {
 		pcount = tp->packets_out;
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "tcp_send_loss_probe\n");
+			pr_debug("tcp_send_loss_probe\n");
 		tcp_write_xmit(sk, mss, TCP_NAGLE_OFF, 2, GFP_ATOMIC);
 		if (tp->packets_out > pcount)
 			goto probe_sent;
@@ -3052,7 +3052,7 @@ void __tcp_push_pending_frames(struct sock *sk, unsigned int cur_mss,
 	if (unlikely(sk->sk_state == TCP_CLOSE))
 		return;
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->tcp_write_xmit cur_mss %u nonagle %d\n", __func__, cur_mss, nonagle);
+		pr_debug("%s: ->tcp_write_xmit cur_mss %u nonagle %d\n", __func__, cur_mss, nonagle);
 	if (tcp_write_xmit(sk, cur_mss, nonagle, 0,
 			   sk_gfp_mask(sk, GFP_ATOMIC)))
 		tcp_check_probe_timer(sk);
@@ -3067,7 +3067,7 @@ void tcp_push_one(struct sock *sk, unsigned int mss_now)
 
 	BUG_ON(!skb || skb->len < mss_now);
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "tcp_push_one -> tcp_write_xmit\n");
+		pr_debug("tcp_push_one -> tcp_write_xmit\n");
 	tcp_write_xmit(sk, mss_now, TCP_NAGLE_PUSH, 1, sk->sk_allocation);
 }
 
@@ -3608,7 +3608,7 @@ void tcp_send_fin(struct sock *sk)
 		tcp_queue_skb(sk, skb);
 	}
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "tcp_send_fin\n");
+		pr_debug("tcp_send_fin\n");
 	__tcp_push_pending_frames(sk, tcp_current_mss(sk), TCP_NAGLE_OFF);
 }
 
@@ -3637,7 +3637,7 @@ void tcp_send_active_reset(struct sock *sk, gfp_t priority)
 	tcp_mstamp_refresh(tcp_sk(sk));
 	/* Send it off. */
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "tcp_send_active_reset -> tcp_transmit_skb \n");
+		pr_debug("tcp_send_active_reset -> tcp_transmit_skb \n");
 	if (tcp_transmit_skb(sk, skb, 0, priority))
 		NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPABORTFAILED);
 
@@ -3665,7 +3665,7 @@ int tcp_send_synack(struct sock *sk)
 	//如果当前报文未带 ACK，则构造 ACK
 	if (!(TCP_SKB_CB(skb)->tcp_flags & TCPHDR_ACK)) {
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s: ->TCPHDR_ACK \n", __func__);
+			pr_debug("%s: ->TCPHDR_ACK \n", __func__);
 		//若 skb 是克隆的，需要复制一份再修改
 		if (skb_cloned(skb)) {
 			struct sk_buff *nskb;
@@ -3690,7 +3690,7 @@ int tcp_send_synack(struct sock *sk)
 		tcp_ecn_send_synack(sk, skb);
 	}
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->tcp_transmit_skb \n", __func__);
+		pr_debug("%s: ->tcp_transmit_skb \n", __func__);
 	return tcp_transmit_skb(sk, skb, 1, GFP_ATOMIC);
 }
 
@@ -3993,7 +3993,7 @@ static int tcp_send_syn_data(struct sock *sk, struct sk_buff *syn)
 		tcp_chrono_start(sk, TCP_CHRONO_BUSY);
 
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "tcp_send_syn_data -> tcp_transmit_skb \n");
+		pr_debug("tcp_send_syn_data -> tcp_transmit_skb \n");
 	err = tcp_transmit_skb(sk, syn_data, 1, sk->sk_allocation);
 
 	syn->skb_mstamp_ns = syn_data->skb_mstamp_ns;
@@ -4062,11 +4062,11 @@ int tcp_connect(struct sock *sk)
 
 	/* Send off SYN; include data in Fast Open. */
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
-		printk(KERN_INFO "%s: ->tp->write_seq 0x%x\n", __func__, tp->write_seq);
+		pr_debug("%s: ->tp->write_seq 0x%x\n", __func__, tp->write_seq);
 		if (tp->fastopen_req) {
-			printk(KERN_INFO "%s: ->tcp_send_syn_data\n", __func__);
+			pr_debug("%s: ->tcp_send_syn_data\n", __func__);
 		} else {
-			printk(KERN_INFO "%s: ->tcp_transmit_skb\n", __func__);
+			pr_debug("%s: ->tcp_transmit_skb\n", __func__);
 		}
 	}
 	//发出SYN 走后边这个
@@ -4190,7 +4190,7 @@ void __tcp_send_ack(struct sock *sk, u32 rcv_nxt)
 
 	/* Send it off, this clears delayed acks for us. */
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s ->__tcp_transmit_skb clone_it: 0\n", __func__);
+		pr_debug("%s ->__tcp_transmit_skb clone_it: 0\n", __func__);
 	__tcp_transmit_skb(sk, buff, 0, (__force gfp_t)0, rcv_nxt);
 }
 EXPORT_SYMBOL_GPL(__tcp_send_ack);
@@ -4231,7 +4231,7 @@ static int tcp_xmit_probe_skb(struct sock *sk, int urgent, int mib)
 	tcp_init_nondata_skb(skb, tp->snd_una - !urgent, TCPHDR_ACK);
 	NET_INC_STATS(sock_net(sk), mib);
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "tcp_xmit_probe_skb -> tcp_transmit_skb \n");
+		pr_debug("tcp_xmit_probe_skb -> tcp_transmit_skb \n");
 	return tcp_transmit_skb(sk, skb, 0, (__force gfp_t)0);
 }
 

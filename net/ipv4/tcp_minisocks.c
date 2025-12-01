@@ -823,7 +823,7 @@ int tcp_child_process(struct sock *parent, struct sock *child,
 	//child socket 当前没有被用户持有（未被应用层调用如 recv() 占用）
 	if (!sock_owned_by_user(child)) {
 		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: ->tcp_rcv_state_process\n", __func__);
+			pr_debug("%s: ->tcp_rcv_state_process\n", __func__);
 		//处理接收的 TCP 包，改变状态机（如 SYN_RECV → ESTABLISHED），或者继续处理数据包。
 		ret = tcp_rcv_state_process(child, skb);
 		/* Wakeup parent, send SIGIO */

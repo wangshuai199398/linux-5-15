@@ -2234,7 +2234,7 @@ static inline int deliver_skb(struct sk_buff *skb,
 		return -ENOMEM;
 	refcount_inc(&skb->users);
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: 0x%x\n", __func__, ntohs(pt_prev->type));
+		pr_debug("%s: 0x%x\n", __func__, ntohs(pt_prev->type));
 	return pt_prev->func(skb, skb->dev, pt_prev, orig_dev);//ip_rcv
 }
 //在一个协议列表中逐个匹配
@@ -2248,7 +2248,7 @@ static inline void deliver_ptype_list_skb(struct sk_buff *skb,
 
 	list_for_each_entry_rcu(ptype, ptype_list, list) {
 		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: ->list_for_each_entry_rcu 0x%x \n", __func__, ntohs(ptype->type));
+			pr_debug("%s: ->list_for_each_entry_rcu 0x%x \n", __func__, ntohs(ptype->type));
 		if (ptype->type != type)
 			continue;
 		if (pt_prev)
@@ -3081,6 +3081,7 @@ static void __netif_reschedule(struct Qdisc *q)
 */
 void __netif_schedule(struct Qdisc *q)
 {
+	//如果这个 qdisc 还没标记成已经被调度SCHED，那么我们现在把它标记为已调度，并且调用 __netif_reschedule(q)重新把它加入调度队列
 	if (!test_and_set_bit(__QDISC_STATE_SCHED, &q->state))
 		__netif_reschedule(q);
 }
@@ -3106,7 +3107,11 @@ void netif_schedule_queue(struct netdev_queue *txq)
 	rcu_read_unlock();
 }
 EXPORT_SYMBOL(netif_schedule_queue);
-
+/*
+当队列从“停发”状态恢复时，你不仅要把状态位改回来
+还要把这个 Qdisc 加入到“待处理队列”中，通知软中断/调度器：
+这个队列现在可以发包了，快来从它这里拿包发出去
+*/
 void netif_tx_wake_queue(struct netdev_queue *dev_queue)
 {
 	if (test_and_clear_bit(__QUEUE_STATE_DRV_XOFF, &dev_queue->state)) {
@@ -3174,9 +3179,11 @@ EXPORT_SYMBOL(netif_device_detach);
  * @dev: network device
  *
  * 将设备标记为已重新连接到系统，并在需要时重新启动设备
+ * 置 PRESENT，如果设备在 running，就 netif_tx_wake_all_queues（清 DRV_XOFF + schedule）+ 启动 watchdog
  */
 void netif_device_attach(struct net_device *dev)
 {
+	//如果之前这个设备还没有标记为 PRESENT（即原值是 0），那现在把它标记为 PRESENT，并且条件为真
 	if (!test_and_set_bit(__LINK_STATE_PRESENT, &dev->state) &&
 	    netif_running(dev)) {
 		netif_tx_wake_all_queues(dev);
@@ -3378,7 +3385,7 @@ struct sk_buff *skb_mac_gso_segment(struct sk_buff *skb,
 	}
 	rcu_read_unlock();
 	if (is_dst_k2pro(skb))
-		printk(KERN_INFO "%s: skb_mac_gso_segment end\n", __func__);
+		pr_debug("%s: skb_mac_gso_segment end\n", __func__);
 	__skb_push(skb, skb->data - skb_mac_header(skb));
 
 	return segs;
@@ -3429,7 +3436,7 @@ struct sk_buff *__skb_gso_segment(struct sk_buff *skb,
 	 * work.
 	 */
 	if (features & NETIF_F_GSO_PARTIAL) {
-		printk(KERN_INFO "GSO partial support enabled\n");
+		pr_debug("GSO partial support enabled\n");
 		netdev_features_t partial_features = NETIF_F_GSO_ROBUST;
 		struct net_device *dev = skb->dev;
 
@@ -3447,7 +3454,7 @@ struct sk_buff *__skb_gso_segment(struct sk_buff *skb,
 	skb_reset_mac_header(skb);
 	skb_reset_mac_len(skb);
 	if (is_dst_k2pro(skb))
-		printk(KERN_INFO "%s: __skb_gso_segment->skb_mac_gso_segment\n", __func__);
+		pr_debug("%s: __skb_gso_segment->skb_mac_gso_segment\n", __func__);
 	segs = skb_mac_gso_segment(skb, features);
 
 	if (segs != skb && unlikely(skb_needs_check(skb, tx_path) && !IS_ERR(segs)))
@@ -3623,7 +3630,7 @@ static int xmit_one(struct sk_buff *skb, struct net_device *dev,
 	unsigned int len;
 	int rc;
 	if (is_dst_k2pro(skb))
-		netdev_info(dev, "%s: ptype_all empty %d dev->ptype_all empty %d\n", __func__, list_empty(&ptype_all), list_empty(&dev->ptype_all));
+		pr_debug("%s: ptype_all empty %d dev->ptype_all empty %d\n", __func__, list_empty(&ptype_all), list_empty(&dev->ptype_all));
 
 	if (dev_nit_active(dev)) {
 		dev_queue_xmit_nit(skb, dev);
@@ -3633,14 +3640,14 @@ static int xmit_one(struct sk_buff *skb, struct net_device *dev,
 	PRANDOM_ADD_NOISE(skb, dev, txq, len + jiffies);
 	trace_net_dev_start_xmit(skb, dev);
 	if (is_dst_k2pro(skb)) {
-		netdev_info(dev, "%s: netdev_start_xmit more %d\n", __func__, more);
-		printk(KERN_INFO "%s: ======== begin ========\n", __func__);
-		skb_dump(KERN_INFO, skb, true);
+		pr_debug("%s: netdev_start_xmit more %d\n", __func__, more);
+		pr_debug("%s: ======== begin ========\n", __func__);
+		skb_dump(KERN_DEBUG, skb, true);
 	}
 	rc = netdev_start_xmit(skb, dev, txq, more);
 	trace_net_dev_xmit(skb, rc, dev, len);
 	if (is_dst_k2pro(skb))
-		netdev_err(dev, "********* kernel tx end ********* \n\n");
+		pr_debug( "********* kernel tx end ********* \n\n");
 	return rc;
 }
 
@@ -3655,7 +3662,7 @@ struct sk_buff *dev_hard_start_xmit(struct sk_buff *first, struct net_device *de
 
 		skb_mark_not_on_list(skb);
 		if (is_dst_k2pro(skb))
-			netdev_info(dev, "%s: skb->next =\n", __func__);
+			pr_debug("%s: skb->next =\n", __func__);
 		rc = xmit_one(skb, dev, txq, next != NULL);
 		if (unlikely(!dev_xmit_complete(rc))) {
 			skb->next = next;
@@ -3722,13 +3729,13 @@ static struct sk_buff *validate_xmit_skb(struct sk_buff *skb, struct net_device 
 		goto out_null;
 
 	if (is_dst_k2pro(skb))
-		printk(KERN_INFO "%s: validate_xmit_skb -> netif_needs_gso? \n", __func__);
+		pr_debug("%s: validate_xmit_skb -> netif_needs_gso? \n", __func__);
 
 	if (netif_needs_gso(skb, features)) {
 		struct sk_buff *segs;
 
 		if (is_dst_k2pro(skb))
-			printk(KERN_INFO "%s: validate_xmit_skb: skb_gso_segment \n", __func__);
+			pr_debug("%s: validate_xmit_skb: skb_gso_segment \n", __func__);
 
 		segs = skb_gso_segment(skb, features);
 		if (IS_ERR(segs)) {
@@ -3865,15 +3872,15 @@ static inline int __dev_xmit_skb(struct sk_buff *skb, struct Qdisc *q,
 	int rc;
 
 	qdisc_calculate_pkt_len(skb, q);
-	//判断这个 qdisc 是否 不需要上锁
+	//判断这个 qdisc 是否 不需要上锁 no
 	if (q->flags & TCQ_F_NOLOCK) {
 		if (is_dst_k2pro(skb))
-			printk(KERN_INFO "%s: TCQ_F_NOLOCK q->flags = %d\n", __func__, q->flags);
+			pr_debug("%s: TCQ_F_NOLOCK q->flags = %d\n", __func__, q->flags);
 		//如果可以绕开排队系统
 		if (q->flags & TCQ_F_CAN_BYPASS && nolock_qdisc_is_empty(q) &&
 		    qdisc_run_begin(q)) {
 			if (is_dst_k2pro(skb))
-				printk(KERN_INFO "%s: q->flags = %d\n", __func__, q->flags);
+				pr_debug("%s: q->flags = %d\n", __func__, q->flags);
 			/* Retest nolock_qdisc_is_empty() within the protection
 			 * of q->seqlock to protect from racing with requeuing.
 			 */
@@ -3916,7 +3923,7 @@ no_lock_out:
 		spin_lock(&q->busylock);
 
 	spin_lock(root_lock);
-	//检查这个 qdisc 是否被标记为 DEACTIVATED（失效/不可用）
+	//检查这个 qdisc 是否被标记为 DEACTIVATED（失效/不可用） no
 	if (unlikely(test_bit(__QDISC_STATE_DEACTIVATED, &q->state))) {
 		__qdisc_drop(skb, &to_free);
 		rc = NET_XMIT_DROP;
@@ -3932,7 +3939,7 @@ no_lock_out:
 		qdisc_bstats_update(q, skb);
 
 		if (is_dst_k2pro(skb))
-			printk(KERN_INFO "%s: lock -> sch_direct_xmit\n", __func__);
+			pr_debug("%s: lock -> sch_direct_xmit\n", __func__);
 		if (sch_direct_xmit(skb, q, dev, txq, root_lock, true)) {
 			if (unlikely(contended)) {
 				spin_unlock(&q->busylock);
@@ -4141,7 +4148,7 @@ u16 netdev_pick_tx(struct net_device *dev, struct sk_buff *skb,
 	struct sock *sk = skb->sk;
 	int queue_index = sk_tx_queue_get(sk);
 	if (is_dst_k2pro(skb)) {
-		printk(KERN_INFO "%s: queue_index %d skb->ooo_okay  dev->real_num_tx_queues %u\n", __func__, queue_index, dev->real_num_tx_queues);
+		pr_debug("%s: queue_index %d skb->ooo_okay  dev->real_num_tx_queues %u\n", __func__, queue_index, dev->real_num_tx_queues);
 	}
 	sb_dev = sb_dev ? : dev;
 	if (queue_index < 0 || skb->ooo_okay ||
@@ -4159,7 +4166,7 @@ u16 netdev_pick_tx(struct net_device *dev, struct sk_buff *skb,
 		queue_index = new_index;
 	}
 	if (is_dst_k2pro(skb))
-		printk(KERN_INFO "%s: queue_index %d\n", __func__, queue_index);
+		pr_debug("%s: queue_index %d\n", __func__, queue_index);
 
 	return queue_index;
 }
@@ -4241,7 +4248,7 @@ static int __dev_queue_xmit(struct sk_buff *skb, struct net_device *sb_dev)
 
 	skb_reset_mac_header(skb);
 	if (is_dst_k2pro(skb))
-		printk(KERN_INFO "%s: skb->mac_header %hu skb_shinfo(skb)->tx_flags 0x%x\n", __func__, skb->mac_header, skb_shinfo(skb)->tx_flags);
+		pr_debug("%s: skb->mac_header %hu skb_shinfo(skb)->tx_flags 0x%x\n", __func__, skb->mac_header, skb_shinfo(skb)->tx_flags);
 	skb_assert_len(skb);
 
 	if (unlikely(skb_shinfo(skb)->tx_flags & SKBTX_SCHED_TSTAMP))
@@ -4257,11 +4264,11 @@ static int __dev_queue_xmit(struct sk_buff *skb, struct net_device *sb_dev)
 	qdisc_pkt_len_init(skb);
 #ifdef CONFIG_NET_CLS_ACT
 	if (is_dst_k2pro(skb))
-		printk(KERN_INFO "%s: CONFIG_NET_CLS_ACT \n", __func__);
+		pr_debug("%s: CONFIG_NET_CLS_ACT \n", __func__);
 	skb->tc_at_ingress = 0;
 # ifdef CONFIG_NET_EGRESS
 	if (is_dst_k2pro(skb))
-		printk(KERN_INFO "%s: CONFIG_NET_EGRESS \n", __func__);
+		pr_debug("%s: CONFIG_NET_EGRESS \n", __func__);
 	if (static_branch_unlikely(&egress_needed_key)) {
 		skb = sch_handle_egress(skb, &rc, dev);
 		if (!skb)
@@ -4274,10 +4281,10 @@ static int __dev_queue_xmit(struct sk_buff *skb, struct net_device *sb_dev)
 	 */
 	if (is_dst_k2pro(skb)) {
 		if (dev->priv_flags & IFF_XMIT_DST_RELEASE) {
-			printk(KERN_INFO "%s: dev->priv_flags\n", __func__);
+			pr_debug("%s: dev->priv_flags\n", __func__);
 		}
 	}
-		
+
 	if (dev->priv_flags & IFF_XMIT_DST_RELEASE)
 		skb_dst_drop(skb);//释放数据包上的路由信息
 	else
@@ -4297,7 +4304,7 @@ static int __dev_queue_xmit(struct sk_buff *skb, struct net_device *sb_dev)
 	//tc qdisc show dev enp1s0f0np0 fq_codel fq_codel_enqueue
 	if (q->enqueue) {//回环设备这里是false
 		if (is_dst_k2pro(skb))
-			printk(KERN_INFO "%s: q->enqueue \n", __func__);
+			pr_debug("%s: q->enqueue \n", __func__);
 		rc = __dev_xmit_skb(skb, q, dev, txq);
 		goto out;
 	}
@@ -4333,7 +4340,7 @@ static int __dev_queue_xmit(struct sk_buff *skb, struct net_device *sb_dev)
 			if (!netif_xmit_stopped(txq)) {
 				dev_xmit_recursion_inc();
 				if (is_dst_k2pro(skb))
-					printk(KERN_INFO "%s: dev_hard_start_xmit \n", __func__);
+					pr_debug("%s: dev_hard_start_xmit \n", __func__);
 				skb = dev_hard_start_xmit(skb, dev, txq, &rc);
 				dev_xmit_recursion_dec();
 				if (dev_xmit_complete(rc)) {
@@ -5413,10 +5420,10 @@ another_round:
 	//当前cpu处理的数据包统计
 	__this_cpu_inc(softnet_data.processed);
 
-	//如果启用了 Generic XDP，执行挂载在设备上的 xdp_prog，并根据其返回值决定是否继续处理 skb 或丢弃它
+	//如果启用了 Generic XDP，执行挂载在设备上的 xdp_prog，并根据其返回值决定是否继续处理 skb 或丢弃它 no
 	if (static_branch_unlikely(&generic_xdp_needed_key)) {
 		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: migrate_disable \n", __func__);
+			pr_debug("%s: migrate_disable \n", __func__);
 		int ret2;
 		//禁止当前任务在执行过程中被迁移到其他 CPU
 		migrate_disable();
@@ -5438,33 +5445,33 @@ another_round:
 	if (skb_skip_tc_classify(skb))
 		goto skip_classify;
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: ->deliver_skb pt_prev %p pfmemalloc %d CONFIG_NET_INGRESS %d\n", __func__, pt_prev, pfmemalloc, CONFIG_NET_INGRESS);
+		pr_debug("%s: ->deliver_skb pt_prev %p pfmemalloc %d CONFIG_NET_INGRESS %d\n", __func__, pt_prev, pfmemalloc, CONFIG_NET_INGRESS);
 	//紧急内存的skb不允许ptype_all处理，即tcpdump抓不到
 	if (pfmemalloc)
 		goto skip_taps;
 	//每次循环执行上一次的ptype deliver_skb，paket_type.type 为 ETH_P_ALL，典型场景就是tcpdump抓包所使用的协议
 	list_for_each_entry_rcu(ptype, &ptype_all, list) {
 		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: ->deliver_skb pt_prev %p\n", __func__, pt_prev);
+			pr_debug("%s: ->deliver_skb pt_prev %p\n", __func__, pt_prev);
 		if (pt_prev)
 			ret = deliver_skb(skb, pt_prev, orig_dev);
 		pt_prev = ptype;
 		if (is_src_k2pro(skb)) {
 			if (ptype->type == htons(ETH_P_ALL)) {
-    			printk(KERN_INFO ">>> Grabbing packet for pcap, ptype->func = %pF\n", ptype->func);
+    			pr_debug(">>> Grabbing packet for pcap, ptype->func = %pF\n", ptype->func);
 			}
 		}
 	}
 
 	list_for_each_entry_rcu(ptype, &skb->dev->ptype_all, list) {
 		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: ->dev deliver_skb pt_prev %p\n", __func__, pt_prev);
+			pr_debug("%s: ->dev deliver_skb pt_prev %p\n", __func__, pt_prev);
 		if (pt_prev)
 			ret = deliver_skb(skb, pt_prev, orig_dev);
 		pt_prev = ptype;
 		if (is_src_k2pro(skb)) {
 			if (ptype->type == htons(ETH_P_ALL)) {
-    			printk(KERN_INFO ">>> dev Grabbing packet for pcap, ptype->func = %pF\n", ptype->func);
+    			pr_debug(">>> dev Grabbing packet for pcap, ptype->func = %pF\n", ptype->func);
 			}
 		}
 	}
@@ -5480,7 +5487,7 @@ skip_taps:
 		//another为true表示需要重新处理（比如重定向到另一个netdev）
 		//skb为空表示包被drop
 		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: ->nf_ingress another %d, skb %p\n", __func__, another, skb);
+			pr_debug("%s: ->nf_ingress another %d, skb %p\n", __func__, another, skb);
 		if (another)
 			goto another_round;
 		if (!skb)
@@ -5498,7 +5505,7 @@ skip_classify:
 
 	if (skb_vlan_tag_present(skb)) {
 		if (is_src_k2pro(skb))
-            printk(KERN_INFO "%s: ->skb_vlan_tag_present deliver_skb pt_prev %p\n", __func__, pt_prev);
+            pr_debug("%s: ->skb_vlan_tag_present deliver_skb pt_prev %p\n", __func__, pt_prev);
 		if (pt_prev) {
 			ret = deliver_skb(skb, pt_prev, orig_dev);
 			pt_prev = NULL;
@@ -5518,7 +5525,7 @@ skip_classify:
 	rx_handler = rcu_dereference(skb->dev->rx_handler);
 	if (rx_handler) {
 		if (is_src_k2pro(skb))
-            printk(KERN_INFO "%s: ->rx_handler deliver_skb pt_prev %p\n", __func__, pt_prev);
+            pr_debug("%s: ->rx_handler deliver_skb pt_prev %p\n", __func__, pt_prev);
 		if (pt_prev) {
 			ret = deliver_skb(skb, pt_prev, orig_dev);
 			pt_prev = NULL;
@@ -5581,20 +5588,20 @@ check_vlan_id:
 	/* deliver only exact match when indicated */
 	if (likely(!deliver_exact)) {
 		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: ->deliver_ptype_list_skb !deliver_exact \n", __func__);
+			pr_debug("%s: ->deliver_ptype_list_skb !deliver_exact \n", __func__);
 		//这里会调用上边抓包的deliver_skb, pt_prev 返回skb的协议类型如ipv4 ipv6 arp等
 		deliver_ptype_list_skb(skb, &pt_prev, orig_dev, type,
 				       &ptype_base[ntohs(type) &
 						   PTYPE_HASH_MASK]);
 	}
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: ->deliver_ptype_list_skb ptype_specific \n", __func__);
+		pr_debug("%s: ->deliver_ptype_list_skb ptype_specific \n", __func__);
 	deliver_ptype_list_skb(skb, &pt_prev, orig_dev, type,
 			       &orig_dev->ptype_specific);
 
 	if (unlikely(skb->dev != orig_dev)) {
 		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: ->deliver_ptype_list_skb skb->dev != orig_dev\n", __func__);
+			pr_debug("%s: ->deliver_ptype_list_skb skb->dev != orig_dev\n", __func__);
 		deliver_ptype_list_skb(skb, &pt_prev, orig_dev, type,
 				       &skb->dev->ptype_specific);
 	}
@@ -5636,7 +5643,7 @@ static int __netif_receive_skb_one_core(struct sk_buff *skb, bool pfmemalloc)
 
 	ret = __netif_receive_skb_core(&skb, pfmemalloc, &pt_prev);
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: __netif_receive_skb_core pt_prev %p\n", __func__, pt_prev);
+		pr_debug("%s: __netif_receive_skb_core pt_prev %p\n", __func__, pt_prev);
 	if (pt_prev)
 		ret = INDIRECT_CALL_INET(pt_prev->func, ipv6_rcv, ip_rcv, skb,
 					 skb->dev, pt_prev, orig_dev);
@@ -5680,14 +5687,14 @@ static inline void __netif_receive_skb_list_ptype(struct list_head *head,
 	if (pt_prev->list_func != NULL) {
 		list_for_each_entry_safe(skb, next, head, list) {
             if (is_src_k2pro(skb))
-                printk(KERN_INFO "%s: list_func !=NUll 0x%x\n", __func__, ntohs(pt_prev->type));
+                pr_debug("%s: list_func !=NUll 0x%x\n", __func__, ntohs(pt_prev->type));
 		}
 		INDIRECT_CALL_INET(pt_prev->list_func, ipv6_list_rcv,
 				   ip_list_rcv, head, pt_prev, orig_dev);
 	} else {
 		list_for_each_entry_safe(skb, next, head, list) {
 			if (is_src_k2pro(skb))
-				printk(KERN_INFO "%s: list_for_each_entry_safe 0x%x\n", __func__, ntohs(pt_prev->type));
+				pr_debug("%s: list_for_each_entry_safe 0x%x\n", __func__, ntohs(pt_prev->type));
 			skb_list_del_init(skb);
 			pt_prev->func(skb, skb->dev, pt_prev, orig_dev);//arp_rcv ip_rcv
 		}
@@ -5718,18 +5725,18 @@ static void __netif_receive_skb_list_core(struct list_head *head, bool pfmemallo
 		struct net_device *orig_dev = skb->dev;
 		struct packet_type *pt_prev = NULL;
 		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: list_for_each_entry_safe \n", __func__);
+			pr_debug("%s: list_for_each_entry_safe \n", __func__);
 		skb_list_del_init(skb);
 		__netif_receive_skb_core(&skb, pfmemalloc, &pt_prev);
 
 		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: list_for_each_entry_safe pt_prev %p\n", __func__, pt_prev);
+			pr_debug("%s: list_for_each_entry_safe pt_prev %p\n", __func__, pt_prev);
 		if (!pt_prev)
 			continue;
 		if (is_src_k2pro(skb)) {
-			printk(KERN_INFO "%s: list_for_each_entry_safe 0x%x\n", __func__, ntohs(pt_prev->type));
+			pr_debug("%s: list_for_each_entry_safe 0x%x\n", __func__, ntohs(pt_prev->type));
 			if (pt_curr != pt_prev || od_curr != orig_dev) {
-				printk(KERN_INFO "%s: __netif_receive_skb_list_ptype \n", __func__);
+				pr_debug("%s: __netif_receive_skb_list_ptype \n", __func__);
 			}
 		}
 		//批量处理，只有当某个skb的协议（ip，ipv6，arp）不同了，才调用处理函数对sublist中的报文进行处理
@@ -5793,7 +5800,7 @@ static void __netif_receive_skb_list(struct list_head *head)
 			//相当于先处理子链表sublist中的skb（都是同类型pfmemalloc或非pfmemalloc），然后之后不同类型的包再处理
 			list_cut_before(&sublist, head, &skb->list);
 			if (is_src_k2pro(skb))
-				printk(KERN_INFO "%s: list_for_each_entry_safe \n", __func__);
+				pr_debug("%s: list_for_each_entry_safe \n", __func__);
 			if (!list_empty(&sublist))
 				__netif_receive_skb_list_core(&sublist, pfmemalloc);//处理这一段skb
 			pfmemalloc = !pfmemalloc;
@@ -5809,7 +5816,7 @@ static void __netif_receive_skb_list(struct list_head *head)
 	if (!list_empty(head)) {
 		list_for_each_entry_safe(skb, next, head, list) {
 			if (is_src_k2pro(skb))
-				printk(KERN_INFO "%s: ->__netif_receive_skb_list_core \n", __func__);
+				pr_debug("%s: ->__netif_receive_skb_list_core \n", __func__);
 		}
 		__netif_receive_skb_list_core(head, pfmemalloc);
 	}
@@ -5887,7 +5894,7 @@ static void netif_receive_skb_list_internal(struct list_head *head)
 		net_timestamp_check(READ_ONCE(netdev_tstamp_prequeue), skb);
 		skb_list_del_init(skb);
 		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: list_for_each_entry_safe \n", __func__);
+			pr_debug("%s: list_for_each_entry_safe \n", __func__);
 		if (!skb_defer_rx_timestamp(skb))
 			list_add_tail(&skb->list, &sublist);//不延迟打时间戳的skb加入sublist
 	}
@@ -5901,7 +5908,7 @@ static void netif_receive_skb_list_internal(struct list_head *head)
 			struct rps_dev_flow voidflow, *rflow = &voidflow;
 			int cpu = get_rps_cpu(skb->dev, skb, &rflow);
 			if (is_src_k2pro(skb))
-				printk(KERN_INFO "%s: cpu %d \n", __func__, cpu);
+				pr_debug("%s: cpu %d \n", __func__, cpu);
 			if (cpu >= 0) {
 				/* Will be handled, remove from list */
 				skb_list_del_init(skb);
@@ -5967,7 +5974,7 @@ void netif_receive_skb_list(struct list_head *head)
 	}
 	list_for_each_entry_safe(skb, next, head, list) {
 		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: netif_receive_skb_list_internal \n", __func__);
+			pr_debug("%s: netif_receive_skb_list_internal \n", __func__);
 	}
 	netif_receive_skb_list_internal(head);
 	trace_netif_receive_skb_list_exit(0);
@@ -6076,7 +6083,7 @@ static void gro_normal_list(struct napi_struct *napi)
 
 	list_for_each_entry_safe(skb, next, &napi->rx_list, list) {
 		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: netif_receive_skb_list_internal \n", __func__);
+			pr_debug("%s: netif_receive_skb_list_internal \n", __func__);
 	}
 	netif_receive_skb_list_internal(&napi->rx_list);
 	INIT_LIST_HEAD(&napi->rx_list);
@@ -6091,11 +6098,11 @@ static void gro_normal_one(struct napi_struct *napi, struct sk_buff *skb, int se
 	list_add_tail(&skb->list, &napi->rx_list);
 	napi->rx_count += segs;
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: ->gro_normal_one napi->rx_count %d gro_normal_batch %d\n", __func__,
+		pr_debug("%s: ->gro_normal_one napi->rx_count %d gro_normal_batch %d\n", __func__,
 													napi->rx_count, gro_normal_batch);
 	if (napi->rx_count >= gro_normal_batch) {
 		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: ->gro_normal_list\n", __func__);
+			pr_debug("%s: ->gro_normal_list\n", __func__);
 		gro_normal_list(napi);
 	}
 }
@@ -6134,7 +6141,7 @@ static int napi_gro_complete(struct napi_struct *napi, struct sk_buff *skb)
 
 out:
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: ->gro_normal_one\n", __func__);
+		pr_debug("%s: ->gro_normal_one\n", __func__);
 	gro_normal_one(napi, skb, NAPI_GRO_CB(skb)->count);
 	return NET_RX_SUCCESS;
 }
@@ -6342,7 +6349,7 @@ static enum gro_result dev_gro_receive(struct napi_struct *napi, struct sk_buff 
 			NAPI_GRO_CB(skb)->csum_valid = 0;
 		}
 		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: ->inet_gro_receive 0x%x\n", __func__, ntohs(type));
+			pr_debug("%s: ->inet_gro_receive 0x%x\n", __func__, ntohs(type));
 		pp = INDIRECT_CALL_INET(ptype->callbacks.gro_receive,
 					ipv6_gro_receive, inet_gro_receive,
 					&gro_list->list, skb);
@@ -6352,7 +6359,7 @@ static enum gro_result dev_gro_receive(struct napi_struct *napi, struct sk_buff 
 	//遍历完协议，没有找到可以gro的协议
 	if (&ptype->list == head) {
 		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: ->ptype->list == head\n", __func__);
+			pr_debug("%s: ->ptype->list == head\n", __func__);
 		goto normal;
 	}
 
@@ -6374,7 +6381,7 @@ static enum gro_result dev_gro_receive(struct napi_struct *napi, struct sk_buff 
 	}
 
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: ->same_flow pp %p same_flow %d flush %hu\n", __func__, pp, same_flow, NAPI_GRO_CB(skb)->flush);
+		pr_debug("%s: ->same_flow pp %p same_flow %d flush %hu\n", __func__, pp, same_flow, NAPI_GRO_CB(skb)->flush);
 	//已经被某个 GRO flow 吸收（合并）成功，直接跳过后面逻辑，走 ok 路径（继续处理其他包）
 	if (same_flow)
 		goto ok;
@@ -6395,7 +6402,7 @@ static enum gro_result dev_gro_receive(struct napi_struct *napi, struct sk_buff 
 	list_add(&skb->list, &gro_list->list);
 	ret = GRO_HELD;
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: ->skb_shinfo(skb)->gso_size %u\n", __func__, skb_shinfo(skb)->gso_size);
+		pr_debug("%s: ->skb_shinfo(skb)->gso_size %u\n", __func__, skb_shinfo(skb)->gso_size);
 
 pull:
 	//将需要处理的数据从 skb 的第一个 fragment（frag[0]）中拷贝一部分到线性区（head 区）中，以便后续处理（如协议头解析）变得更简单
@@ -6410,7 +6417,7 @@ ok:
 		__clear_bit(bucket, &napi->gro_bitmask);//无包，对bucket位置0
 	}
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: ->return ret %d gro_list->count %d grow %d\n", __func__, ret, gro_list->count, grow);
+		pr_debug("%s: ->return ret %d gro_list->count %d grow %d\n", __func__, ret, gro_list->count, grow);
 
 	return ret;
 
@@ -6454,13 +6461,13 @@ static gro_result_t napi_skb_finish(struct napi_struct *napi,
 	switch (ret) {
 	case GRO_NORMAL:
 		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: ->gro_normal_one\n", __func__);
+			pr_debug("%s: ->gro_normal_one\n", __func__);
 		gro_normal_one(napi, skb, 1);
 		break;
 
 	case GRO_MERGED_FREE:
 		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: ->GRO_MERGED_FREE\n", __func__);
+			pr_debug("%s: ->GRO_MERGED_FREE\n", __func__);
 		if (NAPI_GRO_CB(skb)->free == NAPI_GRO_FREE_STOLEN_HEAD)
 			napi_skb_free_stolen_head(skb);
 		else if (skb->fclone != SKB_FCLONE_UNAVAILABLE)
@@ -6473,7 +6480,7 @@ static gro_result_t napi_skb_finish(struct napi_struct *napi,
 	case GRO_MERGED:
 	case GRO_CONSUMED:
 		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: ->GRO_MERGED\n", __func__);
+			pr_debug("%s: ->GRO_MERGED\n", __func__);
 		break;
 	}
 
@@ -6489,9 +6496,9 @@ gro_result_t napi_gro_receive(struct napi_struct *napi, struct sk_buff *skb)
 
 	skb_gro_reset_offset(skb, 0);
 	if (is_src_k2pro(skb)) {
-		printk(KERN_ERR "%s: ======== rx begin ======== protocol 0x%x\n", __func__, ntohs(skb->protocol));
-		skb_dump(KERN_INFO, skb, true);
-		printk(KERN_INFO "%s: ->dev_gro_receive skb->napi_id %u\n", __func__, skb->napi_id);
+		pr_debug("%s: ======== rx begin ======== protocol 0x%x\n", __func__, ntohs(skb->protocol));
+		skb_dump(KERN_DEBUG, skb, true);
+		pr_debug("%s: ->dev_gro_receive skb->napi_id %u\n", __func__, skb->napi_id);
 	}
 
 	ret = napi_skb_finish(napi, skb, dev_gro_receive(napi, skb));
@@ -6771,10 +6778,13 @@ EXPORT_SYMBOL(__napi_schedule);
 /**
  *	检查 NAPI 是否可以被调度
  *	@n: napi context
+ *  尝试给 n 这个 NAPI 实例设置“已调度”状态，如果成功返回 true，否则返回 false
  *
  * 检测 NAPI 处理函数是否已经在运行，如果没有，则将其标记为正在运行。
  * 这相当于一个条件变量，用于确保同一时间只运行一个 NAPI poll 实例。
  * 同时也会确保没有待处理的 NAPI 禁用操作。
+ * 返回 true：这次调用使 NAPI 从“未调度”变为“已调度” → 你应该继续调度（例如调用 __napi_schedule()）
+ * 返回 false：它本来就已经是调度状态了 → 你不需要重复调度；但 MISSED 位会告诉 NAPI 处理逻辑“后面还有活”
  */
 bool napi_schedule_prep(struct napi_struct *n)
 {
@@ -6782,6 +6792,7 @@ bool napi_schedule_prep(struct napi_struct *n)
 
 	do {
 		val = READ_ONCE(n->state);
+		//如果 NAPI 实例被禁用，则不能调度
 		if (unlikely(val & NAPIF_STATE_DISABLE))
 			return false;
 		new = val | NAPIF_STATE_SCHED;
@@ -6791,11 +6802,18 @@ bool napi_schedule_prep(struct napi_struct *n)
 		 * emits better code than :
 		 * if (val & NAPIF_STATE_SCHED)
 		 *     new |= NAPIF_STATE_MISSED;
+		 * 没 SCHED： new
+		 * 有 SCHED： new |= NAPIF_STATE_MISSED
+		 * 如果之前已经是调度状态，再调度一次 → 设置 MISSED bit
+		 * 如果之前没调度过 → 不设置 MISSED bit
 		 */
 		new |= (val & NAPIF_STATE_SCHED) / NAPIF_STATE_SCHED *
 						   NAPIF_STATE_MISSED;
+		//如果 n->state == val，则把它改成 new，并返回旧值（也就是 val）
+		//如果 n->state != val（说明另一个 CPU 在这期间改过了），则什么也不改，直接返回当前的旧值（不等于 val）
 	} while (cmpxchg(&n->state, val, new) != val);
-
+	//如果旧状态里 没有 SCHED 位：说明你是第一次把它从“未调度”变成“已调度”，调用者通常需要接下来真正调用 __napi_schedule() 去挂到软中断队列上
+	//如果旧状态里 已经有 SCHED 位：说明已经有人调度过它了，调用者就不需要再调度一次了，只是顺便把 MISSED 标记打上了而已
 	return !(val & NAPIF_STATE_SCHED);
 }
 EXPORT_SYMBOL(napi_schedule_prep);
@@ -6865,7 +6883,7 @@ bool napi_complete_done(struct napi_struct *n, int work_done)
 	struct sk_buff *skb, *next;
 	list_for_each_entry_safe(skb, next, &n->rx_list, list) {
 		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: ->gro_normal_list work_done %d\n", __func__, work_done);
+			pr_debug("%s: ->gro_normal_list work_done %d\n", __func__, work_done);
 	}
 	gro_normal_list(n);
 
@@ -6878,7 +6896,7 @@ bool napi_complete_done(struct napi_struct *n, int work_done)
 		//恢复本地中断
 		local_irq_restore(flags);
 	}
-
+	// val没有MISSED，就清除SCHED状态，恢复成可调度的状态
 	do {
 		val = READ_ONCE(n->state);
 
@@ -7231,10 +7249,10 @@ void napi_disable(struct napi_struct *n)
 EXPORT_SYMBOL(napi_disable);
 
 /**
- *	启用 NAPI 调度
+ *	启用 NAPI 调度，使其可以被调度执行
  *	@n: NAPI context
  *
- * 从暂停状态中恢复 NAPI，使其可以被调度执行。
+ * 在确保当前 NAPI 处于“已调度（SCHED）”状态的前提下，把它的调度标志、禁止服务标志清掉，必要时再把“threaded” 这个标志置上，从而把 NAPI 恢复到可正常被 poll 的状态
  * 必须与 napi_disable 配对使用。
  */
 void napi_enable(struct napi_struct *n)
@@ -7307,7 +7325,7 @@ static int __napi_poll(struct napi_struct *n, bool *repoll)
 	if (n->rx_count > 0) {	
 		list_for_each_entry_safe(skb, next, &n->rx_list, list) {
 			if (is_src_k2pro(skb)) 
-				printk(KERN_INFO "%s: gro_normal_list work %d weight %d\n", __func__, work, weight);
+				pr_debug("%s: gro_normal_list work %d weight %d\n", __func__, work, weight);
 		}
 	}
 
@@ -11108,7 +11126,7 @@ struct net_device *alloc_netdev_mqs(int sizeof_priv, const char *name,
 	}
 	/* ensure 32-byte alignment of whole construct */
 	alloc_size += NETDEV_ALIGN - 1;
-
+	//申请内存，大小是net_device和私有数据之和，再加上对齐填充，对应网桥是 net_bridge
 	p = kvzalloc(alloc_size, GFP_KERNEL_ACCOUNT | __GFP_RETRY_MAYFAIL);
 	if (!p)
 		return NULL;

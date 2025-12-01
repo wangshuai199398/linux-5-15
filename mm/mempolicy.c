@@ -2168,16 +2168,17 @@ struct page *alloc_pages(gfp_t gfp, unsigned order)
 {
 	struct mempolicy *pol = &default_policy;
 	struct page *page;
-
+    //如果不在中断上下文，且没有要求“必须单节点分配”，用进程自己的 NUMA 策略
 	if (!in_interrupt() && !(gfp & __GFP_THISNODE))
 		pol = get_task_policy(current);
 
 	/*
-	 * No reference counting needed for current->mempolicy
-	 * nor system default_policy
+	 * No reference counting needed for current->mempolicy nor system default_policy
 	 */
+	// 交错分配，每次轮换 node，分散内存压力
 	if (pol->mode == MPOL_INTERLEAVE)
 		page = alloc_page_interleave(gfp, order, interleave_nodes(pol));
+	// 优先节点分配，多个候选节点可 fallback
 	else if (pol->mode == MPOL_PREFERRED_MANY)
 		page = alloc_pages_preferred_many(gfp, order,
 				numa_node_id(), pol);

@@ -110,6 +110,7 @@ struct clocksource {
 #ifdef CONFIG_ARCH_CLOCKSOURCE_DATA
 	struct arch_clocksource_data archdata;
 #endif
+	//在可能发生溢出之前的 最大周期值
 	u64			max_cycles;
 	// 时钟源的名称
 	const char		*name;

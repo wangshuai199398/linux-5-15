@@ -36,6 +36,11 @@ struct rcu_exp_work {
 
 /*
  * Definition for node within the RCU grace-period-detection hierarchy.
+ * 包含了与当前宽限期相关的信息，例如：当前宽限期是否完成、要让当前宽限期继续推进还需要哪些 CPU 或 CPU 组进入静默状态等
+ * 每个 rcu_node 都包含一把锁，用于管理其所覆盖的一组 CPU
+ * 这些 rcu_node 结构体被嵌入到 rcu_state 结构中的一个线性数组里，并被表示为一棵树：数组的第一个元素是根节点，覆盖所有 CPU
+ * rcu_node 的数量由 NUM_RCU_NODES 决定，而它又依赖于系统中可用的 CPU 数量
+ * 其中各层的取值依赖于 CONFIG_RCU_FANOUT_LEAF 配置选项。举个最简单的例子：在一台有 8 个 CPU 的机器上，如果配置如此，那么一个 rcu_node 将覆盖两个 CPU
  */
 struct rcu_node {
 	raw_spinlock_t __private lock;	/* Root rcu_node's lock protects */
@@ -285,14 +290,16 @@ do {									\
 } while (0)
 
 /*
- * RCU global state, including node hierarchy.  This hierarchy is
- * represented in "heap" form in a dense array.  The root (first level)
- * of the hierarchy is in ->node[0] (referenced by ->level[0]), the second
- * level in ->node[1] through ->node[m] (->node[1] referenced by ->level[1]),
- * and the third level in ->node[m+1] and following (->node[m+1] referenced
- * by ->level[2]).  The number of levels is determined by the number of
- * CPUs and by CONFIG_RCU_FANOUT.  Small systems will have a "hierarchy"
- * consisting of a single rcu_node.
+ * RCU 全局状态，包括节点层级结构。
+ * 这个层级结构在内存中以 “堆（heap）”形式的稠密数组 来表示。
+ * 层级的根（第一层）位于 ->node[0]（通过 ->level[0] 引用）。
+ * 第二层位于 ->node[1] 到 ->node[m]（其中 ->node[1] 由 ->level[1] 引用）。
+ * 第三层位于 ->node[m+1] 以及之后的节点（其中 ->node[m+1] 由 ->level[2] 引用）。
+ * 层级的层数由 CPU 数量和 CONFIG_RCU_FANOUT 配置项决定。在小型系统中，这个“层级”可能仅仅由一个 rcu_node 组成。
+ * 
+ * 实际上，RCU 通过极低的内部 RCU 锁竞争来提供良好的可扩展性。那么，如果一个数据结构要被不同的 CPU 并发读取会怎样呢？
+ * RCU API 提供了 rcu_state 结构，它表示 RCU 的全局状态，包括节点层次结构。层次结构由以下部分表示：
+ * struct rcu_node node[NUM_RCU_NODES];
  */
 struct rcu_state {
 	struct rcu_node node[NUM_RCU_NODES];	/* Hierarchy. */

@@ -204,7 +204,7 @@ resubmit:
 			nf_reset_ct(skb);
 		}
 		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: protocol 0x%x\n", __func__, protocol);
+			pr_debug("%s: protocol 0x%x\n", __func__, protocol);
 		ret = INDIRECT_CALL_2(ipprot->handler, tcp_v4_rcv, udp_rcv,
 				      skb);
 		if (ret < 0) {
@@ -256,7 +256,7 @@ int ip_local_deliver(struct sk_buff *skb)
 			return 0;//表示“还不能继续处理该 skb，等待更多分片”
 	}
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: ->ip_local_deliver_finish\n", __func__);
+		pr_debug("%s: ->ip_local_deliver_finish\n", __func__);
 	return NF_HOOK(NFPROTO_IPV4, NF_INET_LOCAL_IN,
 		       net, NULL, skb, skb->dev, NULL,
 		       ip_local_deliver_finish);
@@ -459,7 +459,7 @@ static int ip_rcv_finish(struct net *net, struct sock *sk, struct sk_buff *skb)
 	if (!skb)
 		return NET_RX_SUCCESS;
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: ->ip_rcv_finish_core\n", __func__);
+		pr_debug("%s: ->ip_rcv_finish_core\n", __func__);
 	ret = ip_rcv_finish_core(net, sk, skb, dev, NULL);
 	if (ret != NET_RX_DROP)
 		ret = dst_input(skb);
@@ -485,7 +485,7 @@ static struct sk_buff *ip_rcv_core(struct sk_buff *skb, struct net *net)
 	__IP_UPD_PO_STATS(net, IPSTATS_MIB_IN, skb->len);
 	//如果skb是共享的，即skb的user不为1，clone一份
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: skb_shared %d\n", __func__, skb_shared(skb));
+		pr_debug("%s: skb_shared %d\n", __func__, skb_shared(skb));
 	skb = skb_share_check(skb, GFP_ATOMIC);
 	if (!skb) {
 		__IP_INC_STATS(net, IPSTATS_MIB_INDISCARDS);
@@ -580,7 +580,7 @@ int ip_rcv(struct sk_buff *skb, struct net_device *dev, struct packet_type *pt,
 {
 	struct net *net = dev_net(dev);
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: ip_rcv_core\n", __func__);
+		pr_debug("%s: ip_rcv_core\n", __func__);
 	skb = ip_rcv_core(skb, net);
 	if (skb == NULL)
 		return NET_RX_DROP;
@@ -653,6 +653,7 @@ static void ip_list_rcv_finish(struct net *net, struct sock *sk,
 static void ip_sublist_rcv(struct list_head *head, struct net_device *dev,
 			   struct net *net)
 {
+	// 没调用 ip_rcv_finish
 	NF_HOOK_LIST(NFPROTO_IPV4, NF_INET_PRE_ROUTING, net, NULL,
 		     head, dev, NULL, ip_rcv_finish);
 	ip_list_rcv_finish(net, NULL, head);
@@ -672,7 +673,7 @@ void ip_list_rcv(struct list_head *head, struct packet_type *pt,
 		struct net_device *dev = skb->dev;
 		struct net *net = dev_net(dev);
 		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: 0x%x\n", __func__, ntohs(pt->type));
+			pr_debug("%s: 0x%x\n", __func__, ntohs(pt->type));
 		skb_list_del_init(skb);
 		skb = ip_rcv_core(skb, net);
 		if (skb == NULL)

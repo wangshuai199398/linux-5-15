@@ -1951,6 +1951,7 @@ static enum hrtimer_restart hrtimer_wakeup(struct hrtimer *timer)
  *
  * Wrapper around hrtimer_start_expires() for hrtimer_sleeper based timers
  * to allow PREEMPT_RT to tweak the delivery mode (soft/hardirq context)
+ * 启动一个高精度定时器，并让当前线程睡眠，直到时间到了被唤醒
  */
 void hrtimer_sleeper_start_expires(struct hrtimer_sleeper *sl,
 				   enum hrtimer_mode mode)

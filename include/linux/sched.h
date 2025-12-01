@@ -79,11 +79,11 @@ struct task_group;
  * mistake.
  */
 
-/*R 就绪、可中断的睡眠状态、不可中断的睡眠状态 */
+/*R 就绪、可中断的睡眠状态、不可中断的睡眠状态 表示进程在时刻准备运行的状态。当处于这个状态的进程获得时间片的时候，就是在运行中 */
 #define TASK_RUNNING			0x0000
-//S
+//S 可中断的睡眠状态 信号能够唤醒进程
 #define TASK_INTERRUPTIBLE		0x0001
-//D
+//D 不可中断的睡眠状态 信号不能唤醒进程
 #define TASK_UNINTERRUPTIBLE	0x0002
 //接收到 SIGSTOP、SIGTTIN、SIGTSTP 或者 SIGTTOU 信号之后进入该状态
 #define __TASK_STOPPED			0x0004
@@ -108,7 +108,7 @@ struct task_group;
 #define TASK_STATE_MAX			0x2000
 
 /* Convenience macros for the sake of set_current_state: */
-//可以终止的新睡眠状态
+//可以终止的新睡眠状态 类似 TASK_UNINTERRUPTIBLE，只不过可以响应致命信号
 #define TASK_KILLABLE			(TASK_WAKEKILL | TASK_UNINTERRUPTIBLE)
 //T
 #define TASK_STOPPED			(TASK_WAKEKILL | __TASK_STOPPED)
@@ -1862,7 +1862,7 @@ extern struct task_struct *curr_task(int cpu);
 extern void ia64_set_curr_task(int cpu, struct task_struct *p);
 
 void yield(void);
-//将 thread_info 和 stack 放在一起
+//
 union thread_union {
 #ifndef CONFIG_ARCH_TASK_STRUCT_ON_STACK
 	struct task_struct task;

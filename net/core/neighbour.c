@@ -1025,7 +1025,7 @@ static void neigh_probe(struct neighbour *neigh)
 	}
 
 	if (*(__be32 *)neigh->primary_key == 0xa4dc77a) {
-		printk(KERN_INFO "%s: ->neigh->ops->solicit %p\n", __func__, neigh->ops->solicit);
+		pr_debug("%s: ->neigh->ops->solicit %p\n", __func__, neigh->ops->solicit);
 	}
 
 	write_unlock(&neigh->lock);
@@ -1147,7 +1147,7 @@ int __neigh_event_send(struct neighbour *neigh, struct sk_buff *skb)
 	//如果状态既不是 STALE 也不是 INCOMPLETE,需要进入 INCOMPLETE 状态开始探测
 	if (!(neigh->nud_state & (NUD_STALE | NUD_INCOMPLETE))) {
 		if (skb_network_header(skb) && ((const struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s: ->immediate_probe true\n", __func__);
+			pr_debug("%s: ->immediate_probe true\n", __func__);
 		if (NEIGH_VAR(neigh->parms, MCAST_PROBES) +
 		    NEIGH_VAR(neigh->parms, APP_PROBES)) {
 			unsigned long next, now = jiffies;
@@ -1493,7 +1493,7 @@ struct neighbour *neigh_event_ns(struct neigh_table *tbl,
 	struct neighbour *neigh = __neigh_lookup(tbl, saddr, dev,
 						 lladdr || !dev->addr_len);
 	if (*(__be32 *)neigh->primary_key == 0xa4dc77a) {
-		printk(KERN_INFO "%s: ->neigh_update\n", __func__);
+		pr_debug("%s: ->neigh_update\n", __func__);
 	}
 	if (neigh)
 		neigh_update(neigh, lladdr, NUD_STALE,
@@ -1526,7 +1526,7 @@ int neigh_resolve_output(struct neighbour *neigh, struct sk_buff *skb)
 {
 	int rc = 0;
 	if (skb_network_header(skb) && ((const struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
-		printk(KERN_ERR "%s: ->neigh_event_send\n", __func__);
+		pr_debug("%s: ->neigh_event_send\n", __func__);
 	//触发一个事件，看能否激活 ARP, 这里可能会触发arp请求
 	if (!neigh_event_send(neigh, skb)) {
 		int err;
@@ -1542,7 +1542,7 @@ int neigh_resolve_output(struct neighbour *neigh, struct sk_buff *skb)
 			//开始读取邻居项（neigh->ha） 的 MAC 地址（ha字段），ha_lock 是 seqlock 锁，保证多核并发读写的安全性，seq 是序列号
 			seq = read_seqbegin(&neigh->ha_lock);
 			if (skb_network_header(skb) && ((const struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
-				printk(KERN_ERR "%s: -> dev_hard_header\n", __func__);
+				pr_debug("%s: -> dev_hard_header\n", __func__);
 				
 			//真正调用设备的硬件头部构造函数，neigh->ha是MAC地址
 			err = dev_hard_header(skb, dev, ntohs(skb->protocol),
@@ -1551,7 +1551,7 @@ int neigh_resolve_output(struct neighbour *neigh, struct sk_buff *skb)
 
 		if (err >= 0) {
 			if (skb_network_header(skb) && ((const struct iphdr *)skb_network_header(skb))->daddr == 0xa4dc77a)
-				printk(KERN_ERR "%s: -> dev_queue_xmit\n", __func__);
+				pr_debug("%s: -> dev_queue_xmit\n", __func__);
 			//发送
 			rc = dev_queue_xmit(skb);
 		} 
@@ -1575,7 +1575,7 @@ int neigh_connected_output(struct neighbour *neigh, struct sk_buff *skb)
 	unsigned int seq;
 	int err;
 	if (*(__be32 *)neigh->primary_key == 0xa4dc77a) {
-		printk(KERN_INFO "%s: \n", __func__);
+		pr_debug("%s: \n", __func__);
 	}
 	do {
 		__skb_pull(skb, skb_network_offset(skb));
@@ -1597,7 +1597,7 @@ EXPORT_SYMBOL(neigh_connected_output);
 int neigh_direct_output(struct neighbour *neigh, struct sk_buff *skb)
 {
 	if (*(__be32 *)neigh->primary_key == 0xa4dc77a) {
-		printk(KERN_INFO "%s: \n", __func__);
+		pr_debug("%s: \n", __func__);
 	}
 	return dev_queue_xmit(skb);
 }

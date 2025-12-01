@@ -25,7 +25,7 @@ struct linux_binprm {
 #endif
 	// 表示该二进制程序的内存描述符
 	struct mm_struct *mm;
-	unsigned long p; /* current top of mem */
+	unsigned long p; /* 当前栈写指针 */
 	unsigned long argmin; /* rlimit marker for copy_strings() */
 	unsigned int
 		/* Should an execfd be passed to userspace? */
@@ -95,8 +95,7 @@ struct coredump_params {
 };
 
 /*
- * This structure defines the functions that are used to load the binary formats that
- * linux accepts.
+ * 这个结构体定义了用于加载 Linux 所接受的二进制格式的函数
  */
 struct linux_binfmt {
 	struct list_head lh;

@@ -2067,6 +2067,7 @@ static int effective_prio(struct task_struct *p)
  * @p: the task in question.
  *
  * Return: 1 if the task is currently executing. 0 otherwise.
+ * 任务（task_struct）是否正在某个 CPU 上运行
  */
 inline int task_curr(const struct task_struct *p)
 {
@@ -3318,6 +3319,7 @@ unsigned long wait_task_inactive(struct task_struct *p, unsigned int match_state
  * the kernel. If the IPI races and the task has been migrated
  * to another CPU then no harm is done and the purpose has been
  * achieved as well.
+ * 如果任务 p 当前正在另一个 CPU 上运行，则向那个 CPU 发送一个 reschedule 中断，让那个 CPU 尽快执行调度，看看是否要切换任务
  */
 void kick_process(struct task_struct *p)
 {
@@ -4532,7 +4534,7 @@ void wake_up_new_task(struct task_struct *p)
 	 */
 	p->recent_used_cpu = task_cpu(p);
 	rseq_migrate(p);
-	//为进程选择一个合适的CPU 为进程指定运行队列
+	//为进程选择一个合适的CPU 为进程指定运行队列，之后新进程p上记录了自己所在的任务队列
 	__set_task_cpu(p, select_task_rq(p, task_cpu(p), WF_FORK));
 #endif
 	//将新进程p要使用的CPU运行队列rq加锁防止冲突
@@ -5053,8 +5055,9 @@ context_switch(struct rq *rq, struct task_struct *prev,
 
 	/* Here we just switch the register state and the stack. 执行寄存器和栈的切换 */
 	switch_to(prev, next, prev);// -> __switch_to
+	// ((last) = __switch_to_asm((prev), (next)));
 	barrier();
-
+    //进程切换之后，到这里已经是新进程的finish_task_switch了，当时新任务被切换的时候也是调用 __schedule -> switch_to 到这里的，所以prev到这里没有错
 	return finish_task_switch(prev);
 }
 
@@ -5672,10 +5675,9 @@ __pick_next_task(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 	struct task_struct *p;
 
 	/*
-	 * Optimization: we know that if all tasks are in the fair class we can
-	 * call that function directly, but only if the @prev task wasn't of a
-	 * higher scheduling class, because otherwise those lose the
-	 * opportunity to pull in more work from other CPUs.
+	 * 优化说明：
+	 * 如果系统中的所有任务都属于 fair 调度类（CFS，完全公平调度类），那么我们可以直接调用对应的函数来进行调度选择。
+	 * 但前提是：上一个任务（@prev） 不能属于更高优先级的调度类（例如实时任务或截止期任务），否则这些高优先级调度类的任务就会失去从其他 CPU 拉取更多工作的机会。
 	 */
 	if (likely(prev->sched_class <= &fair_sched_class &&
 		   rq->nr_running == rq->cfs.h_nr_running)) {
@@ -5789,7 +5791,7 @@ pick_next_task(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 
 	if (!sched_core_enabled(rq))
 		return __pick_next_task(rq, prev, rf);
-
+    pr_info("pick_next_task----\n");
 	cpu = cpu_of(rq);
 
 	/* Stopper task is switching into idle, no need core-wide selection. */
@@ -5804,13 +5806,11 @@ pick_next_task(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 	}
 
 	/*
-	 * If there were no {en,de}queues since we picked (IOW, the task
-	 * pointers are all still valid), and we haven't scheduled the last
-	 * pick yet, do so now.
+	 * 如果自从上次选择后没有发生任何 {入队或出队}（enqueue/dequeue） 操作（也就是说任务指针仍然都是有效的），
+	 * 并且我们还没有调度上次选中的任务（pick），那么就现在进行调度
 	 *
-	 * rq->core_pick can be NULL if no selection was made for a CPU because
-	 * it was either offline or went offline during a sibling's core-wide
-	 * selection. In this case, do a core-wide selection.
+	 * rq->core_pick 可能为 NULL，这种情况表示在某个 CPU 上没有做出任务选择，原因可能是：
+	 * 该 CPU 处于离线状态，或者 在兄弟 CPU（同一个核心的其他 CPU）进行 core-wide selection 过程中，该 CPU 下线了
 	 */
 	if (rq->core->core_pick_seq == rq->core->core_task_seq &&
 	    rq->core->core_pick_seq != rq->core_sched_seq &&
@@ -6532,14 +6532,17 @@ asmlinkage __visible void __sched schedule_user(void)
 #endif
 
 /**
- * schedule_preempt_disabled - called with preemption disabled
+ * 在关闭抢占（preemption disabled）的情况下调用
  *
- * Returns with preemption disabled. Note: preempt_count must be 1
+ * 返回时依然保持抢占关闭状态。注意：preempt_count 必须为 1
  */
 void __sched schedule_preempt_disabled(void)
 {
+	// 启用抢占，但不立即触发调度
 	sched_preempt_enable_no_resched();
+	// 主动调度，切换任务
 	schedule();
+	// 调度返回后，再次禁止抢占
 	preempt_disable();
 }
 
@@ -7016,7 +7019,7 @@ void set_user_nice(struct task_struct *p, long nice)
 		dequeue_task(rq, p, DEQUEUE_SAVE | DEQUEUE_NOCLOCK);
 	if (running)
 		put_prev_task(rq, p);
-	//将 nice 值转化为优先级
+	//将 nice 值转化为优先级 nice+120
 	p->static_prio = NICE_TO_PRIO(nice);
 	//将nice值转化为weight，存储到p->se.load.weight
 	set_load_weight(p, true);

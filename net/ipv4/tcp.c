@@ -713,20 +713,20 @@ void tcp_push(struct sock *sk, int flags, int mss_now,
 	if (!skb)
 		return;
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->write_seq %u, pushed_seq %u max_window %u\n",  __func__, tp->write_seq, tp->pushed_seq, tp->max_window);
+	pr_debug("%s: ->write_seq %u, pushed_seq %u max_window %u\n",  __func__, tp->write_seq, tp->pushed_seq, tp->max_window);
 	if (!(flags & MSG_MORE) || forced_push(tp))
 		tcp_mark_push(tp, skb);//置位0x08
 
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->pushed_seq %u TCP_SKB_CB(skb)->tcp_flags 0x%x flags %d\n",  __func__, tp->pushed_seq, TCP_SKB_CB(skb)->tcp_flags, flags);
+		pr_debug("%s: ->pushed_seq %u TCP_SKB_CB(skb)->tcp_flags 0x%x flags %d\n",  __func__, tp->pushed_seq, TCP_SKB_CB(skb)->tcp_flags, flags);
 
 	tcp_mark_urg(tp, flags);
-	//判断是否应该自动延迟发送小的数据包（即“自动塞子”机制），以提高网络传输效率
+	//判断是否应该自动延迟发送小的数据包（即“自动塞子”机制），以提高网络传输效率 no
 	if (tcp_should_autocork(sk, skb, size_goal)) {
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
-			printk(KERN_INFO "%s: ->tcp_should_autocork\n", __func__);
+			pr_debug("%s: ->tcp_should_autocork\n", __func__);
 			if (!test_bit(TSQ_THROTTLED, &sk->sk_tsq_flags)) {
-				printk(KERN_INFO "%s: ->TSQ_THROTTLED\n", __func__);
+				pr_debug("%s: ->TSQ_THROTTLED\n", __func__);
 			}
 		}
 
@@ -746,7 +746,7 @@ void tcp_push(struct sock *sk, int flags, int mss_now,
 	if (flags & MSG_MORE)
 		nonagle = TCP_NAGLE_CORK;
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->__tcp_push_pending_frames\n", __func__);
+		pr_debug("%s: ->__tcp_push_pending_frames\n", __func__);
 		
 	__tcp_push_pending_frames(sk, mss_now, nonagle);
 }
@@ -937,14 +937,14 @@ static unsigned int tcp_xmit_size_goal(struct sock *sk, u32 mss_now,
 		return mss_now;
 
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: -> sk->sk_gso_max_size %u MAX_TCP_HEADER %d\n", __func__, sk->sk_gso_max_size, MAX_TCP_HEADER);
+		pr_debug("%s: -> sk->sk_gso_max_size %u MAX_TCP_HEADER %d\n", __func__, sk->sk_gso_max_size, MAX_TCP_HEADER);
 
 	/* Note : tcp_tso_autosize() will eventually split this later */
 	new_size_goal = sk->sk_gso_max_size - 1 - MAX_TCP_HEADER;
 	new_size_goal = tcp_bound_to_half_wnd(tp, new_size_goal);
 
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: -> new_size_goal %u, tp->gso_segs: %hu\n", __func__, new_size_goal, tp->gso_segs);
+		pr_debug("%s: -> new_size_goal %u, tp->gso_segs: %hu\n", __func__, new_size_goal, tp->gso_segs);
 
 	/* We try hard to avoid divides here */
 	size_goal = tp->gso_segs * mss_now;
@@ -956,7 +956,7 @@ static unsigned int tcp_xmit_size_goal(struct sock *sk, u32 mss_now,
 	}
 
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: -> tp->gso_segs: %hu, size_goal: %u\n", __func__, tp->gso_segs, size_goal);
+		pr_debug("%s: -> tp->gso_segs: %hu, size_goal: %u\n", __func__, tp->gso_segs, size_goal);
 
 	return max(size_goal, mss_now);
 }
@@ -1105,7 +1105,7 @@ ssize_t do_tcp_sendpages(struct sock *sk, struct page *page, int offset,
 		if (skb->len < size_goal || (flags & MSG_OOB))
 			continue;
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "do_tcp_sendpages\n");
+			pr_debug("do_tcp_sendpages\n");
 		if (forced_push(tp)) {
 			tcp_mark_push(tp, skb);
 			__tcp_push_pending_frames(sk, mss_now, TCP_NAGLE_PUSH);
@@ -1233,21 +1233,21 @@ static void print_msg_iter(struct iov_iter *iter)
 	int i;
 	const struct iovec *iov;
 	if (!iter_is_iovec(iter)) {
-		printk(KERN_INFO "Unsupported iter type\n");
+		pr_debug("Unsupported iter type\n");
 		return;
 	}
     iov = iter->iov;
-	printk(KERN_INFO "iov_iter: nr_segs=%lu\n", iter->nr_segs);
+	pr_debug("iov_iter: nr_segs=%lu\n", iter->nr_segs);
     for (i = 0; i < iter->nr_segs; i++) {
 		size_t len = min((size_t)37, iov[i].iov_len);
 		char buf[37];
 		if (copy_from_user(buf, iov[i].iov_base, len)) {
-			printk(KERN_INFO "Failed to copy from user at segment %d\n", i);
+			pr_debug("Failed to copy from user at segment %d\n", i);
 			continue;
 		}
-		printk(KERN_INFO "vec[%d]: %zu, data: %*ph\n", i, iov[i].iov_len, (int)len, buf);
+		pr_debug("vec[%d]: %zu, data: %*ph\n", i, iov[i].iov_len, (int)len, buf);
     }
-	printk(KERN_INFO "vec end\n");
+	pr_debug("vec end\n");
 	return;
 }
 
@@ -1257,7 +1257,7 @@ static void print_page_fragment_data(struct page *page, size_t offset, size_t le
     void *data = addr + offset;
     size_t to_print = len;
 
-    printk(KERN_INFO "Page data (offset %zu, len %zu): %*ph\n",
+    pr_debug("Page data (offset %zu, len %zu): %*ph\n",
            offset, to_print, (int)to_print, data);
 
     kunmap_local(addr);
@@ -1279,10 +1279,10 @@ int tcp_sendmsg_locked(struct sock *sk, struct msghdr *msg, size_t size)
 	long timeo;
 
 	flags = msg->msg_flags;
-	//用户请求了零拷贝且数据不为0且socket支持
+	//用户请求了零拷贝且数据不为0且socket支持 no
 	if (flags & MSG_ZEROCOPY && size && sock_flag(sk, SOCK_ZEROCOPY)) {
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s: MSG_ZEROCOPY \n",  __func__);
+			pr_debug("%s: MSG_ZEROCOPY \n",  __func__);
 		skb = tcp_write_queue_tail(sk);
 		uarg = msg_zerocopy_realloc(sk, size, skb_zcopy(skb));
 		if (!uarg) {
@@ -1294,11 +1294,11 @@ int tcp_sendmsg_locked(struct sock *sk, struct msghdr *msg, size_t size)
 		if (!zc)
 			uarg->zerocopy = 0;
 	}
-	//启用TFO(允许在初始握手SYN包中就附带数据)或当前socket处于延迟连接模式 且TCP连接不是处于repair模式(故障恢复)
+	//启用TFO(允许在初始握手SYN包中就附带数据)或当前socket处于延迟连接模式 且TCP连接不是处于repair模式(故障恢复) no
 	if (unlikely(flags & MSG_FASTOPEN || inet_sk(sk)->defer_connect) &&
 	    !tp->repair) {
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s: tcp_sendmsg_fastopen \n", __func__);
+			pr_debug("%s: tcp_sendmsg_fastopen \n", __func__);
 
 		err = tcp_sendmsg_fastopen(sk, msg, &copied_syn, size, uarg);
 		if (err == -EINPROGRESS && copied_syn > 0)
@@ -1309,22 +1309,22 @@ int tcp_sendmsg_locked(struct sock *sk, struct msghdr *msg, size_t size)
 
 	timeo = sock_sndtimeo(sk, flags & MSG_DONTWAIT);
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: timeo %ld tp->app_limited %u mss_cache %u\n", __func__, timeo, tp->app_limited, tp->mss_cache);
+		pr_debug("%s: timeo %ld tp->app_limited %u mss_cache %u\n", __func__, timeo, tp->app_limited, tp->mss_cache);
 	//检测当前 TCP 连接是否受到应用层限制
 	tcp_rate_check_app_limited(sk);  /* is sending application-limited? */
 
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: timeo %ld tp->app_limited %u\n", __func__, timeo, tp->app_limited);
+		pr_debug("%s: timeo %ld tp->app_limited %u\n", __func__, timeo, tp->app_limited);
 
 	/* Wait for a connection to finish. One exception is TCP Fast Open
 	 * (passive side) where data is allowed to be sent before a connection
 	 * is fully established.
 	 */
-	//TCP连接还没完成(不是已连接也不是半关闭)并且这不是一个允许提前发送数据的TFO连接,就阻塞等待连接完成
+	//TCP连接还没完成(不是已连接也不是半关闭)并且这不是一个允许提前发送数据的TFO连接,就阻塞等待连接完成 no
 	if (((1 << sk->sk_state) & ~(TCPF_ESTABLISHED | TCPF_CLOSE_WAIT)) &&
 	    !tcp_passive_fastopen(sk)) {
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s: sk_stream_wait_connect \n", __func__);
+			pr_debug("%s: sk_stream_wait_connect \n", __func__);
 		err = sk_stream_wait_connect(sk, &timeo);
 		if (err != 0)
 			goto do_error;
@@ -1332,7 +1332,7 @@ int tcp_sendmsg_locked(struct sock *sk, struct msghdr *msg, size_t size)
 
 	if (unlikely(tp->repair)) {
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s: TCP_RECV_QUEUE tp->repair_queue %02x\n", __func__, tp->repair_queue);
+			pr_debug("%s: TCP_RECV_QUEUE tp->repair_queue %02x\n", __func__, tp->repair_queue);
 		if (tp->repair_queue == TCP_RECV_QUEUE) {
 			copied = tcp_send_rcvq(sk, msg, size);
 			goto out_nopush;
@@ -1348,7 +1348,7 @@ int tcp_sendmsg_locked(struct sock *sk, struct msghdr *msg, size_t size)
 	sockcm_init(&sockc, sk);
 
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: sock_cmsg_send msg->msg_controllen %lu sk->sk_tsflags %hu SOCK_FASYNC %d\n", __func__, msg->msg_controllen, sk->sk_tsflags, sock_flag(sk, SOCK_FASYNC));
+		pr_debug("%s: sock_cmsg_send msg->msg_controllen %lu sk->sk_tsflags %hu SOCK_FASYNC %d\n", __func__, msg->msg_controllen, sk->sk_tsflags, sock_flag(sk, SOCK_FASYNC));
 
 	if (msg->msg_controllen) {
 		err = sock_cmsg_send(sk, msg, &sockc);
@@ -1369,7 +1369,7 @@ restart:
     //size_goal是skb的最大数据长度
 	mss_now = tcp_send_mss(sk, &size_goal, flags);
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: tcp_send_mss mss_now %d size_goal %d\n", __func__, mss_now, size_goal);
+		pr_debug("%s: tcp_send_mss mss_now %d size_goal %d\n", __func__, mss_now, size_goal);
 
 	err = -EPIPE;
 	if (sk->sk_err || (sk->sk_shutdown & SEND_SHUTDOWN))
@@ -1377,14 +1377,14 @@ restart:
 	//将用户空间的数据复制到内核空间中的skb结构中，并将其挂到TCP的发送队列中，等待协议栈后续处理
 	while (msg_data_left(msg)) {
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s: iov_iter_count(&msg->msg_iter) %zu\n", __func__, iov_iter_count(&msg->msg_iter));
+			pr_debug("%s: iov_iter_count(&msg->msg_iter) %zu\n", __func__, iov_iter_count(&msg->msg_iter));
 
 		int copy = 0;
 		//尝试复用发送队列中的最后一个 skb，如果还有空间可用（即 skb->len < size_goal），就继续往这个skb塞数据
 		skb = tcp_write_queue_tail(sk);
 		if (skb) {
 			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-				printk(KERN_INFO "%s: skb skb->len %d size_goal %d\n", __func__, skb->len, size_goal);
+				pr_debug("%s: skb skb->len %d size_goal %d\n", __func__, skb->len, size_goal);
 			copy = size_goal - skb->len;
 		}
 		//不能复用旧的skb，创建新的skb，如果最后一个 skb 已满，或不能合并数据（不能 collapse）
@@ -1404,7 +1404,7 @@ new_segment:
 			//写队列(应用层刚写入、还没发送出去的数据)和重传队列(已发送但丢失、等待重传的数据)是否为空
 			first_skb = tcp_rtx_and_write_queues_empty(sk);
 			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-				printk(KERN_INFO "%s: sk_stream_alloc_skb sk->sk_allocation 0x%x first_skb %d\n", __func__, sk->sk_allocation, first_skb);
+				pr_debug("%s: sk_stream_alloc_skb sk->sk_allocation 0x%x first_skb %d\n", __func__, sk->sk_allocation, first_skb);
 			skb = sk_stream_alloc_skb(sk, 0, sk->sk_allocation,
 						  first_skb);
 			if (!skb)
@@ -1440,7 +1440,7 @@ new_segment:
 			if (!skb_can_coalesce(skb, i, pfrag->page,
 					      pfrag->offset)) {
 				if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-					printk(KERN_INFO "%s: i %d sysctl_max_skb_frags %d\n", __func__, i, READ_ONCE(sysctl_max_skb_frags));
+					pr_debug("%s: i %d sysctl_max_skb_frags %d\n", __func__, i, READ_ONCE(sysctl_max_skb_frags));
 				if (i >= READ_ONCE(sysctl_max_skb_frags)) {
 					tcp_mark_push(tp, skb);
 					goto new_segment;
@@ -1449,7 +1449,7 @@ new_segment:
 			}
 
 			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-				printk(KERN_INFO "%s: merge %d, copy %d pfrag->size %hu pfrag->offset %hu i %d skb_shinfo(skb)->nr_frags %d sk_route_caps 0x%016llx\n", __func__,
+				pr_debug("%s: merge %d, copy %d pfrag->size %hu pfrag->offset %hu i %d skb_shinfo(skb)->nr_frags %d sk_route_caps 0x%016llx\n", __func__,
 												merge, copy, pfrag->size, pfrag->offset, i, skb_shinfo(skb)->nr_frags, sk->sk_route_caps);
 			copy = min_t(int, copy, pfrag->size - pfrag->offset);
 			//当前 socket 的写缓冲不足以承载 copy 字节的数据，跳转去等待可用内存
@@ -1457,9 +1457,9 @@ new_segment:
 				goto wait_for_space;
 
 			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
-				printk(KERN_INFO "iov_iter type=%d, count=%zu, offset=%lu\n", msg->msg_iter.iter_type, iov_iter_count(&msg->msg_iter), msg->msg_iter.iov_offset);
+				pr_debug("iov_iter type=%d, count=%zu, offset=%lu\n", msg->msg_iter.iter_type, iov_iter_count(&msg->msg_iter), msg->msg_iter.iov_offset);
 				if (sk->sk_route_caps & NETIF_F_NOCACHE_COPY)
-					printk(KERN_INFO "NETIF_F_NOCACHE_COPY\n");
+					pr_debug("NETIF_F_NOCACHE_COPY\n");
 				print_msg_iter(&msg->msg_iter);
 			}
 
@@ -1486,9 +1486,9 @@ new_segment:
 			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a) {
 				struct page *page = compound_head(pfrag->page);
 				if (page_is_pfmemalloc(page))
-					printk(KERN_INFO "pfmemalloc\n");
-				printk(KERN_INFO "======== begin ========\n");
-				printk(KERN_INFO "IPCB(skb)->frag_max_size %hu\n", IPCB(skb)->frag_max_size);
+					pr_debug("pfmemalloc\n");
+				pr_debug("======== begin ========\n");
+				pr_debug("IPCB(skb)->frag_max_size %hu\n", IPCB(skb)->frag_max_size);
 				skb_dump(KERN_INFO, skb, true);
 			}
 			pfrag->offset += copy;
@@ -1496,7 +1496,7 @@ new_segment:
 			if (!sk_wmem_schedule(sk, copy))
 				goto wait_for_space;
 			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-				printk(KERN_INFO "%s: skb_zerocopy_iter_stream \n", __func__);
+				pr_debug("%s: skb_zerocopy_iter_stream \n", __func__);
 
 			err = skb_zerocopy_iter_stream(sk, skb, msg, copy, uarg);
 			if (err == -EMSGSIZE || err == -EEXIST) {
@@ -1511,19 +1511,19 @@ new_segment:
 		if (!copied)
 			TCP_SKB_CB(skb)->tcp_flags &= ~TCPHDR_PSH; // 0x08
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s: copied %d TCP_SKB_CB(skb)->tcp_flags 0x%x copy %d tp->write_seq %u skb->end_seq %u\n", __func__,
+			pr_debug("%s: copied %d TCP_SKB_CB(skb)->tcp_flags 0x%x copy %d tp->write_seq %u skb->end_seq %u\n", __func__,
 										copied, TCP_SKB_CB(skb)->tcp_flags, copy, tp->write_seq, TCP_SKB_CB(skb)->end_seq);
 		//更新当前写序列号和 skb 的 TCP 序列信息
 		WRITE_ONCE(tp->write_seq, tp->write_seq + copy);
 		TCP_SKB_CB(skb)->end_seq += copy;
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s: tp->write_seq %u skb->end_seq %u\n", __func__, tp->write_seq, TCP_SKB_CB(skb)->end_seq);
+			pr_debug("%s: tp->write_seq %u skb->end_seq %u\n", __func__, tp->write_seq, TCP_SKB_CB(skb)->end_seq);
 
 		tcp_skb_pcount_set(skb, 0);
 
 		copied += copy;
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s: copied %d msg_data_left(msg) %lu skb->len %d size_goal %d flags 0x%x tp->repair %d\n", __func__,
+			pr_debug("%s: copied %d msg_data_left(msg) %lu skb->len %d size_goal %d flags 0x%x tp->repair %d\n", __func__,
 									copied, msg_data_left(msg), skb->len, size_goal, flags, tp->repair);
 		//已经把所有数据放进队列，设置“end of record”
 		if (!msg_data_left(msg)) {
@@ -1537,13 +1537,13 @@ new_segment:
 		//积累的数据内容太多了
 		if (forced_push(tp)) {
 			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-				printk(KERN_INFO "%s: __tcp_push_pending_frames write_seq %u, pushed_seq %u max_window %u\n", __func__, tp->write_seq, tp->pushed_seq, tp->max_window);
+				pr_debug("%s: __tcp_push_pending_frames write_seq %u, pushed_seq %u max_window %u\n", __func__, tp->write_seq, tp->pushed_seq, tp->max_window);
 			tcp_mark_push(tp, skb);
 			__tcp_push_pending_frames(sk, mss_now, TCP_NAGLE_PUSH);
 		} else if (skb == tcp_send_head(sk)) {
 			//第一个网络包, 需要马上发送
 			if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-				printk(KERN_INFO "%s: -> tcp_push_one write_seq %u, pushed_seq %u max_window %u\n",  __func__, tp->write_seq, tp->pushed_seq, tp->max_window);
+				pr_debug("%s: -> tcp_push_one write_seq %u, pushed_seq %u max_window %u\n",  __func__, tp->write_seq, tp->pushed_seq, tp->max_window);
 			tcp_push_one(sk, mss_now);
 		}
 		continue;
@@ -1551,7 +1551,7 @@ new_segment:
 wait_for_space:
 		set_bit(SOCK_NOSPACE, &sk->sk_socket->flags);
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s: -> wait_for_space tcp_push\n", __func__);
+			pr_debug("%s: -> wait_for_space tcp_push\n", __func__);
 
 		if (copied)
 			tcp_push(sk, flags & ~MSG_MORE, mss_now,
@@ -1568,7 +1568,7 @@ out:
 	if (copied) {
 		tcp_tx_timestamp(sk, sockc.tsflags);
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "%s: out tcp_push\n", __func__);
+			pr_debug("%s: out tcp_push\n", __func__);
 		tcp_push(sk, flags, mss_now, tp->nonagle, size_goal);
 	}
 out_nopush:
@@ -1598,7 +1598,7 @@ int tcp_sendmsg(struct sock *sk, struct msghdr *msg, size_t size)
 
 	lock_sock(sk);
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "%s: ->tcp_sendmsg_locked \n", __func__);
+		pr_debug("%s: ->tcp_sendmsg_locked \n", __func__);
 
 	ret = tcp_sendmsg_locked(sk, msg, size);
 	release_sock(sk);
@@ -2652,13 +2652,13 @@ found_ok_skb:
 		//如果没有 MSG_TRUNC (表示用户确实要收数据)，就复制
 		if (!(flags & MSG_TRUNC)) {
 			if (is_src_k2pro(skb)) {
-				printk(KERN_INFO "%s: skb_copy_datagram_msg skb->len %u\n", __func__, skb->len);
-				printk(KERN_ERR "%s: ********* kernel rx end ********* \n\n", __func__);
+				pr_debug("%s: skb_copy_datagram_msg skb->len %u\n", __func__, skb->len);
+				pr_debug("%s: ********* kernel rx end ********* \n\n", __func__);
 			}
 
 			if (is_dst_k2pro(skb)) {
-				printk(KERN_INFO "%s: skb->len %u\n", __func__, skb->len);
-				printk(KERN_ERR "%s: ********* kernel rx end ********* \n\n", __func__);
+				pr_debug("%s: skb->len %u\n", __func__, skb->len);
+				pr_debug("%s: ********* kernel rx end ********* \n\n", __func__);
 			}
 			//将 skb 中的数据拷贝到用户空间
 			err = skb_copy_datagram_msg(skb, offset, msg, used);

@@ -201,12 +201,10 @@ static int expand_fdtable(struct files_struct *files, unsigned int nr)
 }
 
 /*
- * Expand files.
- * This function will expand the file structures, if the requested size exceeds
- * the current capacity and there is room for expansion.
- * Return <0 error code on error; 0 when nothing done; 1 when files were
- * expanded and execution may have blocked.
- * The files->file_lock should be held on entry, and will be held on exit.
+ * 扩展文件
+ * 如果请求的大小超过当前容量且仍有扩展空间，此函数将扩展文件结构
+ * 出错时返回小于 0 的错误码；若未执行任何操作则返回 0；若文件已扩展且执行可能发生阻塞，则返回 1
+ * 进入函数时应持有 files->file_lock 锁，函数退出时仍将保持该锁
  */
 static int expand_files(struct files_struct *files, unsigned int nr)
 	__releases(files->file_lock)
@@ -1002,6 +1000,7 @@ struct file *task_lookup_next_fd_rcu(struct task_struct *task, unsigned int *ret
  * The fput_needed flag returned by fget_light should be passed to the
  * corresponding fput_light.
  * 尝试从表中获取一致的文件描述符编号
+ * mask 表示不允许出现的模式位（例如某些调用方不接受 FMODE_PATH 等），一旦 file->f_mode 与之相交就拒绝
  */
 static unsigned long __fget_light(unsigned int fd, fmode_t mask)
 {
@@ -1016,6 +1015,7 @@ static unsigned long __fget_light(unsigned int fd, fmode_t mask)
 	 *
 	 * atomic_read_acquire() pairs with atomic_dec_and_test() in
 	 * put_files_struct().
+	 * 这个 files_struct 只有当前任务在用（未与其它线程/进程共享），就可以直接“生读”文件表
 	 */
 	if (atomic_read_acquire(&files->count) == 1) {
 		file = files_lookup_fd_raw(files, fd);
@@ -1103,7 +1103,12 @@ bool get_close_on_exec(unsigned int fd)
 	rcu_read_unlock();
 	return res;
 }
-
+/* 把一个已打开的文件（struct file *file）放到指定文件描述符号 fd 上（即 “把 file 复制/指派到 fd 位”）
+ * files: 当前进程的文件描述符表
+ * 	file: 要放到目标 fd 的那个 struct file
+ *    fd: 目标文件描述符编号
+ * flags: 目前只看 O_CLOEXEC（对应 dup3）。决定是否给新 fd 打上 exec 时自动关闭 标记
+*/
 static int do_dup2(struct files_struct *files,
 	struct file *file, unsigned fd, unsigned flags)
 __releases(&files->file_lock)
@@ -1128,11 +1133,16 @@ __releases(&files->file_lock)
 	fdt = files_fdtable(files);
 	fd = array_index_nospec(fd, fdt->max_fds);
 	tofree = fdt->fd[fd];
+    //竞态检测：如果指针是空的，但 fd_is_open() 判定这个位“逻辑上已打开”，说明别人正在把一个“尚未完全初始化（larval）”的文件放进去——此时不能覆盖，跳到 Ebusy 返回 -EBUSY
 	if (!tofree && fd_is_open(fd, fdt))
 		goto Ebusy;
+    //给 file 增加引用计数
 	get_file(file);
+    //用 RCU 写指针到 fd[fd]，确保并发读安全
 	rcu_assign_pointer(fdt->fd[fd], file);
+    //在位图里把 fd 标成“打开”
 	__set_open_fd(fd, fdt);
+    //按 O_CLOEXEC 决定是否在 execve 时关闭这个 fd（设置/清除 close_on_exec 位）
 	if (flags & O_CLOEXEC)
 		__set_close_on_exec(fd, fdt);
 	else

@@ -345,7 +345,14 @@ static bool pci_physfn_is_probed(struct pci_dev *dev)
 	return false;
 #endif
 }
-
+/*
+在适当的 CPU 上执行 PCI 设备驱动程序的初始化（即 probe 操作）。它根据设备所在的 NUMA 节点选择一个适合的 CPU 来执行初始化，以便确保内存分配和 CPU 亲和性得到优化。此函数会在设备和驱动程序匹配时被调用，并且会执行以下几个关键步骤：
+	1.	确定设备所在的 NUMA 节点。
+	2.	禁用 CPU 热插拔操作，避免在初始化过程中出现问题。
+	3.	根据设备的 NUMA 节点选择一个 CPU 来执行驱动程序的 probe 操作。
+	4.	在适当的 CPU 上执行驱动程序的初始化操作。
+	5.	设备初始化完成后恢复 CPU 热插拔功能，并返回操作结果
+*/
 static int pci_call_probe(struct pci_driver *drv, struct pci_dev *dev,
 			  const struct pci_device_id *id)
 {

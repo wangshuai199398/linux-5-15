@@ -24,7 +24,7 @@ static void *uapi_add_elm(struct uverbs_api *uapi, u32 key, size_t alloc_size)
 	elm = kzalloc(alloc_size, GFP_KERNEL);
 	if (!elm)
 		return ERR_PTR(-ENOMEM);
-	rc = radix_tree_insert(&uapi->radix, key, elm);
+	rc = (&uapi->radix, key, elm);
 	if (rc) {
 		kfree(elm);
 		return ERR_PTR(rc);

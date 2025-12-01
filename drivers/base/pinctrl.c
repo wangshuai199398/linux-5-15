@@ -39,7 +39,7 @@ int pinctrl_bind_pins(struct device *dev)
 	dev->pins->default_state = pinctrl_lookup_state(dev->pins->p,
 					PINCTRL_STATE_DEFAULT);
 	if (IS_ERR(dev->pins->default_state)) {
-		dev_dbg(dev, "no default pinctrl state\n");
+		dev_dbg(dev, "no default pinctrl state\n");//
 		ret = 0;
 		goto cleanup_get;
 	}

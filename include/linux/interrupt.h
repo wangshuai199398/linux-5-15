@@ -78,7 +78,7 @@
 #define IRQF_NOBALANCING	0x00000800
 // 此中断用于轮询
 #define IRQF_IRQPOLL		0x00001000
-// 在中断上下文中会屏蔽该中断号，在thread_fn执行完后，重新使能该中断号
+// 在中断上下文中会屏蔽该中断号，在使用 threaded IRQ（即带有中断线程处理函数）时，防止中断在中断线程执行期间被重新触发
 #define IRQF_ONESHOT		0x00002000
 #define IRQF_NO_SUSPEND		0x00004000
 #define IRQF_FORCE_RESUME	0x00008000

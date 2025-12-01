@@ -55,9 +55,9 @@ static int notifier_chain_unregister(struct notifier_block **nl,
  *	@nl:		Pointer to head of the blocking notifier chain
  *	@val:		Value passed unmodified to notifier function
  *	@v:		Pointer passed unmodified to notifier function
- *	@nr_to_call:	Number of notifier functions to be called. Don't care
+ *	@nr_to_call:	要调用的通知函数的数量. Don't care
  *			value of this parameter is -1.
- *	@nr_calls:	Records the number of notifications sent. Don't care
+ *	@nr_calls:	已发送的通知数量. Don't care
  *			value of this field is NULL.
  *	@returns:	notifier_call_chain returns the value returned by the
  *			last notifier function called.

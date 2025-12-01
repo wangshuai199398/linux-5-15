@@ -4425,7 +4425,7 @@ static int vxlan_nl2conf(struct nlattr *tb[], struct nlattr *data[],
 
 	return 0;
 }
-
+// ip link add vxlan0 type vxlan
 static int vxlan_newlink(struct net *src_net, struct net_device *dev,
 			 struct nlattr *tb[], struct nlattr *data[],
 			 struct netlink_ext_ack *extack)

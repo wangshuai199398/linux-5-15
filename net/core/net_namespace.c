@@ -308,7 +308,8 @@ struct net *get_net_ns_by_id(const struct net *net, int id)
 
 /*
  * setup_net runs the initializers for the network namespace object.
- * 对默认网络命名空间进行初始化
+ * 命名空间中各个子系统初始化，包括路由表、tcp的proc伪文件系统、iptables规则读取
+ * 
  */
 static __net_init int setup_net(struct net *net, struct user_namespace *user_ns)
 {

@@ -240,23 +240,25 @@ static void __user *
 get_sigframe(struct k_sigaction *ka, struct pt_regs *regs, size_t frame_size,
 	     void __user **fpstate)
 {
-	/* Default to using normal stack */
+	/* 当前 sp 是否已经在 sigaltstack 上（防止嵌套使用同一备用栈） */
 	bool nested_altstack = on_sig_stack(regs->sp);
 	bool entering_altstack = false;
 	unsigned long math_size = 0;
+    //当前用户栈指针作为信号帧起点
 	unsigned long sp = regs->sp;
 	unsigned long buf_fx = 0;
 
-	/* redzone */
+	/* AMD64 System V ABI 规定redzone（栈顶下方 128 字节的保留区）不能被异步破坏。内核在放入信号帧前先“跨过”这 128 字节 */
 	if (IS_ENABLED(CONFIG_X86_64))
 		sp -= 128;
 
-	/* This is the X/Open sanctioned signal stack switching.  */
+	/* This is the X/Open sanctioned signal stack switching. 如果该信号的处理动作要求用备用栈 */
 	if (ka->sa.sa_flags & SA_ONSTACK) {
 		/*
 		 * This checks nested_altstack via sas_ss_flags(). Sensible
 		 * programs use SS_AUTODISARM, which disables that check, and
 		 * programs that don't use SS_AUTODISARM get compatible.
+		 * 可用
 		 */
 		if (sas_ss_flags(sp) == 0) {
 			sp = current->sas_ss_sp + current->sas_ss_size;
@@ -271,7 +273,7 @@ get_sigframe(struct k_sigaction *ka, struct pt_regs *regs, size_t frame_size,
 		sp = (unsigned long) ka->sa.sa_restorer;
 		entering_altstack = true;
 	}
-
+    //为 FPU/FXSAVE/XSAVE 状态预留并对齐空间；返回更新后的 sp
 	sp = fpu__alloc_mathframe(sp, IS_ENABLED(CONFIG_X86_32),
 				  &buf_fx, &math_size);
 	*fpstate = (void __user *)sp;
@@ -456,7 +458,11 @@ static unsigned long frame_uc_flags(struct pt_regs *regs)
 
 	return flags;
 }
+/*
+uc_flags: ucontext_t 的第一个字段，通常置为 0 或带有特定标志（比如是否保存了 FPU 状态、是否有效等）
+uc_link : 在用户态表示“当信号处理函数返回后恢复到哪个 ucontext_t。设置为 0 表示没有后续上下文（即信号返回后直接回到原执行流）
 
+*/
 static int __setup_rt_frame(int sig, struct ksignal *ksig,
 			    sigset_t *set, struct pt_regs *regs)
 {
@@ -477,6 +483,7 @@ static int __setup_rt_frame(int sig, struct ksignal *ksig,
 	/* Create the ucontext.  */
 	unsafe_put_user(uc_flags, &frame->uc.uc_flags, Efault);
 	unsafe_put_user(0, &frame->uc.uc_link, Efault);
+	//保存当前的备用信号栈（altstack）信息到 uc.uc_stack
 	unsafe_save_altstack(&frame->uc.uc_stack, regs->sp, Efault);
 
 	/* Set up to return from userspace.  If provided, use a stub already in userspace.  */

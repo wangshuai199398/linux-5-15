@@ -43,7 +43,10 @@ struct fork_frame {
 	struct inactive_task_frame frame;
 	struct pt_regs regs;
 };
-
+/*
+A -> B -> C -> A
+从C回到A的时候，会把C复制给last，也就是A当时的栈帧的prev，这样A就知道当时是从A切换的B，然后从C切换回来的
+*/
 #define switch_to(prev, next, last)					\
 do {									\
 	((last) = __switch_to_asm((prev), (next)));			\

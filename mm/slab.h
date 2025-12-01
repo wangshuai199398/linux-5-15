@@ -267,6 +267,7 @@ static inline size_t obj_full_size(struct kmem_cache *s)
 
 /*
  * Returns false if the allocation should fail.
+ * memcg 限制检查（内存 cgroup quota 是否允许分配）
  */
 static inline bool memcg_slab_pre_alloc_hook(struct kmem_cache *s,
 					     struct obj_cgroup **objcgp,

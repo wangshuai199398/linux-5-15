@@ -1188,7 +1188,7 @@ int native_cpu_up(unsigned int cpu, struct task_struct *tidle)
 	err = common_cpu_up(cpu, tidle);
 	if (err)
 		return err;
-
+	//启动除 引导处理器（bootstrap processor） 之外的所有处理器
 	err = do_boot_cpu(apicid, cpu, tidle, &cpu0_nmi_registered);
 	if (err) {
 		pr_err("do_boot_cpu failed(%d) to wakeup CPU#%u\n", err, cpu);

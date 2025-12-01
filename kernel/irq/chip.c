@@ -1576,10 +1576,12 @@ static struct device *irq_get_parent_device(struct irq_data *data)
  */
 int irq_chip_pm_get(struct irq_data *data)
 {
+	//找到控制这个中断硬件块的设备对象
 	struct device *dev = irq_get_parent_device(data);
 	int retval;
 
 	if (IS_ENABLED(CONFIG_PM) && dev) {
+		//同步拉起/保持设备唤醒：把设备从 Runtime suspend 拉到 active 状态，并把 usage_count+1
 		retval = pm_runtime_get_sync(dev);
 		if (retval < 0) {
 			pm_runtime_put_noidle(dev);

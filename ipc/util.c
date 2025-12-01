@@ -407,7 +407,7 @@ static int ipcget_public(struct ipc_namespace *ns, struct ipc_ids *ids,
 	 * a new entry + read locks are not "upgradable"
 	 */
 	down_write(&ids->rwsem);
-	//垦局key查找kern_ipc_perm
+	//根据key查找kern_ipc_perm
 	ipcp = ipc_findkey(ids, params->key);
 	if (ipcp == NULL) {
 		/* key not used */

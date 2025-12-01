@@ -1310,6 +1310,7 @@ static void set_class_tag(struct rtable *rt, u32 tag)
 }
 #endif
 
+// 如果服务端mtu设置成100，mss最少都是256，算出来的mss是256-12=244，所以流量不通
 static unsigned int ipv4_default_advmss(const struct dst_entry *dst)
 {
 	unsigned int header_size = sizeof(struct tcphdr) + sizeof(struct iphdr);
@@ -2149,7 +2150,7 @@ static int ip_mkroute_input(struct sk_buff *skb,
 	}
 #endif
 
-	/* create a routing cache entry */
+	/* create a routing cache entry 为转发构建路由 */
 	return __mkroute_input(skb, res, in_dev, daddr, saddr, tos);
 }
 
@@ -2273,6 +2274,7 @@ static int ip_route_input_slow(struct sk_buff *skb, __be32 daddr, __be32 saddr,
 
 	/* Following code try to avoid calling IN_DEV_NET_ROUTE_LOCALNET(),
 	 * and call it once if daddr or/and saddr are loopback addresses
+	 * 如果目的或源是 127.0.0.0/8，但没开 route_localnet → 拒绝
 	 */
 	if (ipv4_is_loopback(daddr)) {
 		if (!IN_DEV_NET_ROUTE_LOCALNET(in_dev, net))
@@ -2283,7 +2285,7 @@ static int ip_route_input_slow(struct sk_buff *skb, __be32 daddr, __be32 saddr,
 	}
 
 	/*
-	 *	Now we are ready to route packet.
+	 *	Now we are ready to route packet. 构造查表键 flowi4
 	 */
 	fl4.flowi4_l3mdev = 0;
 	fl4.flowi4_oif = 0;
@@ -2304,7 +2306,7 @@ static int ip_route_input_slow(struct sk_buff *skb, __be32 daddr, __be32 saddr,
 		fl4.fl4_sport = 0;
 		fl4.fl4_dport = 0;
 	}
-
+    //查路由
 	err = fib_lookup(net, &fl4, res, 0);
 	if (err != 0) {
 		if (!IN_DEV_FORWARD(in_dev))
@@ -2320,7 +2322,7 @@ static int ip_route_input_slow(struct sk_buff *skb, __be32 daddr, __be32 saddr,
 			do_cache = false;
 		goto brd_input;
 	}
-
+    //发给本机的地址
 	if (res->type == RTN_LOCAL) {
 		err = fib_validate_source(skb, saddr, daddr, tos,
 					  0, dev, in_dev, &itag);
@@ -2328,7 +2330,7 @@ static int ip_route_input_slow(struct sk_buff *skb, __be32 daddr, __be32 saddr,
 			goto martian_source;
 		goto local_input;
 	}
-
+    //设备不允许转发
 	if (!IN_DEV_FORWARD(in_dev)) {
 		err = -EHOSTUNREACH;
 		goto no_route;
@@ -2362,7 +2364,7 @@ local_input:
 	do_cache &= res->fi && !itag;
 	if (do_cache) {
 		struct fib_nh_common *nhc = FIB_RES_NHC(*res);
-
+        //尝试复用缓存，从下一跳的nhc_rth_input拿旧rtable，若仍有效直接挂到skb
 		rth = rcu_dereference(nhc->nhc_rth_input);
 		if (rt_cache_valid(rth)) {
 			skb_dst_set_noref(skb, &rth->dst);
@@ -2370,7 +2372,7 @@ local_input:
 			goto out;
 		}
 	}
-
+    //分配新路由
 	rth = rt_dst_alloc(ip_rt_get_dev(net, res),
 			   flags | RTCF_LOCAL, res->type,
 			   no_policy, false);
@@ -2403,6 +2405,7 @@ local_input:
 		if (unlikely(!rt_cache_route(nhc, rth)))
 			rt_add_uncached_list(rth);
 	}
+	//将新dst挂到skb并返回0
 	skb_dst_set(skb, &rth->dst);
 	err = 0;
 	goto out;
@@ -2686,7 +2689,7 @@ struct rtable *ip_route_output_key_hash_rcu(struct net *net, struct flowi4 *fl4,
 		    (ipv4_is_multicast(fl4->daddr) ||
 		     ipv4_is_lbcast(fl4->daddr))) {
 			/* It is equivalent to inet_addr_type(saddr) == RTN_LOCAL */
-			//查找 RT_TABLE_LOCAL 路由表，查看是不是 lookback 设备
+			//根据源地址在哪个网卡上找到对应设备
 			dev_out = __ip_dev_find(net, fl4->saddr, false);
 			if (!dev_out)
 				goto out;
@@ -3583,6 +3586,7 @@ static struct ctl_table ipv4_route_table[] = {
 		.proc_handler	= proc_dointvec_minmax,
 		.extra1		= &ip_min_valid_pmtu,
 	},
+	//内核对外通告的最小 TCP MSS 值（Minimum Advertised MSS）, 用于防止路径 MTU 过小导致的分片问题
 	{
 		.procname	= "min_adv_mss",
 		.data		= &ip_rt_min_advmss,

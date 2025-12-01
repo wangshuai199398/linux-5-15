@@ -328,7 +328,7 @@ int __sk_backlog_rcv(struct sock *sk, struct sk_buff *skb)
 
 	noreclaim_flag = memalloc_noreclaim_save();
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: sk_backlog_rcv\n", __func__);
+		pr_debug("%s: sk_backlog_rcv\n", __func__);
 	ret = sk->sk_backlog_rcv(sk, skb);
 	memalloc_noreclaim_restore(noreclaim_flag);
 
@@ -513,7 +513,7 @@ int __sk_receive_skb(struct sock *sk, struct sk_buff *skb,
 
 	skb->dev = NULL;
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: sk_rcvqueues_full\n", __func__);
+		pr_debug("%s: sk_rcvqueues_full\n", __func__);
 	if (sk_rcvqueues_full(sk, READ_ONCE(sk->sk_rcvbuf))) {
 		atomic_inc(&sk->sk_drops);
 		goto discard_and_relse;
@@ -528,7 +528,7 @@ int __sk_receive_skb(struct sock *sk, struct sk_buff *skb,
 		 */
 		mutex_acquire(&sk->sk_lock.dep_map, 0, 1, _RET_IP_);
 		if (is_src_k2pro(skb))
-			printk(KERN_INFO "%s: sk_backlog_rcv\n", __func__);
+			pr_debug("%s: sk_backlog_rcv\n", __func__);
 		rc = sk_backlog_rcv(sk, skb);
 
 		mutex_release(&sk->sk_lock.dep_map, _RET_IP_);
@@ -1863,7 +1863,7 @@ static struct sock *sk_prot_alloc(struct proto *prot, gfp_t priority,
 	slab = prot->slab;
 	if (slab != NULL) {
 		//如果协议定义了 slab cache（如 TCP 定义的 tcp_cachep），用 kmem_cache_alloc() 分配对象
-		//TCP的slab缓存是在 inet_init 初始化好的
+		//TCP的slab缓存是在 inet_init->proto_register 初始化好的，这里创建的是 tcp_sock
 		sk = kmem_cache_alloc(slab, priority & ~__GFP_ZERO);
 		if (!sk)
 			return sk;
@@ -3085,7 +3085,7 @@ ssize_t sock_no_sendpage_locked(struct sock *sk, struct page *page,
 	iov.iov_len = size;
 
 	if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-		printk(KERN_INFO "sock_no_sendpage_locked -> kernel_sendmsg_locked\n");
+		pr_debug("sock_no_sendpage_locked -> kernel_sendmsg_locked\n");
 
 	res = kernel_sendmsg_locked(sk, &msg, &iov, 1, size);
 	kunmap(page);
@@ -3298,6 +3298,7 @@ void lock_sock_nested(struct sock *sk, int subclass)
 }
 EXPORT_SYMBOL(lock_sock_nested);
 
+//在释放 socket 自旋锁时，安全地处理 backlog 队列中的挂起数据、执行回调、释放当前线程对该 socket 的所有权，并唤醒可能等待锁的其他任务
 void release_sock(struct sock *sk)
 {
 	spin_lock_bh(&sk->sk_lock.slock);
@@ -3308,7 +3309,7 @@ void release_sock(struct sock *sk)
 	/* 警告：release_cb() 可能需要释放 sk 的所有权，也就是说，它可能会在我们之前调用 sock_release_ownership(sk) */
 	if (sk->sk_prot->release_cb)
 		sk->sk_prot->release_cb(sk);
-	//释放所有权
+	//释放所有权, 当前线程（或 softirq）不再独占这个 socket
 	sock_release_ownership(sk);
 	// 如果有人在等锁，唤醒他们
 	if (waitqueue_active(&sk->sk_lock.wq))

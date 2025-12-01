@@ -16,7 +16,7 @@
 #define SMAP	0x534d4150	/* ASCII "SMAP" */
 
 /*
-发出0x15中断并处理所有结果，把内存地址范围保存到boot_params.e820_table对象中
+发出0x15中断并处理所有结果，把内存地址范围保存到 boot_params.e820_table 对象中
 */
 static void detect_memory_e820(void)
 {

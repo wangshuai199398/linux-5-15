@@ -775,10 +775,8 @@ __kernel_physical_mapping_init(unsigned long paddr_start,
 
 
 /*
- * Create page table mapping for the physical memory for specific physical
- * addresses. Note that it can only be used to populate non-present entries.
- * The virtual and physical addresses have to be aligned on PMD level
- * down. It returns the last physical address mapped.
+ * 为特定物理地址创建对应的物理内存页表映射。请注意，该函数只能用于填充当前不存在（non-present）的页表项。
+ * 虚拟地址和物理地址必须向下对齐到 PMD（Page Middle Directory）级别。函数将返回最后一个被映射的物理地址
  */
 unsigned long __meminit
 kernel_physical_mapping_init(unsigned long paddr_start,

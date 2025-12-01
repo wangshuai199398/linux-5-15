@@ -572,13 +572,14 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 
 	WARN_ON_ONCE(IS_ENABLED(CONFIG_DEBUG_ENTRY) &&
 		     this_cpu_read(hardirq_stack_inuse));
-
+    //TIF_NEED_FPU_LOAD: 系统暂时不恢复 FPU 状态，等任务第一次真正执行浮点指令时再恢复
+	// 如果当前线程的 FPU 状态正在 CPU 上（即不是懒加载），在切换前先把它保存到内存中
 	if (!test_thread_flag(TIF_NEED_FPU_LOAD))
 		switch_fpu_prepare(prev_fpu, cpu);
 
 	/* We must save %fs and %gs before load_TLS() because
 	 * %fs and %gs may be cleared by load_TLS().
-	 *
+	 * 保存 prev_p 的 fs/gs 选择子（以及必要时的基址）。
 	 * (e.g. xen_load_tls())
 	 */
 	save_fsgs(prev_p);
@@ -586,6 +587,8 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 	/*
 	 * Load TLS before restoring any segments so that segment loads
 	 * reference the correct GDT entries.
+	 * 加载 next 的线程本地存储（TLS）相关的 GDT/LDT 条目
+	 * 说明：先保存 FS/GS 再加载 TLS，是因为加载 TLS 可能会改变这些段寄存器的含义
 	 */
 	load_TLS(next, cpu);
 
@@ -593,6 +596,7 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 	 * Leave lazy mode, flushing any hypercalls made here.  This
 	 * must be done after loading TLS entries in the GDT but before
 	 * loading segments that might reference them.
+	 * 离开懒模式，确保与虚拟化/超调用相关的状态被刷新（常见于 KVM/Xen 等环境）
 	 */
 	arch_end_context_switch(next_p);
 
@@ -609,6 +613,7 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 	 *
 	 * Note that we don't need to do anything for CS and SS, as
 	 * those are saved and restored as part of pt_regs.
+	 * 说明：读出只是拿到选择子值；写回（非 0 时）会从 GDT/LDT 重新装载完整描述符。CS/SS 在陷入/返回时由 pt_regs 负责，这里不动
 	 */
 	savesegment(es, prev->es);
 	if (unlikely(next->es | prev->es))
@@ -617,22 +622,24 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 	savesegment(ds, prev->ds);
 	if (unlikely(next->ds | prev->ds))
 		loadsegment(ds, next->ds);
-
+    //如果 CPU 支持 FSGSBASE 指令族，设置 next 的 FS/GS 基址
 	x86_fsgsbase_load(prev, next);
-
+    //恢复 MPK（Memory Protection Keys）的 PKRU 寄存器，影响用户态访问权限
 	x86_pkru_load(prev, next);
 
 	/*
 	 * Switch the PDA and FPU contexts.
+	 * 更新本 CPU 的“当前任务”指针
+	 * 更新该任务的内核栈顶地址（供中断/异常入栈使用）
 	 */
 	this_cpu_write(current_task, next_p);
 	this_cpu_write(cpu_current_top_of_stack, task_top_of_stack(next_p));
-
+    //完成 FPU 切换的收尾
 	switch_fpu_finish();
 
-	/* Reload sp0. */
+	/* Reload sp0. 把 TSS 里的 sp0（从用户态陷入内核时用的栈顶）重载为 next 的内核栈 */
 	update_task_stack(next_p);
-
+    //切换额外的架构/平台相关状态（比如某些调试寄存器、特性开关、虚拟化钩子等）
 	switch_to_extra(prev_p, next_p);
 
 	if (static_cpu_has_bug(X86_BUG_SYSRET_SS_ATTRS)) {
@@ -656,6 +663,8 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 		 * We read SS first because SS reads are much faster than
 		 * writes.  Out of caution, we force SS to __KERNEL_DS even if
 		 * it previously had a different non-NULL value.
+		 * 某些 AMD CPU 在 SYSRET 时对 SS 描述符缓存处理不完整，可能导致从内核回到用户态时 SS“看起来是对的，其实不可用”
+		 * 为避免这种情况，这里在每次上下文切换时，把 SS 强制写成 __KERNEL_DS，确保之后的 SYSRET 不会踩雷
 		 */
 		unsigned short ss_sel;
 		savesegment(ss, ss_sel);
@@ -663,9 +672,9 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 			loadsegment(ss, __KERNEL_DS);
 	}
 
-	/* Load the Intel cache allocation PQR MSR. */
+	/* Load the Intel cache allocation PQR MSR. 加载英特尔资源控制的 PQR（IA32_PQR_ASSOC MSR），使缓存/带宽分配策略（如 CAT/MBM）对新任务生效 */
 	resctrl_sched_in(next_p);
-
+    //返回“之前的任务指针”
 	return prev_p;
 }
 

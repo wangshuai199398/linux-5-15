@@ -396,7 +396,9 @@ queue:
 pv_queue:
 	//获取当前 CPU 对应的 MCS 锁节点，构造链表的节点（MCS 样式），用于链式等待锁
 	node = this_cpu_ptr(&qnodes[0].mcs);
+	//从当前 CPU 的 qnode 结构中取出当前嵌套层索引（count），然后自增
 	idx = node->count++;
+	//生成一个 32 位整数（tail 值），编码当前 CPU 的 ID 和它的嵌套层次（idx）
 	tail = encode_tail(smp_processor_id(), idx);
 
 	/*

@@ -4717,6 +4717,9 @@ void rcu_init_geometry(void)
 /*
  * Dump out the structure of the rcu_node combining tree associated
  * with the rcu_state structure.
+ * /etc/default/grub添加参数 rcutree.dump_tree=1
+ * rcu: rcu_node tree layout dump
+ * rcu:  0:11 ^0
  */
 static void __init rcu_dump_rcu_node_tree(void)
 {

@@ -40,7 +40,7 @@ struct semid_ds {
 struct sembuf {
 	//当前操作要作用于哪个信号量编号
 	unsigned short  sem_num;	/* semaphore index in array */
-	short		sem_op;		/* semaphore operation */
+	short		sem_op;		/* 操作数（P/V 操作 */
 	short		sem_flg;	/* operation flags */
 };
 

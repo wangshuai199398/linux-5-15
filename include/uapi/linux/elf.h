@@ -224,7 +224,7 @@ typedef struct elf64_hdr {
   Elf64_Half e_type;
   Elf64_Half e_machine;
   Elf64_Word e_version;
-  Elf64_Addr e_entry;		/* Entry point virtual address */
+  Elf64_Addr e_entry;		/* 程序运行的入口 */
   Elf64_Off e_phoff;		/* Program header table file offset */
   Elf64_Off e_shoff;		/* Section header table file offset */
   Elf64_Word e_flags;
@@ -257,7 +257,7 @@ typedef struct elf64_phdr {
   Elf64_Word p_type;
   Elf64_Word p_flags;
   Elf64_Off p_offset;		/* Segment file offset */
-  Elf64_Addr p_vaddr;		/* Segment virtual address */
+  Elf64_Addr p_vaddr;		/* 这个段加载到内存的虚拟地址 */
   Elf64_Addr p_paddr;		/* Segment physical address */
   Elf64_Xword p_filesz;		/* Segment size in file */
   Elf64_Xword p_memsz;		/* Segment size in memory */

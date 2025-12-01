@@ -73,6 +73,7 @@ enum fixed_addresses {
 	/*
 	 * Temporary boot-time mappings, used by early_ioremap(),
 	 * before ioremap() is functional.
+	 * 初期固定映射地址
 	 */
 #define NR_FIX_BTMAPS		(SZ_256K / PAGE_SIZE)
 #define FIX_BTMAPS_SLOTS	7

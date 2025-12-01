@@ -377,7 +377,7 @@ static void driver_bound(struct device *dev)
 			__func__, kobject_name(&dev->kobj));
 		return;
 	}
-
+	// driver: 'ysk_unic3.eth': driver_bound: bound to device 'ysk_unic3.eth.0'
 	pr_debug("driver: '%s': %s: bound to device '%s'\n", dev->driver->name,
 		 __func__, dev_name(dev));
 
@@ -418,7 +418,7 @@ static int driver_sysfs_add(struct device *dev)
 	if (dev->bus)
 		blocking_notifier_call_chain(&dev->bus->p->bus_notifier,
 					     BUS_NOTIFY_BIND_DRIVER, dev);
-
+	// /sys/bus/auxiliary/drivers/ysk_unic3.eth/ysk_unic3.eth.0
 	ret = sysfs_create_link(&dev->driver->p->kobj, &dev->kobj,
 				kobject_name(&dev->kobj));
 	if (ret)
@@ -556,7 +556,7 @@ static int really_probe(struct device *dev, struct device_driver *drv)
 	ret = device_links_check_suppliers(dev);
 	if (ret)
 		return ret;
-
+	// bus: 'auxiliary': really_probe: probing driver ysk_unic3.eth with device ysk_unic3.eth.0
 	pr_debug("bus: '%s': %s: probing driver %s with device %s\n",
 		 drv->bus->name, __func__, drv->name, dev_name(dev));
 	if (!list_empty(&dev->devres_head)) {
@@ -578,7 +578,7 @@ re_probe:
 		if (ret)
 			goto probe_failed;
 	}
-
+	// 创建 /sys/bus/auxiliary/drivers/ysk_unic3.eth 下的软链接
 	ret = driver_sysfs_add(dev);
 	if (ret) {
 		pr_err("%s: driver_sysfs_add(%s) failed\n",
@@ -647,6 +647,7 @@ re_probe:
 		dev->pm_domain->sync(dev);
 
 	driver_bound(dev);
+	// driver: 'ysk_unic3.eth': driver_bound: bound to device 'ysk_unic3.eth.0'
 	pr_debug("bus: '%s': %s: bound device %s to driver %s\n",
 		 drv->bus->name, __func__, dev_name(dev), drv->name);
 	goto done;
@@ -741,6 +742,7 @@ static int __driver_probe_device(struct device_driver *drv, struct device *dev)
 		return -EBUSY;
 
 	dev->can_match = true;
+	// bus: 'auxiliary': __driver_probe_device: matched device ysk_unic3.eth.0 with driver ysk_unic3.eth
 	pr_debug("bus: '%s': %s: matched device %s with driver %s\n",
 		 drv->bus->name, __func__, dev_name(dev), drv->name);
 

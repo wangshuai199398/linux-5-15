@@ -686,15 +686,14 @@ static void msix_mask_all(void __iomem *base, int tsize)
 }
 
 /**
- * msix_capability_init - configure device's MSI-X capability
- * @dev: pointer to the pci_dev data structure of MSI-X device function
- * @entries: pointer to an array of struct msix_entry entries
- * @nvec: number of @entries
- * @affd: Optional pointer to enable automatic affinity assignment
+ * 配置设备的 MSI-X 能力
+ * @dev: 指向 MSI-X 设备函数的 pci_dev 数据结构的指针
+ * @entries: 指向 struct msix_entry 数组的指针
+ * @nvec: @entries 数组的元素数量
+ * @affd: 可选的指针，用于启用自动亲和性分配
  *
- * Setup the MSI-X capability structure of device function with a
- * single MSI-X IRQ. A return of zero indicates the successful setup of
- * requested MSI-X entries with allocated IRQs or non-zero for otherwise.
+ * 此函数用于设置设备函数的 MSI-X 能力结构，配置单个 MSI-X 中断。
+ * 返回值为零表示成功配置了所请求的 MSI-X 条目并分配了中断。如果返回非零值，则表示配置失败
  **/
 static int msix_capability_init(struct pci_dev *dev, struct msix_entry *entries,
 				int nvec, struct irq_affinity *affd)
@@ -705,15 +704,15 @@ static int msix_capability_init(struct pci_dev *dev, struct msix_entry *entries,
 	u16 control;
 
 	/*
-	 * Some devices require MSI-X to be enabled before the MSI-X
-	 * registers can be accessed.  Mask all the vectors to prevent
-	 * interrupts coming in before they're fully set up.
+	 * 一些设备在访问 MSI-X 寄存器之前需要启用 MSI-X。为了防止在完全设置之前中断进入，先屏蔽所有的中断向量
+	 * 这行代码首先清除 MSI-X 的所有中断标志，并启用 MSI-X
+	 * PCI_MSIX_FLAGS_MASKALL 会掩蔽所有中断，以防止在配置过程中触发中断, PCI_MSIX_FLAGS_ENABLE 启用 MSI-X 功能
 	 */
 	pci_msix_clear_and_set_ctrl(dev, 0, PCI_MSIX_FLAGS_MASKALL |
 				    PCI_MSIX_FLAGS_ENABLE);
-
+    //读取 PCI 配置空间中的 MSI-X 控制寄存器
 	pci_read_config_word(dev, dev->msix_cap + PCI_MSIX_FLAGS, &control);
-	/* Request & Map MSI-X table region */
+	/* 获取 MSI-X 表的大小并通过 msix_map_region 映射 MSI-X 表区域 */
 	tsize = msix_table_size(control);
 	base = msix_map_region(dev, tsize);
 	if (!base) {
@@ -721,9 +720,9 @@ static int msix_capability_init(struct pci_dev *dev, struct msix_entry *entries,
 		goto out_disable;
 	}
 
-	/* Ensure that all table entries are masked. */
+	/* 在配置 MSI-X 之前，确保所有 MSI-X 条目都被屏蔽，防止中断在配置期间触发 */
 	msix_mask_all(base, tsize);
-
+    //分配中断描述符并初始化 MSI-X 条目
 	ret = msix_setup_entries(dev, base, entries, nvec, affd);
 	if (ret)
 		goto out_disable;
@@ -1181,12 +1180,13 @@ void pci_free_irq_vectors(struct pci_dev *dev)
 EXPORT_SYMBOL(pci_free_irq_vectors);
 
 /**
- * pci_irq_vector - return Linux IRQ number of a device vector
- * @dev:	PCI device to operate on
- * @nr:		Interrupt vector index (0-based)
+ * 返回指定 PCI 设备的 中断向量对应的 Linux IRQ 号
+ * @dev:	设备
+ * @nr:		中断向量索引（从 0 开始）
  *
+ * 从一个 PCI 设备的中断配置中，根据索引 nr，取得它对应的 IRQ 编号（即你在 request_irq() 时要用的那个数值）
  * @nr has the following meanings depending on the interrupt mode:
- *   MSI-X:	The index in the MSI-X vector table
+ *   MSI-X:	nr 是 MSI-X 向量表中的索引
  *   MSI:	The index of the enabled MSI vectors
  *   INTx:	Must be 0
  *

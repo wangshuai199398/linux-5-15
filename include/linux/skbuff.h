@@ -1719,12 +1719,11 @@ static inline struct sk_buff *skb_get(struct sk_buff *skb)
  */
 
 /**
- *	skb_cloned - is the buffer a clone
+ *	该缓冲区是否为克隆缓冲区
  *	@skb: buffer to check
  *
- *	Returns true if the buffer was generated with skb_clone() and is
- *	one of multiple shared copies of the buffer. Cloned buffers are
- *	shared data so must not be written to under normal circumstances.
+ *	如果该缓冲区是通过 skb_clone() 生成的，并且是多个共享副本之一，则返回 true。
+ *  克隆缓冲区中的数据是共享的，因此在正常情况下不能对其进行写操作
  */
 static inline int skb_cloned(const struct sk_buff *skb)
 {
@@ -2226,7 +2225,9 @@ static inline bool skb_is_nonlinear(const struct sk_buff *skb)
 {
 	return skb->data_len;
 }
-
+/*
+线性区中的有效数据长度
+*/
 static inline unsigned int skb_headlen(const struct sk_buff *skb)
 {
 	return skb->len - skb->data_len;
@@ -2377,6 +2378,7 @@ static inline void skb_assert_len(struct sk_buff *skb)
  */
 void *pskb_put(struct sk_buff *skb, struct sk_buff *tail, int len);
 void *skb_put(struct sk_buff *skb, unsigned int len);
+// 扩大tail指针，增加skb的长度len，并返回原tail指针位置
 static inline void *__skb_put(struct sk_buff *skb, unsigned int len)
 {
 	void *tmp = skb_tail_pointer(skb);
@@ -2947,7 +2949,7 @@ static inline int skb_orphan_frags(struct sk_buff *skb, gfp_t gfp_mask)
 }
 
 /* Frags must be orphaned, even if refcounted, if skb might loop to rx path */
-//将这些 frags ‘orphan’（解绑）掉”
+//把用户空间的页（user buffers）真正拷贝一份到内核空间，从而“孤立”（orphan）这些分片，使得接收路径上的后续处理不再依赖用户空间内存
 static inline int skb_orphan_frags_rx(struct sk_buff *skb, gfp_t gfp_mask)
 {
 	if (likely(!skb_zcopy(skb)))
@@ -3366,6 +3368,7 @@ static inline struct sk_buff *pskb_copy_for_clone(struct sk_buff *skb,
  *
  *	Returns true if modifying the header part of the cloned buffer
  *	does not requires the data to be copied.
+ *  头部（header）没有被共享，要改写的字节数完全落在被声明为“头部区”的范围内
  */
 static inline int skb_clone_writable(const struct sk_buff *skb, unsigned int len)
 {

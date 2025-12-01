@@ -224,8 +224,8 @@ void tcp_time_wait(struct sock *sk, int state, int timeo);
 
 /* Flags in tp->nonagle */
 #define TCP_NAGLE_OFF		1	/* Nagle's algo is disabled */
-#define TCP_NAGLE_CORK		2	/* Socket is corked	    */
-#define TCP_NAGLE_PUSH		4	/* Cork is overridden for already queued data */
+#define TCP_NAGLE_CORK		2	/* 暂时阻止发送数据，将数据积累在缓冲区里，直到“拔塞子”或达到一定条件再一次性发送	    */
+#define TCP_NAGLE_PUSH		4	/* 即使 socket 被 cork，也会把缓冲中已有的数据立即发送出去 */
 
 /* TCP thin-stream limits */
 #define TCP_THIN_LINEAR_RETRIES 6       /* After 6 linear retries, do exp. backoff */
@@ -681,13 +681,15 @@ static inline u32 __tcp_set_rto(const struct tcp_sock *tp)
 {
 	return usecs_to_jiffies((tp->srtt_us >> 3) + tp->rttvar_us);
 }
-
+/*
+把pred_flags设置成 首部长度|ACK标志|发送窗口大小
+*/
 static inline void __tcp_fast_path_on(struct tcp_sock *tp, u32 snd_wnd)
 {
 	/* mptcp hooks are only on the slow path */
 	if (sk_is_mptcp((struct sock *)tp))
 		return;
-
+    //tcp_header_len是字节数/4放到相应位置
 	tp->pred_flags = htonl((tp->tcp_header_len << 26) |
 			       ntohl(TCP_FLAG_ACK) |
 			       snd_wnd);
@@ -736,9 +738,10 @@ static inline u32 tcp_min_rtt(const struct tcp_sock *tp)
 	return minmax_get(&tp->rtt_min);
 }
 
-/* 计算我们当前通告的实际接收窗口。Rcv_nxt 可能会超出窗口范围，如果对端发送的数据超过了我们提供的窗口 */
+/* 基于当前已接收但未读数据计算出来的当前可通告窗口。Rcv_nxt 可能会超出窗口范围，如果对端发送的数据超过了我们提供的窗口 */
 static inline u32 tcp_receive_window(const struct tcp_sock *tp)
 {
+    //当前还能接收多少字节 = 当前通告的窗口右边界 − 已经收到的数据的右边界
 	s32 win = tp->rcv_wup + tp->rcv_wnd - tp->rcv_nxt;
 
 	if (win < 0)
@@ -1908,7 +1911,7 @@ static inline void tcp_push_pending_frames(struct sock *sk)
 	if (tcp_send_head(sk)) {
 		struct tcp_sock *tp = tcp_sk(sk);
 		if (inet_sk(sk)->cork.fl.u.ip4.daddr == 0xa4dc77a)
-			printk(KERN_INFO "tcp_push_pending_frames\n");
+			->tcp_data_q"tcp_push_pending_frames\n");
 		__tcp_push_pending_frames(sk, tcp_current_mss(sk), tp->nonagle);
 	}
 }

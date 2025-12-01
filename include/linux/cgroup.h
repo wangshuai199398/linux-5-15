@@ -683,9 +683,7 @@ bool cgroup_psi_enabled(void);
 static inline void cgroup_init_kthreadd(void)
 {
 	/*
-	 * kthreadd is inherited by all kthreads, keep it in the root so
-	 * that the new kthreads are guaranteed to stay in the root until
-	 * initialization is finished.
+	 * kthreadd 被所有内核线程继承，把它保持在根（root）中，这样可以保证新的内核线程在初始化完成之前都会留在根里
 	 */
 	current->no_cgroup_migration = 1;
 }

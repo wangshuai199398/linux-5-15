@@ -2504,7 +2504,7 @@ static int filemap_create_page(struct file *file,
 		error = AOP_TRUNCATED_PAGE;
 	if (error)
 		goto error;
-
+    //提交读盘
 	error = filemap_read_page(file, mapping, page);
 	if (error)
 		goto error;
@@ -2535,7 +2535,9 @@ static int filemap_get_pages(struct kiocb *iocb, struct iov_iter *iter,
 	struct file *filp = iocb->ki_filp;
 	struct address_space *mapping = filp->f_mapping;
 	struct file_ra_state *ra = &filp->f_ra;
+    //index 是当前读取位置所在页号
 	pgoff_t index = iocb->ki_pos >> PAGE_SHIFT;
+    //last_index 是本次读取操作会覆盖的最后一页的下一个页号（即 end）
 	pgoff_t last_index;
 	struct page *page;
 	int err = 0;
@@ -2545,33 +2547,37 @@ static int filemap_get_pages(struct kiocb *iocb, struct iov_iter *iter,
 retry:
 	if (fatal_signal_pending(current))
 		return -EINTR;
-
+    //先尝试从页缓存中批量获取已有的页（从 index 到 last_index-1）放入 pvec
 	filemap_get_read_batch(mapping, index, last_index - 1, pvec);
 	if (!pagevec_count(pvec)) {
 		if (iocb->ki_flags & IOCB_NOIO)
 			return -EAGAIN;
-		//预取
+		//调用 同步预读（同步读取磁盘数据），把数据拉进 page cache，再尝试一次获取页
 		page_cache_sync_readahead(mapping, ra, filp, index,
 				last_index - index);
 		filemap_get_read_batch(mapping, index, last_index - 1, pvec);
 	}
+    //如果页仍然没找到：分配一个新页
 	if (!pagevec_count(pvec)) {
 		if (iocb->ki_flags & (IOCB_NOWAIT | IOCB_WAITQ))
 			return -EAGAIN;
 		err = filemap_create_page(filp, mapping,
 				iocb->ki_pos >> PAGE_SHIFT, pvec);
+        //对应的文件被截断（truncate）或映射被改变
 		if (err == AOP_TRUNCATED_PAGE)
 			goto retry;
 		return err;
 	}
 
 	page = pvec->pages[pagevec_count(pvec) - 1];
+    //如果这个页是“预读标志”页
 	if (PageReadahead(page)) {
-		//如果第一次找缓存页就找到了，我们还是要判断，是不是应该继续预读；如果需要，就调用 page_cache_async_readahead 发起一个异步预读
+		//发起异步预读
 		err = filemap_readahead(iocb, filp, mapping, page, last_index);
 		if (err)
 			goto err;
 	}
+    //如果页还没准备好（没加载数据），调用 filemap_update_page() 来读取磁盘内容
 	if (!PageUptodate(page)) {
 		if ((iocb->ki_flags & IOCB_WAITQ) && pagevec_count(pvec) > 1)
 			iocb->ki_flags |= IOCB_NOWAIT;

@@ -13,36 +13,30 @@
 #include <linux/notifier.h>
 
 /**
- * struct subsys_private - structure to hold the private to the driver core portions of the bus_type/class structure.
+ * 用于保存与驱动核心部分相关的 bus_type/class 结构体的私有数据
  *
- * @subsys - the struct kset that defines this subsystem
- * @devices_kset - the subsystem's 'devices' directory
- * @interfaces - list of subsystem interfaces associated
- * @mutex - protect the devices, and interfaces lists.
+ * @subsys       - 定义该子系统的 struct kset
+ * @devices_kset - 子系统的 'devices' 目录
+ * @interfaces   - 与子系统关联的接口列表
+ * @mutex        - 保护 devices 和 interfaces 列表的互斥锁
  *
- * @drivers_kset - the list of drivers associated
- * @klist_devices - the klist to iterate over the @devices_kset
- * @klist_drivers - the klist to iterate over the @drivers_kset
- * @bus_notifier - the bus notifier list for anything that cares about things
- *                 on this bus.
- * @bus - pointer back to the struct bus_type that this structure is associated
- *        with.
+ * @drivers_kset  - 与子系统关联的驱动列表
+ * @klist_devices - 用于遍历 @devices_kset 的 klist
+ * @klist_drivers - 用于遍历 @drivers_kset 的 klist
+ * @bus_notifier  - 与该总线相关的总线通知列表，供关心此总线的任何组件使用
+ * @bus           - 指向与该结构体关联的 struct bus_type 的指针
  *
- * @glue_dirs - "glue" directory to put in-between the parent device to
- *              avoid namespace conflicts
- * @class - pointer back to the struct class that this structure is associated
- *          with.
+ * @glue_dirs     - 用于在父设备之间插入 "粘合" 目录，避免命名空间冲突
+ * @class         - 指向与该结构体关联的 struct class 的指针
  *
- * This structure is the one that is the actual kobject allowing struct
- * bus_type/class to be statically allocated safely.  Nothing outside of the
- * driver core should ever touch these fields.
+ * 该结构体是 允许 struct bus_type/class 安全地静态分配的实际的 kobject。驱动核心之外的任何代码都不应该直接访问这些字段
  */
 struct subsys_private {
 	struct kset subsys;
 	struct kset *devices_kset;
 	struct list_head interfaces;
 	struct mutex mutex;
-
+    //驱动集合，它的kobject的name是drivers
 	struct kset *drivers_kset;
 	struct klist klist_devices;
 	struct klist klist_drivers;
@@ -84,6 +78,9 @@ struct driver_private {
  *	device should exit without taking any action.
  *
  * Nothing outside of the driver core should ever touch these fields.
+ * 扩展结构
+ * 保存各种 klist 节点、bus/class 链表节点、PM 信息等等
+ * 如果还没分配，就通过 device_private_init(dev) 初始化
  */
 struct device_private {
 	struct klist klist_children;

@@ -2213,27 +2213,29 @@ blk_qc_t blk_mq_submit_bio(struct bio *bio)
 	blk_qc_t cookie;
 	blk_status_t ret;
 	bool hipri;
-
+    //当块设备不能直接访问某些内存区时，把 bio 中的数据复制到设备可访问的物理地址范围内
 	blk_queue_bounce(q, &bio);
+    //根据队列限制（最大段数、最大扇区等）把超限的 bio 拆分
 	__blk_queue_split(&bio, &nr_segs);
 	if (!bio)
 		goto queue_exit;
 
 	if (!bio_integrity_prep(bio))
 		goto queue_exit;
-
+    //与当前 CPU 的 plug 列表里已有 request 合并成功就结束（无需新建 request）
 	if (!is_flush_fua && !blk_queue_nomerges(q) &&
 	    blk_attempt_plug_merge(q, bio, nr_segs, &same_queue_rq))
 		goto queue_exit;
-
+    //交给电梯/调度器尝试合并到现有 request，成功也直接结束
 	if (blk_mq_sched_bio_merge(q, bio, nr_segs))
 		goto queue_exit;
-
+    //进入队列 QoS 控制
 	rq_qos_throttle(q, bio);
 
 	hipri = bio->bi_opf & REQ_HIPRI;
 
 	data.cmd_flags = bio->bi_opf;
+	//依据 bio->bi_opf（读写/优先级/nowait 等标志）分配 request 与目标硬件队列 (hctx)
 	rq = __blk_mq_alloc_request(&data);
 	if (unlikely(!rq)) {
 		rq_qos_cleanup(q, bio);
@@ -2247,9 +2249,9 @@ blk_qc_t blk_mq_submit_bio(struct bio *bio)
 	rq_qos_track(q, rq, bio);
 
 	cookie = request_to_qc_t(data.hctx, rq);
-
+    //把 bio 内容（段、方向、起始扇区等）装进 request
 	blk_mq_bio_to_request(rq, bio, nr_segs);
-
+    //若设备支持内联加密，需要在硬件里获取 keyslot
 	ret = blk_crypto_rq_get_keyslot(rq);
 	if (ret != BLK_STS_OK) {
 		bio->bi_status = ret;
@@ -2260,7 +2262,7 @@ blk_qc_t blk_mq_submit_bio(struct bio *bio)
 
 	plug = blk_mq_plug(q, bio);
 	if (unlikely(is_flush_fua)) {
-		/* Bypass scheduler for flush requests */
+		/* 刷盘/带FUA：绕过调度器，直插flush队列并立刻跑硬件 */
 		blk_insert_flush(rq);
 		blk_mq_run_hw_queue(data.hctx, true);
 	} else if (plug && (q->nr_hw_queues == 1 ||
@@ -2272,6 +2274,7 @@ blk_qc_t blk_mq_submit_bio(struct bio *bio)
 		 *
 		 * Use normal plugging if this disk is slow HDD, as sequential
 		 * IO may benefit a lot from plug merging.
+		 * 使用 plug：把 request 暂存到当前 CPU 的 plug 列表，延后批量下发以做更多合并/聚合
 		 */
 		unsigned int request_count = plug->rq_count;
 		struct request *last = NULL;
@@ -2289,7 +2292,7 @@ blk_qc_t blk_mq_submit_bio(struct bio *bio)
 
 		blk_add_rq_to_plug(plug, rq);
 	} else if (q->elevator) {
-		/* Insert the request at the IO scheduler queue */
+		/* 有调度器：把 request 交给调度器队列，由调度器择机下发 */
 		blk_mq_sched_insert_request(rq, false, true, true);
 	} else if (plug && !blk_queue_nomerges(q)) {
 		/*
@@ -2298,6 +2301,7 @@ blk_qc_t blk_mq_submit_bio(struct bio *bio)
 		 * issued. So the plug list will have one request at most
 		 * The plug list might get flushed before this. If that happens,
 		 * the plug list is empty, and same_queue_rq is invalid.
+		 * 轻量 plug：最多保持一个 request，能合并就合并，否则把旧的先直接发出去
 		 */
 		if (list_empty(&plug->mq_list))
 			same_queue_rq = NULL;
@@ -2319,10 +2323,11 @@ blk_qc_t blk_mq_submit_bio(struct bio *bio)
 		/*
 		 * There is no scheduler and we can try to send directly
 		 * to the hardware.
+		 * 无调度器：且是多队列同步 I/O 或硬件队列不忙 → 试图直接下发到硬件
 		 */
 		blk_mq_try_issue_directly(data.hctx, rq, &cookie);
 	} else {
-		/* Default case. */
+		/* 默认：进调度器的插入路径（即使没有电梯，也用调度器入口做排队） */
 		blk_mq_sched_insert_request(rq, false, true, true);
 	}
 

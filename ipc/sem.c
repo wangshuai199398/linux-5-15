@@ -963,11 +963,11 @@ static int update_queue(struct sem_array *sma, int semnum, struct wake_q_head *w
 	struct sem_queue *q, *tmp;
 	struct list_head *pending_list;
 	int semop_completed = 0;
-
+    //扫描整个信号量集合的“变更队列”（sma->pending_alter）
 	if (semnum == -1)
 		pending_list = &sma->pending_alter;
 	else
-		pending_list = &sma->sems[semnum].pending_alter;
+		pending_list = &sma->sems[semnum].pending_alter;//只扫描指定信号量 sma->sems[semnum].pending_alter 的队列（更窄、更快）
 
 again:
 	list_for_each_entry_safe(q, tmp, pending_list, list) {
@@ -979,6 +979,9 @@ again:
 		 * that affect only one entry succeed immediately and cannot
 		 * be in the  per semaphore pending queue, and decrements
 		 * cannot be successful if the value is already 0.
+		 * 如果只扫描某个信号量的队列（semnum!=-1）且该信号量当前值为0，
+         * 那就不用继续：单个+1这类操作会立即成功（不会排在“会阻塞”的队列里），
+         * 而 -1 这类减操作在值已为0时也不可能成功。
 		 */
 		if (semnum != -1 && sma->sems[semnum].semval == 0)
 			break;
@@ -988,13 +991,14 @@ again:
 		/* Does q->sleeper still need to sleep? 如果不成功，则尝试队列中的下一个 */
 		if (error > 0)
 			continue;
-		//如果尝试成功，则调用 unlink_queue 从队列上取下来
+		//能完成或出错，则调用 unlink_queue 从队列上取下来
 		unlink_queue(sma, q);
 
 		if (error) {
 			restart = 0;
 		} else {
 			semop_completed = 1;
+            //若这次操作使某些信号量变为 0，把等待“==0”的那些人安排唤醒
 			do_smart_wakeup_zero(sma, q->sops, q->nsops, wake_q);
 			restart = check_restart(sma, q);
 		}
@@ -1998,6 +2002,10 @@ out:
 	return un;
 }
 
+/*
+sops: 用户传入的一组信号量操作数组
+nsops: 信号量操作的个数
+*/
 long __do_semtimedop(int semid, struct sembuf *sops,
 		unsigned nsops, const struct timespec64 *timeout,
 		struct ipc_namespace *ns)

@@ -2929,6 +2929,7 @@ static bool mount_too_revealing(const struct super_block *sb, int *new_mnt_flags
 /*
  * Create a new mount using a superblock configuration and request it
  * be added to the namespace tree.
+ * 将已经创建好的挂载对象 attach 到 VFS mount tree
  */
 static int do_new_mount_fc(struct fs_context *fc, struct path *mountpoint,
 			   unsigned int mnt_flags)

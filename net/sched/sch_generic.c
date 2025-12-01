@@ -494,7 +494,12 @@ static void dev_watchdog(struct timer_list *t)
 
 	dev_put(dev);
 }
-
+/*
+netdev watchdog，主要作用是防止“发送卡死”：
+•驱动调用 netdev_completed_queue() / netdev_tx_completed_queue() 告诉核心：“我已经完成了多少包的发送”；
+•内核通过 dev->trans_start / trans_timeout 之类的东西，看一个 TX 队列多久没前进；
+•超时就会调用 ndo_tx_timeout（老接口）或对应的恢复逻辑，重置硬件或打印告警。
+*/
 void __netdev_watchdog_up(struct net_device *dev)
 {
 	if (dev->netdev_ops->ndo_tx_timeout) {

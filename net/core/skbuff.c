@@ -833,7 +833,7 @@ void skb_dump(const char *level, const struct sk_buff *skb, bool full_pkt)
 	has_mac = skb_mac_header_was_set(skb);
 	has_trans = skb_transport_header_was_set(skb);
 
-	printk("%sskb len=%u headroom=%u headlen=%u tailroom=%u\n"
+	pr_debug("%sskb len=%u headroom=%u headlen=%u tailroom=%u\n"
 	       "mac=(%d,%d) net=(%d,%d) trans=%d\n"
 	       "shinfo(txflags=%u nr_frags=%u gso(size=%hu type=%u segs=%hu))\n"
 	       "csum(0x%x ip_summed=%u complete_sw=%u valid=%u level=%u)\n"
@@ -852,10 +852,10 @@ void skb_dump(const char *level, const struct sk_buff *skb, bool full_pkt)
 	       ntohs(skb->protocol), skb->pkt_type, skb->skb_iif);
 
 	if (dev)
-		printk("%sdev name=%s feat=%pNF\n",
+		pr_debug("%sdev name=%s feat=%pNF\n",
 		       level, dev->name, &dev->features);
 	if (sk)
-		printk("%ssk family=%hu type=%u proto=%u\n",
+		pr_debug("%ssk family=%hu type=%u proto=%u\n",
 		       level, sk->sk_family, sk->sk_type, sk->sk_protocol);
 
 	if (full_pkt && headroom)
@@ -877,13 +877,13 @@ void skb_dump(const char *level, const struct sk_buff *skb, bool full_pkt)
 		u32 p_off, p_len, copied;
 		struct page *p;
 		u8 *vaddr;
-		printk("nr_frags num: %d\n", i);
+		pr_debug("nr_frags num: %d\n", i);
 		skb_frag_foreach_page(frag, skb_frag_off(frag),
 				      skb_frag_size(frag), p, p_off, p_len,
 				      copied) {
 			seg_len = min_t(int, p_len, len);
 			vaddr = kmap_atomic(p);
-			printk("skb_frag_foreach_page\n");
+			pr_debug("skb_frag_foreach_page\n");
 			print_hex_dump(level, "skb frag:     ",
 				       DUMP_PREFIX_OFFSET,
 				       32, 1, vaddr + p_off, seg_len, false);
@@ -895,11 +895,11 @@ void skb_dump(const char *level, const struct sk_buff *skb, bool full_pkt)
 	}
 
 	if (full_pkt && skb_has_frag_list(skb)) {
-		printk("skb fraglist:\n");
+		pr_debug("skb fraglist:\n");
 		skb_walk_frags(skb, list_skb)
 			skb_dump(level, list_skb, true);
 	}
-	printk(KERN_ERR "================\n");
+	pr_debug(KERN_ERR "================\n");
 }
 EXPORT_SYMBOL(skb_dump);
 
@@ -1695,19 +1695,16 @@ out:
 EXPORT_SYMBOL(__pskb_copy_fclone);
 
 /**
- *	pskb_expand_head - reallocate header of &sk_buff
- *	@skb: buffer to reallocate
- *	@nhead: room to add at head
- *	@ntail: room to add at tail
- *	@gfp_mask: allocation priority
+ *	重新分配 &sk_buff 的头部空间
+ *	@skb: 要重新分配的缓冲区
+ *	@nhead: 需要在包头（head）增加的空间大小
+ *	@ntail: 需要在包尾（tail）增加的空间大小
+ *	@gfp_mask: 内存分配优先级（GFP 标志）
  *
- *	Expands (or creates identical copy, if @nhead and @ntail are zero)
- *	header of @skb. &sk_buff itself is not changed. &sk_buff MUST have
- *	reference count of 1. Returns zero in the case of success or error,
- *	if expansion failed. In the last case, &sk_buff is not changed.
+ *	这个函数会为 @skb 扩展头部空间（或者在 @nhead 和 @ntail 都为 0 时，仅创建一个内容完全相同的副本）。
+ *  sk_buff 结构本身（这个指针）不会被改变。调用该函数前，sk_buff 的引用计数 必须为 1
  *
- *	All the pointers pointing into skb header may change and must be
- *	reloaded after call to this function.
+ *	如果扩展成功，返回 0；如果扩展失败，也返回错误码（非 0），并且在失败的情况下，原来的 sk_buff 保持不变，不会被修改
  */
 
 int pskb_expand_head(struct sk_buff *skb, int nhead, int ntail,
@@ -2264,9 +2261,8 @@ EXPORT_SYMBOL(pskb_trim_rcsum_slow);
  */
 void *__pskb_pull_tail(struct sk_buff *skb, int delta)
 {
-	/* If skb has not enough free space at tail, get new one
-	 * plus 128 bytes for future expansions. If we have enough
-	 * room at tail, reallocate without expansion only if skb is cloned.
+	/* 如果 skb 在尾部没有足够的空闲空间，则分配一个新的 skb，并额外预留 128 字节以供将来扩展。
+	 * 如果在尾部有足够的空间，则仅在 skb 被克隆时才重新分配，而且不做扩展 eat <= 0：尾部空间足够
 	 */
 	int i, k, eat = (skb->tail + delta) - skb->end;
 
@@ -2275,17 +2271,16 @@ void *__pskb_pull_tail(struct sk_buff *skb, int delta)
 				     GFP_ATOMIC))
 			return NULL;
 	}
-
+	//拷贝非线性数据到线性区最后
 	BUG_ON(skb_copy_bits(skb, skb_headlen(skb),
 			     skb_tail_pointer(skb), delta));
 
-	/* Optimization: no fragments, no reasons to preestimate
-	 * size of pulled pages. Superb.
+	/* 优化：没有 fragment（分片），因此也就没有理由去预估要 pull 上来的页的大小
 	 */
 	if (!skb_has_frag_list(skb))
 		goto pull_pages;
 
-	/* Estimate size of pulled pages. */
+	/* 如果前几个 frag 的总长度就已经覆盖 delta（size >= eat），说明只在 frags 里 pull 就够了 → 跳到 pull_pages，不用动 frag_list */
 	eat = delta;
 	for (i = 0; i < skb_shinfo(skb)->nr_frags; i++) {
 		int size = skb_frag_size(&skb_shinfo(skb)->frags[i]);
@@ -2295,12 +2290,9 @@ void *__pskb_pull_tail(struct sk_buff *skb, int delta)
 		eat -= size;
 	}
 
-	/* If we need update frag list, we are in troubles.
-	 * Certainly, it is possible to add an offset to skb data,
-	 * but taking into account that pulling is expected to
-	 * be very rare operation, it is worth to fight against
-	 * further bloating skb head and crucify ourselves here instead.
-	 * Pure masohism, indeed. 8)8)
+	/* 如果把所有 frags 都用完了 eat 还 > 0，说明：
+	 * 已经把 page frags 里的数据全拉完，还不够 delta，会继续拉 frag_list 里的 skb 数据。
+	 * 也就意味着：后面可能要修改 frag_list，需要更麻烦的处理。
 	 */
 	if (eat) {
 		struct sk_buff *list = skb_shinfo(skb)->frag_list;
@@ -2308,29 +2300,30 @@ void *__pskb_pull_tail(struct sk_buff *skb, int delta)
 		struct sk_buff *insp = NULL;
 
 		do {
+			//这个子 skb 的数据会被全部拉到线性区域 → 整个“吃掉”
 			if (list->len <= eat) {
 				/* Eaten as whole. */
 				eat -= list->len;
 				list = list->next;
 				insp = list;
 			} else {
-				/* Eaten partially. */
+				/* 说明只会部分拉这个子 skb 的数据 */
 				if (skb_is_gso(skb) && !list->head_frag &&
 				    skb_headlen(list))
 					skb_shinfo(skb)->gso_type |= SKB_GSO_DODGY;
 
 				if (skb_shared(list)) {
-					/* Sucks! We need to fork list. :-( */
+					/* 这个 list skb 被共享了，需要 clone 一份自己改 */
 					clone = skb_clone(list, GFP_ATOMIC);
 					if (!clone)
 						return NULL;
 					insp = list->next;
 					list = clone;
 				} else {
-					/* This may be pulled without
-					 * problems. */
+					/*  没共享，可以直接在上面 pull */
 					insp = list;
 				}
+				//在这个子 skb 上也执行“把前面 eat 字节拉进线性区”/剥离前面的数据
 				if (!pskb_pull(list, eat)) {
 					kfree_skb(clone);
 					return NULL;
@@ -2339,12 +2332,12 @@ void *__pskb_pull_tail(struct sk_buff *skb, int delta)
 			}
 		} while (eat);
 
-		/* Free pulled out fragments. */
+		/* 把 完全被吃掉的那些 skb 从 frag_list 头部摘掉并释放 */
 		while ((list = skb_shinfo(skb)->frag_list) != insp) {
 			skb_shinfo(skb)->frag_list = list->next;
 			consume_skb(list);
 		}
-		/* And insert new clone at head. */
+		/* 如果我们刚才为了写而 clone 了一个新 skb，就把它插回 frag_list 的最前面 */
 		if (clone) {
 			clone->next = list;
 			skb_shinfo(skb)->frag_list = clone;
@@ -2353,17 +2346,20 @@ void *__pskb_pull_tail(struct sk_buff *skb, int delta)
 	/* Success! Now we may commit changes to skb data. */
 
 pull_pages:
+	//希望从 frags 里“吃掉”（已经拷到线性区的） delta 字节
 	eat = delta;
 	k = 0;
 	for (i = 0; i < skb_shinfo(skb)->nr_frags; i++) {
 		int size = skb_frag_size(&skb_shinfo(skb)->frags[i]);
-
+		//这个 frag 的数据被完整拉到了线性区 → 直接 skb_frag_unref，不再保留
 		if (size <= eat) {
 			skb_frag_unref(skb, i);
 			eat -= size;
 		} else {
+			//这个 frag 只会被吃掉前 eat 部分
 			skb_frag_t *frag = &skb_shinfo(skb)->frags[k];
-
+			//把这个 frag 移动/压缩到 frags[k]（相当于重建 frags 数组）
+			//调整 frag 的 offset 和 size
 			*frag = skb_shinfo(skb)->frags[i];
 			if (eat) {
 				skb_frag_off_add(frag, eat);
@@ -2375,6 +2371,7 @@ pull_pages:
 			k++;
 		}
 	}
+	//把被完全吃掉的那些 frag 从数组中“删除”
 	skb_shinfo(skb)->nr_frags = k;
 
 end:
@@ -2389,14 +2386,13 @@ end:
 EXPORT_SYMBOL(__pskb_pull_tail);
 
 /**
- *	skb_copy_bits - copy bits from skb to kernel buffer
+ *	将数据从 skb 拷贝到内核缓冲区
  *	@skb: source skb
- *	@offset: offset in source
- *	@to: destination buffer
- *	@len: number of bytes to copy
+ *	@offset: 在源 skb 中数据的偏移
+ *	@to: 目标缓冲区
+ *	@len: 要拷贝的字节数
  *
- *	Copy the specified number of bytes from the source skb to the
- *	destination buffer.
+ *	从源 skb 中拷贝指定数量的字节到目标缓冲区
  *
  *	CAUTION ! :
  *		If its prototype is ever changed,
@@ -4428,7 +4424,7 @@ int skb_gro_receive(struct sk_buff *p, struct sk_buff *skb)
 	lp = NAPI_GRO_CB(p)->last;
 	pinfo = skb_shinfo(lp);
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: headlen %u offset %u\n", __func__, headlen, offset);
+		pr_debug("%s: headlen %u offset %u\n", __func__, headlen, offset);
 	//情况1: skb数据都在frags中（head 不含数据）
 	if (headlen <= offset) {
 		skb_frag_t *frag;
@@ -4538,7 +4534,7 @@ done:
 	}
 	NAPI_GRO_CB(skb)->same_flow = 1;
 	if (is_src_k2pro(skb))
-		printk(KERN_INFO "%s: return 0\n", __func__);
+		pr_debug("%s: return 0\n", __func__);
 	return 0;
 }
 
@@ -5736,7 +5732,7 @@ static inline bool skb_gso_size_check(const struct sk_buff *skb,
 bool skb_gso_validate_network_len(const struct sk_buff *skb, unsigned int mtu)
 {
 	if (is_dst_k2pro((struct sk_buff *)skb))
-		printk(KERN_INFO "skb_gso_validate_network_len: skb_gso_network_seglen = %u transport_seglen= %u tcp header %d\n", skb_gso_network_seglen(skb), skb_gso_transport_seglen(skb), tcp_hdrlen(skb));
+		pr_debug("skb_gso_validate_network_len: skb_gso_network_seglen = %u transport_seglen= %u tcp header %d\n", skb_gso_network_seglen(skb), skb_gso_transport_seglen(skb), tcp_hdrlen(skb));
 	return skb_gso_size_check(skb, skb_gso_network_seglen(skb), mtu);
 }
 EXPORT_SYMBOL_GPL(skb_gso_validate_network_len);
