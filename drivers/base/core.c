@@ -3313,7 +3313,7 @@ int device_add(struct device *dev)
 		goto name_error;
 	}
 
-	pr_info("%s: device: '%s' init_name %s\n", __func__, dev_name(dev), dev->init_name);
+	pr_debug("%s: device: '%s' init_name %s\n", __func__, dev_name(dev), dev->init_name);
 
 	parent = get_device(dev->parent);
 	//决定 sysfs 层级 的辅助函数
