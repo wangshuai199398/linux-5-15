@@ -315,7 +315,7 @@ static int dev_ifsioc(struct net *net, struct ifreq *ifr, void __user *data,
 	int err;
 	struct net_device *dev = __dev_get_by_name(net, ifr->ifr_name);
 	const struct net_device_ops *ops;
-	pr_info("%s: cmd %u\n", __func__, cmd);
+	pr_debug("%s: cmd %u\n", __func__, cmd);
 	if (!dev)
 		return -ENODEV;
 

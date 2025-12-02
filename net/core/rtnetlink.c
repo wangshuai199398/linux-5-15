@@ -2678,7 +2678,7 @@ static int do_setlink(const struct sk_buff *skb,
 	const struct net_device_ops *ops = dev->netdev_ops;
 	char ifname[IFNAMSIZ];
 	int err;
-	pr_info("%s: ->validate_linkmsg\n", __func__);
+	pr_debug("%s: ->validate_linkmsg\n", __func__);
 	err = validate_linkmsg(dev, tb, extack);
 	if (err < 0)
 		return err;
