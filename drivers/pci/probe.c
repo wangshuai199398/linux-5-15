@@ -1925,8 +1925,8 @@ int pci_setup_device(struct pci_dev *dev)
 
 	pci_set_removable(dev);
 	//[1f47:1011] type 00 class 0x020000
-	pci_info(dev, "[%04x:%04x] type %02x class %#08x\n",
-		 dev->vendor, dev->device, dev->hdr_type, dev->class);
+	pci_info(dev, "%s [%04x:%04x] type %02x class %#08x\n",
+		 __func__, dev->vendor, dev->device, dev->hdr_type, dev->class);
 
 	/* Device class may be changed after fixup */
 	class = dev->class >> 8;
