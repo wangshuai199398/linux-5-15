@@ -3087,7 +3087,7 @@ struct pci_bus *pci_create_root_bus(struct device *parent, int bus,
 	bridge->sysdata = sysdata;
 	bridge->busnr = bus;
 	bridge->ops = ops;
-
+	pr_err("PCI %s\n", __func__);
 	error = pci_register_host_bridge(bridge);
 	if (error < 0)
 		goto err_out;
@@ -3210,7 +3210,7 @@ int pci_scan_root_bus_bridge(struct pci_host_bridge *bridge)
 			found = true;
 			break;
 		}
-
+	pr_err("PCI %s\n", __func__);
 	ret = pci_register_host_bridge(bridge);
 	if (ret < 0)
 		return ret;
