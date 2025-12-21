@@ -927,7 +927,7 @@ struct pci_bus *acpi_pci_root_create(struct acpi_pci_root *root,
 	if (obj && obj->type == ACPI_TYPE_INTEGER && obj->integer.value == 0)
 		host_bridge->preserve_config = 1;
 	ACPI_FREE(obj);
-
+	pr_err("PCI %s", __func__);
 	pci_scan_child_bus(bus);
 	pci_set_host_bridge_release(host_bridge, acpi_pci_root_release_info,
 				    info);
