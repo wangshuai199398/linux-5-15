@@ -2460,7 +2460,7 @@ static struct pci_dev *pci_scan_device(struct pci_bus *bus, int devfn)
 
 	if (!pci_bus_read_dev_vendor_id(bus, devfn, &l, 60*1000))
 		return NULL;
-
+	pr_err("PCI %s -> pci_alloc_dev", __func__);
 	dev = pci_alloc_dev(bus);
 	if (!dev)
 		return NULL;
@@ -2468,7 +2468,7 @@ static struct pci_dev *pci_scan_device(struct pci_bus *bus, int devfn)
 	dev->devfn = devfn;
 	dev->vendor = l & 0xffff;
 	dev->device = (l >> 16) & 0xffff;
-
+	pr_err("PCI %s -> pci_setup_device", __func__);
 	if (pci_setup_device(dev)) {
 		pci_bus_put(dev->bus);
 		kfree(dev);
