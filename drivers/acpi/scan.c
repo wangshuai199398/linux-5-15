@@ -2131,6 +2131,7 @@ static int acpi_scan_attach_handler(struct acpi_device *device)
 				continue;
 			}
 			device->handler = handler;
+			// acpi_pci_root_add
 			ret = handler->attach(device, devid);
 			if (ret > 0)
 				break;
