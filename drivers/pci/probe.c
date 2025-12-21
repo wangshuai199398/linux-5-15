@@ -2505,7 +2505,7 @@ static void pci_init_capabilities(struct pci_dev *dev)
 
 	/* Buffers for saving PCIe and PCI-X capabilities */
 	pci_allocate_cap_save_buffers(dev);
-
+	pr_err("PCI %s ->pci_pm_init", __func__);
 	pci_pm_init(dev);		/* Power Management */
 	pci_vpd_init(dev);		/* Vital Product Data */
 	pci_configure_ari(dev);		/* Alternative Routing-ID Forwarding */
@@ -2590,7 +2590,7 @@ void pci_device_add(struct pci_dev *dev, struct pci_bus *bus)
 	pci_reassigndev_resource_alignment(dev);
 
 	dev->state_saved = false;
-
+	pr_err("PCI %s -> pci_init_capabilities", __func__);
 	pci_init_capabilities(dev);
 
 	/*
@@ -2626,7 +2626,7 @@ struct pci_dev *pci_scan_single_device(struct pci_bus *bus, int devfn)
 	dev = pci_scan_device(bus, devfn);
 	if (!dev)
 		return NULL;
-
+	pr_err("PCI %s -> pci_device_add", __func__);
 	pci_device_add(dev, bus);
 
 	return dev;
