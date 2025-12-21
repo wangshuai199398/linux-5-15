@@ -725,7 +725,7 @@ static struct acpi_driver acpi_driver = {
 static int __init acpi_init(void)
 {
 	int result;
-
+	pr_err("ACPI platform %s", __func__);
 	result = acpi_bus_register_driver(&acpi_driver);
 	if (result < 0) {
 		pr_debug("Error registering driver\n");
