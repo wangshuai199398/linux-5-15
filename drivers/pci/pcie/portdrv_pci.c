@@ -113,7 +113,7 @@ static int pcie_portdrv_probe(struct pci_dev *dev,
 
 	if (type == PCI_EXP_TYPE_RC_EC)
 		pcie_link_rcec(dev);
-
+	pr_err("pcie_portdrv_probe: %s\n", pci_name(dev));
 	status = pcie_port_device_register(dev);
 	if (status)
 		return status;
