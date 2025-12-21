@@ -2119,7 +2119,7 @@ static int acpi_scan_attach_handler(struct acpi_device *device)
 {
 	struct acpi_hardware_id *hwid;
 	int ret = 0;
-
+	pr_err("ACPI %s", __func__);
 	list_for_each_entry(hwid, &device->pnp.ids, list) {
 		const struct acpi_device_id *devid;
 		struct acpi_scan_handler *handler;
@@ -2131,7 +2131,6 @@ static int acpi_scan_attach_handler(struct acpi_device *device)
 				continue;
 			}
 			device->handler = handler;
-			pr_err("ACPI %s", __func__);
 			ret = handler->attach(device, devid);
 			if (ret > 0)
 				break;
