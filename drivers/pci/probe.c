@@ -3247,7 +3247,7 @@ struct pci_bus *pci_scan_root_bus(struct device *parent, int bus,
 			found = true;
 			break;
 		}
-
+	pr_err("PCI %s\n", __func__);
 	b = pci_create_root_bus(parent, bus, ops, sysdata, resources);
 	if (!b)
 		return NULL;
@@ -3277,6 +3277,7 @@ struct pci_bus *pci_scan_bus(int bus, struct pci_ops *ops,
 	pci_add_resource(&resources, &ioport_resource);
 	pci_add_resource(&resources, &iomem_resource);
 	pci_add_resource(&resources, &busn_resource);
+	pr_err("PCI %s\n", __func__);
 	b = pci_create_root_bus(NULL, bus, ops, sysdata, &resources);
 	if (b) {
 		pci_scan_child_bus(b);
