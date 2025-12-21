@@ -2915,7 +2915,7 @@ static unsigned int pci_scan_child_bus_extend(struct pci_bus *bus,
 	struct pci_dev *dev;
 	int nr_devs;
 
-	dev_dbg(&bus->dev, "scanning bus\n");
+	dev_err(&bus->dev, "scanning bus\n");
 
 	/* Go find them, Rover! */
 	for (devfn = 0; devfn < 256; devfn += 8) {
@@ -2928,6 +2928,7 @@ static unsigned int pci_scan_child_bus_extend(struct pci_bus *bus,
 		 */
 		if (jailhouse_paravirt() && nr_devs == 0) {
 			for (fn = 1; fn < 8; fn++) {
+				pr_err("PCI %s -> pci_scan_single_device", __func__);
 				dev = pci_scan_single_device(bus, devfn + fn);
 				if (dev)
 					dev->multifunction = 1;
@@ -2968,6 +2969,7 @@ static unsigned int pci_scan_child_bus_extend(struct pci_bus *bus,
 	 */
 	for_each_pci_bridge(dev, bus) {
 		cmax = max;
+		pr_err("PCI %s -> pci_scan_bridge_extend", __func__);
 		max = pci_scan_bridge_extend(bus, dev, max, 0, 0);
 
 		/*
@@ -3001,6 +3003,7 @@ static unsigned int pci_scan_child_bus_extend(struct pci_bus *bus,
 		}
 
 		cmax = max;
+		pr_err("PCI %s -> pci_scan_bridge_extend2", __func__);
 		max = pci_scan_bridge_extend(bus, dev, cmax, buses, 1);
 		/* One bus is already accounted so don't add it again */
 		if (max - cmax > 1)
@@ -3022,7 +3025,7 @@ static unsigned int pci_scan_child_bus_extend(struct pci_bus *bus,
 			if (max > bus->busn_res.end)
 				max = bus->busn_res.end;
 
-			dev_dbg(&bus->dev, "%pR extended by %#02x\n",
+			dev_err(&bus->dev, "%pR extended by %#02x\n",
 				&bus->busn_res, max - start);
 		}
 	}
@@ -3034,7 +3037,7 @@ static unsigned int pci_scan_child_bus_extend(struct pci_bus *bus,
 	 *
 	 * Return how far we've got finding sub-buses.
 	 */
-	dev_dbg(&bus->dev, "bus scan returning with max=%02x\n", max);
+	dev_err(&bus->dev, "bus scan returning with max=%02x\n", max);
 	return max;
 }
 
