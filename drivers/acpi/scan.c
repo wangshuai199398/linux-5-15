@@ -2131,6 +2131,7 @@ static int acpi_scan_attach_handler(struct acpi_device *device)
 				continue;
 			}
 			device->handler = handler;
+			pr_err("ACPI %s", __func__);
 			ret = handler->attach(device, devid);
 			if (ret > 0)
 				break;
@@ -2371,7 +2372,7 @@ int acpi_bus_scan(acpi_handle handle)
 
 	if (!device)
 		return -ENODEV;
-
+	pr_err("ACPI %s", __func__);
 	acpi_bus_attach(device, true);
 
 	if (!acpi_bus_scan_second_pass)
@@ -2547,6 +2548,7 @@ int __init acpi_scan_init(void)
 	/*
 	 * Enumerate devices in the ACPI namespace.
 	 */
+	pr_err("ACPI %s", __func__);
 	result = acpi_bus_scan(ACPI_ROOT_OBJECT);
 	if (result)
 		goto out;
