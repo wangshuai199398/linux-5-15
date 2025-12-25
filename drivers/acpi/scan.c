@@ -2345,18 +2345,16 @@ struct acpi_device *acpi_dev_get_first_consumer_dev(struct acpi_device *supplier
 EXPORT_SYMBOL_GPL(acpi_dev_get_first_consumer_dev);
 
 /**
- * acpi_bus_scan - Add ACPI device node objects in a given namespace scope.
- * @handle: Root of the namespace scope to scan.
+ * 在给定的命名空间范围内添加 ACPI 设备节点对象
+ * @handle: 要扫描的命名空间范围的根句柄
  *
- * Scan a given ACPI tree (probably recently hot-plugged) and create and add
- * found devices.
+ * 扫描一棵给定的 ACPI 树（通常是最近热插拔进来的那部分），并为扫描到的设备创建并添加对应的设备对象
  *
- * If no devices were found, -ENODEV is returned, but it does not mean that
- * there has been a real error.  There just have been no suitable ACPI objects
- * in the table trunk from which the kernel could create a device and add an
- * appropriate driver.
+ * 如果没有找到任何设备，会返回 -ENODEV，但这并不表示真的发生了错误。
+ * 只是因为在该表分支（trunk）中没有合适的 ACPI 对象，
+ * 内核无法据此创建一个设备并绑定合适的驱动
  *
- * Must be called under acpi_scan_lock.
+ * 必须在持有 acpi_scan_lock 的情况下调用
  */
 int acpi_bus_scan(acpi_handle handle)
 {
@@ -2364,7 +2362,7 @@ int acpi_bus_scan(acpi_handle handle)
 
 	acpi_bus_scan_second_pass = false;
 
-	/* Pass 1: Avoid enumerating devices with missing dependencies. */
+	/* 第 1 遍：check_dep = true ——先“保守地建树”，跳过有依赖的设备 */
 
 	if (ACPI_SUCCESS(acpi_bus_check_add(handle, true, &device)))
 		acpi_walk_namespace(ACPI_TYPE_ANY, handle, ACPI_UINT32_MAX,
@@ -2379,7 +2377,7 @@ int acpi_bus_scan(acpi_handle handle)
 	if (!acpi_bus_scan_second_pass)
 		return 0;
 
-	/* Pass 2: Enumerate all of the remaining devices. */
+	/* 如果发现了被推迟的设备：需要第 2 遍补扫 */
 
 	device = NULL;
 
@@ -2556,6 +2554,7 @@ int __init acpi_scan_init(void)
 		goto out;
 
 	result = acpi_bus_get_device(ACPI_ROOT_OBJECT, &acpi_root);
+	pr_err("ACPI %s name %s", __func__, dev_name(&acpi_root->dev));
 	if (result)
 		goto out;
 
