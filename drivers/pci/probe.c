@@ -940,7 +940,7 @@ static int pci_register_host_bridge(struct pci_host_bridge *bridge)
 	b = pci_find_bus(pci_domain_nr(bus), bridge->busnr);
 	if (b) {
 		/* Ignore it if we already got here via a different bridge */
-		dev_dbg(&b->dev, "bus already known\n");
+		dev_err(&b->dev, "bus already known\n");
 		err = -EEXIST;
 		goto free;
 	}
@@ -1296,7 +1296,7 @@ static int pci_scan_bridge_extend(struct pci_bus *bus, struct pci_dev *dev,
 	secondary = (buses >> 8) & 0xFF;
 	subordinate = (buses >> 16) & 0xFF;
 
-	pci_dbg(dev, "scanning [bus %02x-%02x] behind bridge, pass %d\n",
+	pci_err(dev, "scanning [bus %02x-%02x] behind bridge, pass %d\n",
 		secondary, subordinate, pass);
 
 	if (!primary && (primary != bus->number) && secondary && subordinate) {

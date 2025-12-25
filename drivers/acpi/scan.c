@@ -1833,7 +1833,7 @@ static int acpi_add_single_object(struct acpi_device **child,
 	acpi_power_add_remove_device(device, true);
 	acpi_device_add_finalize(device);
 
-	acpi_handle_debug(handle, "Added as %s, parent %s\n",
+	acpi_handle_err(handle, "Added as %s, parent %s\n",
 			  dev_name(&device->dev), device->parent ?
 				dev_name(&device->parent->dev) : "(null)");
 
@@ -2003,6 +2003,8 @@ static u32 acpi_scan_check_dep(acpi_handle handle, bool check_dep)
 
 static bool acpi_bus_scan_second_pass;
 
+/* 在扫描 ACPI 命名空间时，判断某个 acpi_handle 对应的节点要不要创建成内核里的 struct acpi_device，
+   如果要，就创建/补全这个 acpi_device 对象，并在“第一遍扫描”时跳过（推迟）那些依赖没满足的设备 */
 static acpi_status acpi_bus_check_add(acpi_handle handle, bool check_dep,
 				      struct acpi_device **adev_p)
 {
@@ -2049,8 +2051,7 @@ static acpi_status acpi_bus_check_add(acpi_handle handle, bool check_dep,
 	}
 
 	/*
-	 * If check_dep is true at this point, the device has no dependencies,
-	 * or the creation of the device object would have been postponed above.
+	 * 如果此时 check_dep 为 true，那么说明这个设备没有依赖，或者（如果它有依赖）在上面已经把该设备对象的创建推迟（postponed）了
 	 */
 	acpi_add_single_object(&device, handle, type, !check_dep);
 	if (!device)
@@ -2549,6 +2550,7 @@ int __init acpi_scan_init(void)
 	 * Enumerate devices in the ACPI namespace.
 	 */
 	pr_err("ACPI %s", __func__);
+	//从 ACPI 命名空间的根（\）开始操作/遍历
 	result = acpi_bus_scan(ACPI_ROOT_OBJECT);
 	if (result)
 		goto out;
