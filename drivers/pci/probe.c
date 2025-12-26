@@ -1552,14 +1552,16 @@ void set_pcie_port_type(struct pci_dev *pdev)
 	u16 reg16;
 	int type;
 	struct pci_dev *parent;
-
+	// 查找 PCI Express Capability（PCIe 扩展能力结构）
 	pos = pci_find_capability(pdev, PCI_CAP_ID_EXP);
 	if (!pos)
 		return;
 
 	pdev->pcie_cap = pos;
+	// 读取 PCI Express Flags 寄存器
 	pci_read_config_word(pdev, pos + PCI_EXP_FLAGS, &reg16);
 	pdev->pcie_flags_reg = reg16;
+	// 设备能力
 	pci_read_config_dword(pdev, pos + PCI_EXP_DEVCAP, &pdev->devcap);
 	pdev->pcie_mpss = FIELD_GET(PCI_EXP_DEVCAP_PAYLOAD, pdev->devcap);
 
@@ -1606,7 +1608,7 @@ void set_pcie_hotplug_bridge(struct pci_dev *pdev)
 	if (reg32 & PCI_EXP_SLTCAP_HPC)
 		pdev->is_hotplug_bridge = 1;
 }
-
+/* 判断一个 PCIe 设备 dev 是否属于 Thunderbolt 控制器（更准确说：是否在 Thunderbolt 控制器相关的设备集合里） */
 static void set_pcie_thunderbolt(struct pci_dev *dev)
 {
 	int vsec = 0;
@@ -1641,7 +1643,7 @@ static void set_pcie_untrusted(struct pci_dev *dev)
 	}
 
 	if (arch_pci_dev_is_removable(dev)) {
-		pci_dbg(dev, "marking as untrusted\n");
+		pci_info(dev, "marking as untrusted\n");
 		dev->untrusted = true;
 	}
 }
@@ -1877,7 +1879,7 @@ int pci_setup_device(struct pci_dev *dev)
 
 	hdr_type = pci_hdr_type(dev);
 
-	dev->sysdata = dev->bus->sysdata;
+	dev->sysdata = dev->bus->sysdata;//domain node acpi_device
 	dev->dev.parent = dev->bus->bridge;
 	dev->dev.bus = &pci_bus_type;
 	dev->hdr_type = hdr_type & 0x7f;
@@ -1887,7 +1889,7 @@ int pci_setup_device(struct pci_dev *dev)
 
 	pci_set_of_node(dev);
 	pci_set_acpi_fwnode(dev);
-
+	// 设备号就是逻辑slot号
 	pci_dev_assign_slot(dev);
 
 	/*
