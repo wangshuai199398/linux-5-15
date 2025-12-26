@@ -236,7 +236,7 @@ int __pci_read_base(struct pci_dev *dev, enum pci_bar_type type,
 		sz64 = sz & PCI_ROM_ADDRESS_MASK;
 		mask64 = PCI_ROM_ADDRESS_MASK;
 	}
-
+	pr_info("%s dev->mmio_always_on %d, sz %u res->flags 0x%lx", __func__, dev->mmio_always_on, sz, res->flags);
 	if (res->flags & IORESOURCE_MEM_64) {
 		pci_read_config_dword(dev, pos + 4, &l);
 		pci_write_config_dword(dev, pos + 4, ~0);
