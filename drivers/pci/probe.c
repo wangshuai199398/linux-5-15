@@ -1824,6 +1824,7 @@ static u8 pci_hdr_type(struct pci_dev *dev)
  *
  * Test whether PCI_COMMAND_INTX_DISABLE is writable for @dev.  Check this
  * at enumeration-time to avoid modifying PCI_COMMAND at run-time.
+ * 检测某个 PCI 设备的 PCI_COMMAND 寄存器里的 INTX_DISABLE 位能不能写（也就是能不能通过这个位去屏蔽传统 INTx 中断）。如果写不进去，就认为“intx mask broken”（名字有点误导，但历史原因）
  */
 static int pci_intx_mask_broken(struct pci_dev *dev)
 {
@@ -1955,6 +1956,7 @@ int pci_setup_device(struct pci_dev *dev)
 		pci_read_bases(dev, 6, PCI_ROM_ADDRESS);
 
 		pci_subsystem_ids(dev, &dev->subsystem_vendor, &dev->subsystem_device);
+		pr_info("%s pin %u IRQ %u subsystem_vendor %hu subsystem_device %hu\n", __func__, dev->irq, dev->irq, dev->subsystem_vendor, dev->subsystem_device);
 
 		/*
 		 * Do the ugly legacy mode stuff here rather than broken chip
