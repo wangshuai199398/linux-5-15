@@ -324,7 +324,7 @@ out:
 	  reg 0x174: [mem 0x6119800000-0x61199fffff 64bit pref]
 	  VF(n) BAR4 space: [mem 0x6119800000-0x6119ffffff 64bit pref] (contains BAR4 for 4 VFs) */
 	if (res->flags)
-		pci_info(dev, "reg 0x%x: %pR\n", pos, res);
+		pci_info(dev, "%s reg 0x%x: %pR\n", __func__, pos, res);
 
 	return (res->flags & IORESOURCE_MEM_64) ? 1 : 0;
 }
@@ -1476,6 +1476,7 @@ static int pci_scan_bridge_extend(struct pci_bus *bus, struct pci_dev *dev,
 	sprintf(child->name,
 		(is_cardbus ? "PCI CardBus %04x:%02x" : "PCI Bus %04x:%02x"),
 		pci_domain_nr(bus), child->number);
+	pr_info("child name %s", child->name);
 
 	/* Check that all devices are accessible */
 	while (bus->parent) {
@@ -1858,14 +1859,12 @@ static void early_dump_pci_device(struct pci_dev *pdev)
 }
 
 /**
- * pci_setup_device - Fill in class and map information of a device
+ * 填充设备的 class（类别）和映射信息
  * @dev: the device structure to fill
  *
- * Initialize the device structure with information about the device's
- * vendor,class,memory and IO-space addresses, IRQ lines etc.
- * Called at initialisation of the PCI subsystem and by CardBus services.
- * Returns 0 on success and negative if unknown type of device (not normal,
- * bridge or CardBus).
+ * 用设备自身的信息来初始化这个结构体，包括：设备的 vendor（厂商）、class（类别）、内存与 I/O 空间地址（资源窗口/BAR）、IRQ 中断线 等
+ * 该函数会在 PCI 子系统初始化时被调用，也会被 CardBus 服务调用
+ * 成功返回 0；如果设备类型未知（不是普通设备、桥设备或 CardBus），返回 负值
  */
 int pci_setup_device(struct pci_dev *dev)
 {
@@ -1900,7 +1899,7 @@ int pci_setup_device(struct pci_dev *dev)
 	dev_set_name(&dev->dev, "%04x:%02x:%02x.%d", pci_domain_nr(dev->bus),
 		     dev->bus->number, PCI_SLOT(dev->devfn),
 		     PCI_FUNC(dev->devfn));
-
+	pr_info("%s %s\n", __func__, dev->dev.kobj.name);
 	class = pci_class(dev);
 
 	dev->revision = class & 0xff;
@@ -2460,7 +2459,7 @@ static struct pci_dev *pci_scan_device(struct pci_bus *bus, int devfn)
 
 	if (!pci_bus_read_dev_vendor_id(bus, devfn, &l, 60*1000))
 		return NULL;
-	pr_err("PCI %s -> pci_alloc_dev", __func__);
+	pr_err("\nPCI %s -> pci_alloc_dev", __func__);
 	dev = pci_alloc_dev(bus);
 	if (!dev)
 		return NULL;
@@ -2468,7 +2467,7 @@ static struct pci_dev *pci_scan_device(struct pci_bus *bus, int devfn)
 	dev->devfn = devfn;
 	dev->vendor = l & 0xffff;
 	dev->device = (l >> 16) & 0xffff;
-	pr_err("PCI %s -> pci_setup_device", __func__);
+	pr_err("PCI %s -> pci_setup_device devfn %d", __func__, devfn);
 	if (pci_setup_device(dev)) {
 		pci_bus_put(dev->bus);
 		kfree(dev);
@@ -2895,16 +2894,12 @@ void __weak pcibios_fixup_bus(struct pci_bus *bus)
 }
 
 /**
- * pci_scan_child_bus_extend() - Scan devices below a bus
- * @bus: Bus to scan for devices
- * @available_buses: Total number of buses available (%0 does not try to
- *		     extend beyond the minimal)
+ * 扫描某条总线下面的设备
+ * @bus: 要扫描设备的总线
+ * @available_buses: 可用的总线总数（传 0 表示不会尝试把扫描范围扩展到“最小需求”之外）
  *
- * Scans devices below @bus including subordinate buses. Returns new
- * subordinate number including all the found devices. Passing
- * @available_buses causes the remaining bus space to be distributed
- * equally between hotplug-capable bridges to allow future extension of the
- * hierarchy.
+ * 扫描 @bus 下面的所有设备，包括其下级（subordinate）总线。返回值是新的下级总线号（subordinate number），它包含扫描到的所有设备/总线范围
+ * 如果传入 @available_buses，则会把剩余的总线号空间在支持热插拔（hotplug-capable）的桥（bridge）之间平均分配，以便将来能够进一步扩展总线层级结构
  */
 static unsigned int pci_scan_child_bus_extend(struct pci_bus *bus,
 					      unsigned int available_buses)
@@ -2919,17 +2914,15 @@ static unsigned int pci_scan_child_bus_extend(struct pci_bus *bus,
 
 	/* Go find them, Rover! */
 	for (devfn = 0; devfn < 256; devfn += 8) {
-		nr_devs = pci_scan_slot(bus, devfn);
+		nr_devs = pci_scan_slot(bus, devfn);//添加若干 Host Bridge（主桥/内存控制器相关的桥），PCIe 端口/桥
 
 		/*
-		 * The Jailhouse hypervisor may pass individual functions of a
-		 * multi-function device to a guest without passing function 0.
-		 * Look for them as well.
+		 * Jailhouse 管理程序（hypervisor）可能会把一个多功能设备中的某些单独功能分配给来宾（guest），而不一定会把功能 0 一起分配。因此也要把这些功能一并查找出来
 		 */
 		if (jailhouse_paravirt() && nr_devs == 0) {
 			for (fn = 1; fn < 8; fn++) {
 				pr_err("PCI %s -> pci_scan_single_device", __func__);
-				dev = pci_scan_single_device(bus, devfn + fn);
+				dev = pci_scan_single_device(bus, devfn + fn);//no
 				if (dev)
 					dev->multifunction = 1;
 			}
@@ -2941,19 +2934,16 @@ static unsigned int pci_scan_child_bus_extend(struct pci_bus *bus,
 	max += used_buses;
 
 	/*
-	 * After performing arch-dependent fixup of the bus, look behind
-	 * all PCI-to-PCI bridges on this bus.
+	 * 在对该总线完成与体系结构相关的修正（arch-dependent fixup）之后，去检查这条总线上所有 PCI-to-PCI 桥后面的设备（即桥后面的下级总线/层级）
 	 */
 	if (!bus->is_added) {
-		dev_dbg(&bus->dev, "fixups for bus\n");
+		dev_info(&bus->dev, "fixups for bus\n");
 		pcibios_fixup_bus(bus);
 		bus->is_added = 1;
 	}
 
 	/*
-	 * Calculate how many hotplug bridges and normal bridges there
-	 * are on this bus. We will distribute the additional available
-	 * buses between hotplug bridges.
+	 * 计算这条总线上有多少支持热插拔的桥（hotplug bridges）和多少普通桥（normal bridges）。我们会把额外可用的总线号资源在这些热插拔桥之间进行分配
 	 */
 	for_each_pci_bridge(dev, bus) {
 		if (dev->is_hotplug_bridge)
@@ -2963,9 +2953,7 @@ static unsigned int pci_scan_child_bus_extend(struct pci_bus *bus,
 	}
 
 	/*
-	 * Scan bridges that are already configured. We don't touch them
-	 * unless they are misconfigured (which will be done in the second
-	 * scan below).
+	 * 扫描那些已经完成配置的桥（bridge）。我们不会去修改它们，除非它们存在配置错误（这种情况会在下面的第二次扫描中处理并修正）。
 	 */
 	for_each_pci_bridge(dev, bus) {
 		cmax = max;
@@ -2973,8 +2961,7 @@ static unsigned int pci_scan_child_bus_extend(struct pci_bus *bus,
 		max = pci_scan_bridge_extend(bus, dev, max, 0, 0);
 
 		/*
-		 * Reserve one bus for each bridge now to avoid extending
-		 * hotplug bridges too much during the second scan below.
+		 * 现在先为每个桥（bridge）预留一个总线号，以避免在下面的第二次扫描中把支持热插拔的桥（hotplug bridges）的总线范围扩展得过大。
 		 */
 		used_buses++;
 		if (max - cmax > 1)
@@ -2987,10 +2974,7 @@ static unsigned int pci_scan_child_bus_extend(struct pci_bus *bus,
 
 		if (!hotplug_bridges && normal_bridges == 1) {
 			/*
-			 * There is only one bridge on the bus (upstream
-			 * port) so it gets all available buses which it
-			 * can then distribute to the possible hotplug
-			 * bridges below.
+			 * 这条总线上只有一个桥（上行端口 / upstream port），所以它会获得所有可用的总线号；随后它可以把这些总线号再分配给下面可能存在的支持热插拔的桥（hotplug bridges）
 			 */
 			buses = available_buses;
 		} else if (dev->is_hotplug_bridge) {
@@ -3011,9 +2995,7 @@ static unsigned int pci_scan_child_bus_extend(struct pci_bus *bus,
 	}
 
 	/*
-	 * Make sure a hotplug bridge has at least the minimum requested
-	 * number of buses but allow it to grow up to the maximum available
-	 * bus number if there is room.
+	 * 确保热插拔桥（hotplug bridge）至少拥有所请求的最小总线数量；如果还有空间，则允许它增长，最多可扩展到最大可用的总线号
 	 */
 	if (bus->self && bus->self->is_hotplug_bridge) {
 		used_buses = max_t(unsigned int, available_buses,
@@ -3031,11 +3013,9 @@ static unsigned int pci_scan_child_bus_extend(struct pci_bus *bus,
 	}
 
 	/*
-	 * We've scanned the bus and so we know all about what's on
-	 * the other side of any bridges that may be on this bus plus
-	 * any devices.
+	 * 我们已经扫描过该总线，因此我们已经了解：这条总线上可能存在的任何桥（bridge）另一侧的情况，以及总线上的各个设备
 	 *
-	 * Return how far we've got finding sub-buses.
+	 * 返回我们在发现/分配下级总线（sub-buses）时推进到了哪个位置（即当前的下级总线号范围/终点）
 	 */
 	dev_err(&bus->dev, "bus scan returning with max=%02x\n", max);
 	return max;

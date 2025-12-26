@@ -1832,7 +1832,7 @@ static int acpi_add_single_object(struct acpi_device **child,
 
 	acpi_power_add_remove_device(device, true);
 	acpi_device_add_finalize(device);
-
+	// /sys/bus/acpi/devices/
 	acpi_handle_err(handle, "Added as %s, parent %s\n",
 			  dev_name(&device->dev), device->parent ?
 				dev_name(&device->parent->dev) : "(null)");
@@ -2120,7 +2120,7 @@ static int acpi_scan_attach_handler(struct acpi_device *device)
 {
 	struct acpi_hardware_id *hwid;
 	int ret = 0;
-	pr_err("ACPI %s", __func__);
+
 	list_for_each_entry(hwid, &device->pnp.ids, list) {
 		const struct acpi_device_id *devid;
 		struct acpi_scan_handler *handler;
@@ -2190,7 +2190,7 @@ static void acpi_bus_attach(struct acpi_device *device, bool first_pass)
 		acpi_device_set_enumerated(device);
 		goto ok;
 	}
-
+	pr_info("ACPI %s ->device_attach", __func__);
 	ret = device_attach(&device->dev);
 	if (ret < 0)
 		return;
@@ -2201,6 +2201,7 @@ static void acpi_bus_attach(struct acpi_device *device, bool first_pass)
 		acpi_device_set_enumerated(device);
 
  ok:
+	// 回调
 	list_for_each_entry(child, &device->children, node)
 		acpi_bus_attach(child, first_pass);
 

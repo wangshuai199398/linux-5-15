@@ -45,7 +45,7 @@ static const struct acpi_device_id root_device_ids[] = {
 	{"PNP0A03", 0},
 	{"", 0},
 };
-
+// acpi_scan_attach_handler->
 static struct acpi_scan_handler pci_root_handler = {
 	.ids = root_device_ids,
 	.attach = acpi_pci_root_add,
@@ -547,10 +547,8 @@ static int acpi_pci_root_add(struct acpi_device *device,
 	status = try_get_root_bridge_busnr(handle, &root->secondary);
 	if (ACPI_FAILURE(status)) {
 		/*
-		 * We need both the start and end of the downstream bus range
-		 * to interpret _CBA (MMCONFIG base address), so it really is
-		 * supposed to be in _CRS.  If we don't find it there, all we
-		 * can do is assume [_BBN-0xFF] or [0-0xFF].
+		 * 我们需要下游总线范围（downstream bus range）的起始和结束值，才能正确解析 _CBA（MMCONFIG 基地址），因此它确实应该出现在 _CRS 里。
+		 * 如果我们在 _CRS 中找不到它，那么我们所能做的就只有假设总线范围是 [_BBN - 0xFF] 或者 [0 - 0xFF]
 		 */
 		root->secondary.end = 0xFF;
 		dev_warn(&device->dev,
@@ -579,8 +577,8 @@ static int acpi_pci_root_add(struct acpi_device *device,
 		goto end;
 	}
 	//ACPI: PCI Root Bridge [PC00] (domain 0000 [bus 00-fe])
-	pr_info("%s [%s] (domain %04x %pR)\n",
-	       acpi_device_name(device), acpi_device_bid(device),
+	pr_info("%s %s [%s] (domain %04x %pR)\n",
+	       __func__, acpi_device_name(device), acpi_device_bid(device),
 	       root->segment, &root->secondary);
 
 	root->mcfg_addr = acpi_pci_root_get_mcfg_addr(handle);
@@ -589,15 +587,13 @@ static int acpi_pci_root_add(struct acpi_device *device,
 	negotiate_os_control(root, &no_aspm, is_pcie);
 
 	/*
-	 * TBD: Need PCI interface for enumeration/configuration of roots.
+	 * TBD：需要一个 PCI 接口，用于对 Root（根桥/根端口）进行枚举和配置
 	 */
 
 	/*
-	 * Scan the Root Bridge
+	 * 扫描 Root Bridge（根桥）
 	 * --------------------
-	 * Must do this prior to any attempt to bind the root device, as the
-	 * PCI namespace does not get created until this call is made (and
-	 * thus the root bridge's pci_dev does not exist).
+	 *在尝试绑定（bind）根设备之前，必须先做这一步，因为 PCI 命名空间只有在调用了这个扫描之后才会被创建（也就是说，在此之前根桥对应的 pci_dev 还不存在）
 	 */
 	root->bus = pci_acpi_scan_root(root);
 	if (!root->bus) {
