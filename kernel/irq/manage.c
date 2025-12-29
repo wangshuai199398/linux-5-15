@@ -1623,6 +1623,7 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 
 	/* 为启用了 ONESHOT 的 irqaction 设置线程掩码（thread mask）。对于非 ONESHOT 的中断（!ONESHOT），线程掩码为 0，这样就可以在 irq_wake_thread 中避免使用条件判断 */
 	//设置 thread_mask 用于 ONESHOT 中断
+	pr_err("new->flags 0x%x shared %d", new->flags, shared);
 	if (new->flags & IRQF_ONESHOT) {
 		/*
 		 * Unlikely to have 32 resp 64 irqs sharing one line,
