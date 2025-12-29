@@ -677,17 +677,17 @@ int pcibios_add_device(struct pci_dev *dev)
 	set_dev_domain_options(dev);
 
 	/*
-	 * Setup the initial MSI domain of the device. If the underlying
-	 * bus has a PCI/MSI irqdomain associated use the bus domain,
-	 * otherwise set the default domain. This ensures that special irq
-	 * domains e.g. VMD are preserved. The default ensures initial
-	 * operation if irq remapping is not active. If irq remapping is
-	 * active it will overwrite the domain pointer when the device is
-	 * associated to a remapping domain.
+	 * 为设备设置初始的 MSI 域（MSI domain）。
+	 如果底层总线已经关联了一个 PCI/MSI 的 irqdomain，就使用该总线的域；
+	 否则使用默认域。这样可以确保像 VMD 这类特殊的 irqdomain 能被保留。
+	 默认域可以保证在未启用 IRQ 重映射（irq remapping）时设备也能正常工作；
+	 如果启用了 IRQ 重映射，那么当设备被关联到某个重映射域时，它会覆盖（更新）这个域指针。
 	 */
 	msidom = dev_get_msi_domain(&dev->bus->dev);
+	pr_err("%s %p", __func__, msidom);
 	if (!msidom)
 		msidom = x86_pci_msi_default_domain;
+	pr_err("%s %s", __func__, msidom->name);
 	dev_set_msi_domain(&dev->dev, msidom);
 	return 0;
 }

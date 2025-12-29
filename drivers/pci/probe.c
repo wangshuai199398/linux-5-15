@@ -186,6 +186,7 @@ int __pci_read_base(struct pci_dev *dev, enum pci_bar_type type,
 	mask = type ? PCI_ROM_ADDRESS_MASK : ~0;
 
 	/* No printks while decoding is disabled! */
+	//PCI_COMMAND_DECODE_ENABLE：包含 I/O decode 和 Mem decode 的启用位。这里把它清掉，避免 BAR 探测过程中设备真的去响应地址（或产生怪行为）
 	if (!dev->mmio_always_on) {
 		pci_read_config_word(dev, PCI_COMMAND, &orig_cmd);
 		if (orig_cmd & PCI_COMMAND_DECODE_ENABLE) {
@@ -193,9 +194,15 @@ int __pci_read_base(struct pci_dev *dev, enum pci_bar_type type,
 				orig_cmd & ~PCI_COMMAND_DECODE_ENABLE);
 		}
 	}
-
+	// res 的 name 会显示为类似 0000:01:00.0
 	res->name = pci_name(dev);
 
+	/*
+	• l：原始 BAR 值（里面包含地址 + 类型位）。
+	• 写 l | mask（通常等价写全 1）到 BAR。
+	• 再读回来得到 sz：设备会把“不可写/硬连线为 0 的地址位”反映出来，借此计算 BAR 的大小。
+	• 最后把原值 l 写回去，恢复配置。
+	*/
 	pci_read_config_dword(dev, pos, &l);
 	pci_write_config_dword(dev, pos, l | mask);
 	pci_read_config_dword(dev, pos, &sz);
@@ -237,6 +244,7 @@ int __pci_read_base(struct pci_dev *dev, enum pci_bar_type type,
 		mask64 = PCI_ROM_ADDRESS_MASK;
 	}
 	pr_info("%s dev->mmio_always_on %d, sz %u res->flags 0x%lx", __func__, dev->mmio_always_on, sz, res->flags);
+	// 如果是 64-bit BAR，还要读高 32 位并一起 sizing
 	if (res->flags & IORESOURCE_MEM_64) {
 		pci_read_config_dword(dev, pos + 4, &l);
 		pci_write_config_dword(dev, pos + 4, ~0);
@@ -247,7 +255,7 @@ int __pci_read_base(struct pci_dev *dev, enum pci_bar_type type,
 		sz64 |= ((u64)sz << 32);
 		mask64 |= ((u64)~0 << 32);
 	}
-
+	// 恢复 PCI_COMMAND（把 decode 开回去）
 	if (!dev->mmio_always_on && (orig_cmd & PCI_COMMAND_DECODE_ENABLE))
 		pci_write_config_word(dev, PCI_COMMAND, orig_cmd);
 
@@ -260,7 +268,7 @@ int __pci_read_base(struct pci_dev *dev, enum pci_bar_type type,
 			 pos);
 		goto fail;
 	}
-
+	// 64-bit BAR 的边界处理（32 位内核/资源类型不够大等）
 	if (res->flags & IORESOURCE_MEM_64) {
 		if ((sizeof(pci_bus_addr_t) < 8 || sizeof(resource_size_t) < 8)
 		    && sz64 > 0x100000000ULL) {
@@ -1956,7 +1964,7 @@ int pci_setup_device(struct pci_dev *dev)
 		pci_read_bases(dev, 6, PCI_ROM_ADDRESS);
 
 		pci_subsystem_ids(dev, &dev->subsystem_vendor, &dev->subsystem_device);
-		pr_info("%s pin %u IRQ %u subsystem_vendor %hu subsystem_device %hu\n", __func__, dev->irq, dev->irq, dev->subsystem_vendor, dev->subsystem_device);
+		pr_info("%s pin %u IRQ %u subsystem_vendor 0x%x subsystem_device 0x%x\n", __func__, dev->irq, dev->irq, dev->subsystem_vendor, dev->subsystem_device);
 
 		/*
 		 * Do the ugly legacy mode stuff here rather than broken chip
