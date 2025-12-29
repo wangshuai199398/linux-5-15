@@ -1404,7 +1404,7 @@ static int irq_request_resources(struct irq_desc *desc)
 {
 	struct irq_data *d = &desc->irq_data;
 	struct irq_chip *c = d->chip;
-	pr_err("Requesting resources for irq %d\n", irq_desc_get_irq(desc));
+	pr_err("Requesting resources for irq %d c->irq_request_resources %p\n", irq_desc_get_irq(desc), c->irq_request_resources);
 	return c->irq_request_resources ? c->irq_request_resources(d) : 0;
 }
 
