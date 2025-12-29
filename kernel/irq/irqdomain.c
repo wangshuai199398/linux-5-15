@@ -226,7 +226,7 @@ static void __irq_domain_publish(struct irq_domain *domain)
 	list_add(&domain->link, &irq_domain_list);
 	mutex_unlock(&irq_domain_mutex);
 
-	pr_debug("Added domain %s\n", domain->name);
+	pr_err("Added domain %s\n", domain->name);
 }
 
 /**
@@ -493,7 +493,7 @@ EXPORT_SYMBOL_GPL(irq_domain_check_msi_remap);
  */
 void irq_set_default_host(struct irq_domain *domain)
 {
-	pr_debug("Default domain set to @0x%p\n", domain);
+	pr_err("Default domain set to @0x%p\n", domain);
 
 	irq_default_domain = domain;
 }

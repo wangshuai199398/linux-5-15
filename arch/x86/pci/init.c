@@ -18,7 +18,7 @@ static __init int pci_arch_init(void)
 
 	if (x86_init.pci.arch_init)
 		pcbios = x86_init.pci.arch_init();
-
+	pr_err("PCI %s", __func__);
 	/*
 	 * Must happen after x86_init.pci.arch_init(). Xen sets up the
 	 * x86_init.irqs.create_pci_msi_domain there.

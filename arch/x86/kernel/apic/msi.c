@@ -207,6 +207,7 @@ struct irq_domain * __init native_create_pci_msi_domain(void)
 	} else {
 		d->flags |= IRQ_DOMAIN_MSI_NOMASK_QUIRK;
 	}
+	pr_err("PCI %s domain name %s", __func__, d->name);
 	return d;
 }
 
@@ -240,7 +241,7 @@ struct irq_domain *arch_create_remap_msi_irq_domain(struct irq_domain *parent,
 {
 	struct fwnode_handle *fn;
 	struct irq_domain *d;
-
+	pr_err("PCI %s domain name %s id %d\n", __func__, name, id);
 	fn = irq_domain_alloc_named_id_fwnode(name, id);
 	if (!fn)
 		return NULL;
