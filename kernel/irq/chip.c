@@ -289,6 +289,7 @@ int irq_activate(struct irq_desc *desc)
 
 	if (!irqd_affinity_is_managed(d))
 		return irq_domain_activate_irq(d, false);
+	pr_err("irq_domain_activate_irq is not going\n");
 	return 0;
 }
 
