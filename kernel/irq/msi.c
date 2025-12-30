@@ -550,6 +550,7 @@ int __msi_domain_alloc_irqs(struct irq_domain *domain, struct device *dev,
 	ret = msi_domain_prepare_irqs(domain, dev, nvec, &arg);
 	if (ret)
 		return ret;
+	pr_err("__msi_domain_alloc_irqs: dev %s nvec %d\n", dev_name(dev), nvec);
 	// 一个msi_desc对应一个中断，驱动分配32个就使用32个
 	for_each_msi_entry(desc, dev) {
 		ops->set_desc(&arg, desc);// msi_domain_ops_set_desc
@@ -588,8 +589,7 @@ int __msi_domain_alloc_irqs(struct irq_domain *domain, struct device *dev,
 	for_each_msi_vector(desc, i, dev) {
 		if (desc->irq == i) {
 			virq = desc->irq;
-			dev_err(dev, "irq [%d-%d] for MSI\n",
-				virq, virq + desc->nvec_used - 1);
+			dev_err(dev, "irq [%d-%d] for MSI can_reserve %d\n", virq, virq + desc->nvec_used - 1, can_reserve);
 		}
 
 		irq_data = irq_domain_get_irq_data(domain, i);
@@ -642,7 +642,7 @@ int msi_domain_alloc_irqs(struct irq_domain *domain, struct device *dev,
 {
 	struct msi_domain_info *info = domain->host_data;
 	struct msi_domain_ops *ops = info->ops;
-
+	pr_err("msi_domain_alloc_irqs: dev %s nvec %d\n", dev_name(dev), nvec);
 	return ops->domain_alloc_irqs(domain, dev, nvec);// __msi_domain_alloc_irqs
 }
 
