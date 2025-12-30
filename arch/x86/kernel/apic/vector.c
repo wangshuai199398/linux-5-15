@@ -171,6 +171,7 @@ setnew:
 	apicd->vector = newvec;
 	apicd->cpu = newcpu;
 	BUG_ON(!IS_ERR_OR_NULL(per_cpu(vector_irq, newcpu)[newvec]));
+	pr_err("%s: Assigning vector %u on CPU %u for IRQ %u\n", __func__, newvec, newcpu, irqd->irq);
 	per_cpu(vector_irq, newcpu)[newvec] = desc;
 }
 
@@ -302,8 +303,10 @@ assign_irq_vector_policy(struct irq_data *irqd, struct irq_alloc_info *info)
 {
 	if (irqd_affinity_is_managed(irqd))
 		return reserve_managed_vector(irqd);
+	pr_err("%s assign_irq_vector called for non-managed irq %u\n", __func__, irqd->irq);
 	if (info->mask)
 		return assign_irq_vector(irqd, info->mask);
+	pr_err("%s reserve_irq_vector called for non-managed irq %u\n", __func__, irqd->irq);
 	/*
 	 * Make only a global reservation with no guarantee. A real vector
 	 * is associated at activation time.
@@ -788,7 +791,7 @@ void __init lapic_assign_system_vectors(void)
 int __init arch_early_irq_init(void)
 {
 	struct fwnode_handle *fn;
-
+	// 把 Linux 的 virq（IRQ号）映射到 CPU 的“中断向量号 vector(0..255)”并管理这些 vector 的分配/迁移
 	fn = irq_domain_alloc_named_fwnode("VECTOR");
 	BUG_ON(!fn);
 	x86_vector_domain = irq_domain_create_tree(fn, &x86_vector_domain_ops,
