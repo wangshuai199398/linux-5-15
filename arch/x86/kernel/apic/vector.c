@@ -208,7 +208,7 @@ static void reserve_irq_vector_locked(struct irq_data *irqd)
 	trace_vector_reserve(irqd->irq, 0);
 	vector_assign_managed_shutdown(irqd);
 }
-
+/* 把某个 CPU 的中断向量号（vector）预留/占住，避免之后被普通的设备中断（MSI/IOAPIC 等）分配到 */
 static int reserve_irq_vector(struct irq_data *irqd)
 {
 	unsigned long flags;
@@ -250,6 +250,7 @@ assign_vector_locked(struct irq_data *irqd, const struct cpumask *dest)
 	trace_vector_alloc(irqd->irq, vector, resvd, vector);
 	if (vector < 0)
 		return vector;
+	pr_err("%s: Assigned vector %u on CPU %u for IRQ %u\n", __func__, vector, cpu, irqd->irq);
 	apic_update_vector(irqd, vector, cpu);
 	apic_update_irq_cfg(irqd, vector, cpu);
 
@@ -331,6 +332,7 @@ assign_managed_vector(struct irq_data *irqd, const struct cpumask *dest)
 	trace_vector_alloc_managed(irqd->irq, vector, vector);
 	if (vector < 0)
 		return vector;
+	pr_err("%s: Assigned vector %u on CPU %u for IRQ %u\n", __func__, vector, cpu, irqd->irq);
 	apic_update_vector(irqd, vector, cpu);
 	apic_update_irq_cfg(irqd, vector, cpu);
 	return 0;
@@ -433,7 +435,7 @@ static int activate_managed(struct irq_data *irqd)
 		pr_err("Managed startup for irq %u, but no CPU\n", irqd->irq);
 		return -EINVAL;
 	}
-
+	pr_err("%s: Activating managed irq %u\n", __func__, irqd->irq);
 	ret = assign_managed_vector(irqd, vector_searchmask);
 	/*
 	 * This should not happen. The vector reservation got buggered.  Handle
@@ -461,8 +463,10 @@ static int x86_vector_activate(struct irq_domain *dom, struct irq_data *irqd,
 		assign_irq_vector_any_locked(irqd);
 	else if (reserve || irqd_is_managed_and_shutdown(irqd))
 		vector_assign_managed_shutdown(irqd);
-	else if (apicd->is_managed)
+	else if (apicd->is_managed) {
+		pr_err("%s", __func__);
 		ret = activate_managed(irqd);
+	}
 	else if (apicd->has_reserved)
 		ret = activate_reserved(irqd);
 	raw_spin_unlock_irqrestore(&vector_lock, flags);
