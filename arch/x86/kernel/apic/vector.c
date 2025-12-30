@@ -552,7 +552,7 @@ static int x86_vector_alloc_irqs(struct irq_domain *domain, unsigned int virq,
 	if (WARN_ON_ONCE(info->flags & X86_IRQ_ALLOC_LEGACY &&
 			 virq == PIC_CASCADE_IR))
 		return -EINVAL;
-	pr_err("%s: virq=%u nr_irqs=%u\n", __func__, virq, nr_irqs);
+	pr_err("%s: virq=%u nr_irqs=%u info->flags 0x%x\n", __func__, virq, nr_irqs, info->flags);
 	for (i = 0; i < nr_irqs; i++) {
 		irqd = irq_domain_get_irq_data(domain, virq + i);
 		BUG_ON(!irqd);
