@@ -285,6 +285,7 @@ static int msi_domain_alloc(struct irq_domain *domain, unsigned int virq,
 		return -EEXIST;
 
 	if (domain->parent) {
+		pr_err("domain parent %s", domain->parent->name);
 		ret = irq_domain_alloc_irqs_parent(domain, virq, nr_irqs, arg);
 		if (ret < 0)
 			return ret;
