@@ -1478,8 +1478,8 @@ int irq_domain_alloc_irqs_hierarchy(struct irq_domain *domain,
 		pr_debug("domain->ops->alloc() is NULL\n");
 		return -ENOSYS;
 	}
-
-	return domain->ops->alloc(domain, irq_base, nr_irqs, arg);// msi_domain_alloc parent是 x86_vector_alloc_irqs
+	pr_err("%s domain name %s", __func__, domain->name);
+	return domain->ops->alloc(domain, irq_base, nr_irqs, arg);// msi_domain_alloc parent 是 x86_vector_alloc_irqs
 }
 /* 在持锁情况下，从某个 irq_domain 给设备分配一段 Linux IRQ 号（virq），并把这些 virq 和该 domain 的层级（hierarchy）irqdomain 结构建立起来 */
 static int irq_domain_alloc_irqs_locked(struct irq_domain *domain, int irq_base,

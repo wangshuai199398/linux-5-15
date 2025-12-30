@@ -283,7 +283,7 @@ static int msi_domain_alloc(struct irq_domain *domain, unsigned int virq,
 	// 查找hwirq对应的 irq_data 是否存在
 	if (irq_find_mapping(domain, hwirq) > 0)
 		return -EEXIST;
-
+	pr_err("%s hwirq %lu", __func__, hwirq);
 	if (domain->parent) {
 		pr_err("domain parent %s", domain->parent->name);
 		ret = irq_domain_alloc_irqs_parent(domain, virq, nr_irqs, arg);
@@ -643,7 +643,7 @@ int msi_domain_alloc_irqs(struct irq_domain *domain, struct device *dev,
 {
 	struct msi_domain_info *info = domain->host_data;
 	struct msi_domain_ops *ops = info->ops;
-	pr_err("msi_domain_alloc_irqs: dev %s nvec %d\n", dev_name(dev), nvec);
+	pr_err("msi_domain_alloc_irqs: dev %s nvec %d domain name %s\n", dev_name(dev), nvec, domain->name);
 	return ops->domain_alloc_irqs(domain, dev, nvec);// __msi_domain_alloc_irqs
 }
 
