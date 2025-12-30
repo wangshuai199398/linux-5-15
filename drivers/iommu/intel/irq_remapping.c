@@ -750,7 +750,7 @@ static int __init intel_prepare_irq_remapping(void)
 	if (!dmar_ir_support())
 		return -ENODEV;
 
-	if (parse_ioapics_under_ir()) {
+	if (parse_ioapics_under_ir()) {//
 		pr_info("Not enabling interrupt remapping\n");
 		goto error;
 	}
@@ -1182,7 +1182,7 @@ intel_ir_set_affinity(struct irq_data *data, const struct cpumask *mask,
 	struct irq_data *parent = data->parent_data;
 	struct irq_cfg *cfg = irqd_cfg(data);
 	int ret;
-
+	pr_err("%s ->parent->chip->irq_set_affinity\n", __func__);
 	ret = parent->chip->irq_set_affinity(parent, mask, force);
 	if (ret < 0 || ret == IRQ_SET_MASK_OK_DONE)
 		return ret;

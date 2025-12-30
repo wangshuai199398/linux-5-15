@@ -242,7 +242,7 @@ int msi_domain_set_affinity(struct irq_data *irq_data,
 	struct irq_data *parent = irq_data->parent_data;
 	struct msi_msg msg[2] = { [1] = { }, };
 	int ret;
-
+	pr_err("%s called\n", __func__);
 	ret = parent->chip->irq_set_affinity(parent, mask, force);
 	if (ret >= 0 && ret != IRQ_SET_MASK_OK_DONE) {
 		BUG_ON(irq_chip_compose_msi_msg(irq_data, msg));
@@ -452,7 +452,7 @@ int msi_domain_prepare_irqs(struct irq_domain *domain, struct device *dev,
 
 	ret = ops->msi_check(domain, info, dev);
 	if (ret == 0)
-		ret = ops->msi_prepare(domain, dev, nvec, arg);// msi_domain_ops_prepare
+		ret = ops->msi_prepare(domain, dev, nvec, arg);// pci_msi_prepare
 
 	return ret;
 }
@@ -554,7 +554,7 @@ int __msi_domain_alloc_irqs(struct irq_domain *domain, struct device *dev,
 	pr_err("__msi_domain_alloc_irqs: dev %s nvec %d\n", dev_name(dev), nvec);
 	// 一个msi_desc对应一个中断，驱动分配32个就使用32个
 	for_each_msi_entry(desc, dev) {
-		ops->set_desc(&arg, desc);// msi_domain_ops_set_desc
+		ops->set_desc(&arg, desc);// pci_msi_domain_set_desc
 
 		virq = __irq_domain_alloc_irqs(domain, -1, desc->nvec_used,
 					       dev_to_node(dev), &arg, false,

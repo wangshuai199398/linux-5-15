@@ -43,6 +43,7 @@ msi_set_affinity(struct irq_data *irqd, const struct cpumask *mask, bool force)
 	old_cfg = *cfg;
 
 	/* Allocate a new target vector */
+	pr_err("%s: irq %d cpu %u\n", __func__, irqd->irq, cpu);
 	ret = parent->chip->irq_set_affinity(parent, mask, force);
 	if (ret < 0 || ret == IRQ_SET_MASK_OK_DONE)
 		return ret;
@@ -98,14 +99,10 @@ msi_set_affinity(struct irq_data *irqd, const struct cpumask *mask, bool force)
 	lock_vector_lock();
 
 	/*
-	 * Mark the new target vector on the local CPU if it is currently
-	 * unused. Reuse the VECTOR_RETRIGGERED state which is also used in
-	 * the CPU hotplug path for a similar purpose. This cannot be
-	 * undone here as the current CPU has interrupts disabled and
-	 * cannot handle the interrupt before the whole set_affinity()
-	 * section is done. In the CPU unplug case, the current CPU is
-	 * about to vanish and will not handle any interrupts anymore. The
-	 * vector is cleaned up when the CPU comes online again.
+	 * 如果新的目标向量在本地 CPU 上当前还未被使用，就在本地 CPU 上标记这个新的目标向量。
+	 这里复用 VECTOR_RETRIGGERED 状态（它在 CPU 热插拔路径中也用于类似目的）。
+	 由于当前 CPU 已经禁用了中断，而且在整个 set_affinity() 这段流程完成之前无法处理该中断，所以这里无法把这个标记撤销。
+	 在 CPU 下线（unplug）的情况下，当前 CPU 即将消失，并且不会再处理任何中断；该向量会在 CPU 再次上线时被清理
 	 */
 	if (IS_ERR_OR_NULL(this_cpu_read(vector_irq[cfg->vector])))
 		this_cpu_write(vector_irq[cfg->vector], VECTOR_RETRIGGERED);
@@ -213,7 +210,7 @@ struct irq_domain * __init native_create_pci_msi_domain(void)
 
 void __init x86_create_pci_msi_domain(void)
 {
-	x86_pci_msi_default_domain = x86_init.irqs.create_pci_msi_domain();
+	x86_pci_msi_default_domain = x86_init.irqs.create_pci_msi_domain();//native_create_pci_msi_domain
 }
 
 #ifdef CONFIG_IRQ_REMAP
