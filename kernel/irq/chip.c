@@ -237,7 +237,7 @@ static int __irq_startup(struct irq_desc *desc)
 
 	/* Warn if this interrupt is not activated but try nevertheless */
 	WARN_ON_ONCE(!irqd_is_activated(d));
-
+	pr_err("Starting up irq_startup %p\n", d->chip->irq_startup);
 	if (d->chip->irq_startup) {
 		ret = d->chip->irq_startup(d);
 		irq_state_clr_disabled(desc);
@@ -264,7 +264,7 @@ int irq_startup(struct irq_desc *desc, bool resend, bool force)
 		case IRQ_STARTUP_NORMAL:
 			pr_err("Starting up non-managed IRQ %d flag 0x%x\n", d->irq, d->chip->flags);
 			if (d->chip->flags & IRQCHIP_AFFINITY_PRE_STARTUP)
-				irq_setup_affinity(desc);
+				irq_setup_affinity(desc);//
 			ret = __irq_startup(desc);
 			if (!(d->chip->flags & IRQCHIP_AFFINITY_PRE_STARTUP))
 				irq_setup_affinity(desc);
