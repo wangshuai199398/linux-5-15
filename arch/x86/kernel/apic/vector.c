@@ -263,7 +263,7 @@ static int assign_irq_vector(struct irq_data *irqd, const struct cpumask *dest)
 {
 	unsigned long flags;
 	int ret;
-
+	pr_err("%s: Assigning vector for IRQ %u\n", __func__, irqd->irq);
 	raw_spin_lock_irqsave(&vector_lock, flags);
 	cpumask_and(vector_searchmask, dest, cpu_online_mask);
 	ret = assign_vector_locked(irqd, vector_searchmask);
@@ -276,6 +276,7 @@ static int assign_irq_vector_any_locked(struct irq_data *irqd)
 	/* Get the affinity mask - either irq_default_affinity or (user) set */
 	const struct cpumask *affmsk = irq_data_get_affinity_mask(irqd);
 	int node = irq_data_get_node(irqd);
+	pr_err("%s: Assigning vector for IRQ %u\n", __func__, irqd->irq);
 
 	if (node != NUMA_NO_NODE) {
 		/* Try the intersection of @affmsk and node mask */
