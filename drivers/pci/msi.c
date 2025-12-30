@@ -40,7 +40,7 @@ static int pci_msi_setup_msi_irqs(struct pci_dev *dev, int nvec, int type)
 
 	domain = dev_get_msi_domain(&dev->dev);
 	if (domain && irq_domain_is_hierarchy(domain))
-		return msi_domain_alloc_irqs(domain, &dev->dev, nvec);
+		return msi_domain_alloc_irqs(domain, &dev->dev, nvec);//
 
 	return arch_setup_msi_irqs(dev, nvec, type);
 }
@@ -590,7 +590,9 @@ static void __iomem *msix_map_region(struct pci_dev *dev, unsigned nr_entries)
 	u32 table_offset;
 	unsigned long flags;
 	u8 bir;
-
+	/* PCI_MSIX_TABLE 这个 dword 里同时包含：
+	•	BIR（BAR Indicator Register）：MSI-X 表位于哪个 BAR（0..5 或 ROM）
+	•	Offset：在该 BAR 内的偏移 */
 	pci_read_config_dword(dev, dev->msix_cap + PCI_MSIX_TABLE,
 			      &table_offset);
 	bir = (u8)(table_offset & PCI_MSIX_TABLE_BIR);
@@ -830,14 +832,12 @@ static int pci_msi_supported(struct pci_dev *dev, int nvec)
 }
 
 /**
- * pci_msi_vec_count - Return the number of MSI vectors a device can send
+ * 返回设备能够发送的 MSI 向量数量
  * @dev: device to report about
  *
- * This function returns the number of MSI vectors a device requested via
- * Multiple Message Capable register. It returns a negative errno if the
- * device is not capable sending MSI interrupts. Otherwise, the call succeeds
- * and returns a power of two, up to a maximum of 2^5 (32), according to the
- * MSI specification.
+ * 这个函数返回设备通过 Multiple Message Capable（多消息能力）寄存器所请求的 MSI 向量数量
+ * 如果设备不具备发送 MSI 中断的能力，则返回一个负的 errno
+ * 否则调用成功，返回一个 2 的幂，最大到 2^5（32），符合 MSI 规范
  **/
 int pci_msi_vec_count(struct pci_dev *dev)
 {
@@ -891,6 +891,7 @@ EXPORT_SYMBOL(pci_disable_msi);
  * @dev: 指向该 MSI-X 设备功能的 pci_dev 数据结构的指针
  * 本函数返回设备 MSI-X 表中的条目数，也就是该设备能够发送的 MSI-X 向量的数量。
  * 如果设备不支持发送 MSI-X 中断，则返回一个负的错误码（errno）。
+ * 2048_wangs
  **/
 int pci_msix_vec_count(struct pci_dev *dev)
 {
@@ -1406,7 +1407,7 @@ struct irq_domain *pci_msi_create_irq_domain(struct fwnode_handle *fwnode,
 
 	if (WARN_ON(info->flags & MSI_FLAG_LEVEL_CAPABLE))
 		info->flags &= ~MSI_FLAG_LEVEL_CAPABLE;
-
+	// MSI_FLAG_USE_DEF_DOM_OPS | MSI_FLAG_USE_DEF_CHIP_OPS | MSI_FLAG_PCI_MSIX
 	if (info->flags & MSI_FLAG_USE_DEF_DOM_OPS)
 		pci_msi_domain_update_dom_ops(info);
 	if (info->flags & MSI_FLAG_USE_DEF_CHIP_OPS)
@@ -1424,6 +1425,7 @@ struct irq_domain *pci_msi_create_irq_domain(struct fwnode_handle *fwnode,
 		return NULL;
 
 	irq_domain_update_bus_token(domain, DOMAIN_BUS_PCI_MSI);
+	pr_err("MSI: Created IRQ domain %s parent name %s\n", domain->name, domain->parent->name);
 	return domain;
 }
 EXPORT_SYMBOL_GPL(pci_msi_create_irq_domain);
