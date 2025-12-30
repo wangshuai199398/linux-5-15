@@ -335,12 +335,17 @@ void irq_shutdown_and_deactivate(struct irq_desc *desc)
 
 void irq_enable(struct irq_desc *desc)
 {
+	//逻辑上并没有走 disable 计数/disable 状态，只是可能处于 masked（屏蔽）状态
 	if (!irqd_irq_disabled(&desc->irq_data)) {
-		unmask_irq(desc);
+		unmask_irq(desc);//让硬件/控制器取消屏蔽，中断可以触发
+		pr_err("%s irq %d already enabled\n", __func__, desc->irq_data.irq);
 	} else {
+		//清掉 desc 里的 “disabled” 软件状态标志：表示我们要把它从 disabled 变回 enabled
 		irq_state_clr_disabled(desc);
+		//接着看中断控制器是否提供专门的 enable 操作
 		if (desc->irq_data.chip->irq_enable) {
 			desc->irq_data.chip->irq_enable(&desc->irq_data);
+			//	然后清掉软件的 masked 标志（认为 enable 后已经不再 masked）
 			irq_state_clr_masked(desc);
 		} else {
 			unmask_irq(desc);
