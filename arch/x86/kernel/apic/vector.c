@@ -276,7 +276,7 @@ static int assign_irq_vector_any_locked(struct irq_data *irqd)
 	/* Get the affinity mask - either irq_default_affinity or (user) set */
 	const struct cpumask *affmsk = irq_data_get_affinity_mask(irqd);
 	int node = irq_data_get_node(irqd);
-	pr_err("%s: Assigning vector for IRQ %u\n", __func__, irqd->irq);
+	pr_err("%s: Assigning vector for IRQ %u node %d\n", __func__, irqd->irq, node);
 
 	if (node != NUMA_NO_NODE) {
 		/* Try the intersection of @affmsk and node mask */
@@ -287,9 +287,10 @@ static int assign_irq_vector_any_locked(struct irq_data *irqd)
 
 	/* Try the full affinity mask */
 	cpumask_and(vector_searchmask, affmsk, cpu_online_mask);
+	pr_err("%s: cpumask_and\n", __func__, irqd->irq);
 	if (!assign_vector_locked(irqd, vector_searchmask))
 		return 0;
-
+	pr_err("%s: Assigning vector for IRQ %u node %d\n", __func__, irqd->irq, node);
 	if (node != NUMA_NO_NODE) {
 		/* Try the node mask */
 		if (!assign_vector_locked(irqd, cpumask_of_node(node)))
@@ -297,6 +298,7 @@ static int assign_irq_vector_any_locked(struct irq_data *irqd)
 	}
 
 	/* Try the full online mask */
+	pr_err("%s: assign_vector_locked\n", __func__, irqd->irq);
 	return assign_vector_locked(irqd, cpu_online_mask);
 }
 
@@ -397,7 +399,7 @@ static int activate_reserved(struct irq_data *irqd)
 {
 	struct apic_chip_data *apicd = apic_chip_data(irqd);
 	int ret;
-
+	pr_info("%s: Activating reserved irq %u\n", __func__, irqd->irq);
 	ret = assign_irq_vector_any_locked(irqd);
 	if (!ret) {
 		apicd->has_reserved = false;
@@ -460,8 +462,11 @@ static int x86_vector_activate(struct irq_domain *dom, struct irq_data *irqd,
 			      apicd->can_reserve, reserve);
 
 	raw_spin_lock_irqsave(&vector_lock, flags);
-	if (!apicd->can_reserve && !apicd->is_managed)
+	if (!apicd->can_reserve && !apicd->is_managed) {
 		assign_irq_vector_any_locked(irqd);
+		pr_err("%s assign_irq_vector_any_locked", __func__);
+	}
+		
 	else if (reserve || irqd_is_managed_and_shutdown(irqd))
 		vector_assign_managed_shutdown(irqd);
 	else if (apicd->is_managed) {
