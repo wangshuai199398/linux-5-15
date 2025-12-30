@@ -1479,9 +1479,9 @@ int irq_domain_alloc_irqs_hierarchy(struct irq_domain *domain,
 		return -ENOSYS;
 	}
 
-	return domain->ops->alloc(domain, irq_base, nr_irqs, arg);
+	return domain->ops->alloc(domain, irq_base, nr_irqs, arg);// msi_domain_alloc
 }
-
+/* 在持锁情况下，从某个 irq_domain 给设备分配一段 Linux IRQ 号（virq），并把这些 virq 和该 domain 的层级（hierarchy）irqdomain 结构建立起来 */
 static int irq_domain_alloc_irqs_locked(struct irq_domain *domain, int irq_base,
 					unsigned int nr_irqs, int node, void *arg,
 					bool realloc, const struct irq_affinity_desc *affinity)
@@ -1491,6 +1491,7 @@ static int irq_domain_alloc_irqs_locked(struct irq_domain *domain, int irq_base,
 	if (realloc && irq_base >= 0) {
 		virq = irq_base;
 	} else {
+		// 分配 nr_irqs 个连续的 Linux IRQ 描述符，返回第一个 IRQ 号 virq
 		virq = irq_domain_alloc_descs(irq_base, nr_irqs, 0, node,
 					      affinity);
 		if (virq < 0) {
@@ -1499,13 +1500,13 @@ static int irq_domain_alloc_irqs_locked(struct irq_domain *domain, int irq_base,
 			return virq;
 		}
 	}
-
+	// virq 是linux分配的 IRQ 号, 为每一层创建/插入 irq_data
 	if (irq_domain_alloc_irq_data(domain, virq, nr_irqs)) {
 		pr_debug("cannot allocate memory for IRQ%d\n", virq);
 		ret = -ENOMEM;
 		goto out_free_desc;
 	}
-
+	// 设置每一层的irq_data和处理函数 handle_edge_irq
 	ret = irq_domain_alloc_irqs_hierarchy(domain, virq, nr_irqs, arg);
 	if (ret < 0)
 		goto out_free_irq_data;
@@ -1515,7 +1516,7 @@ static int irq_domain_alloc_irqs_locked(struct irq_domain *domain, int irq_base,
 		if (ret)
 			goto out_free_irq_data;
 	}
-
+	// 插入hwirq - irq_data 的对应关系
 	for (i = 0; i < nr_irqs; i++)
 		irq_domain_insert_irq(virq + i);
 
@@ -1529,26 +1530,23 @@ out_free_desc:
 }
 
 /**
- * __irq_domain_alloc_irqs - Allocate IRQs from domain
- * @domain:	domain to allocate from
- * @irq_base:	allocate specified IRQ number if irq_base >= 0
- * @nr_irqs:	number of IRQs to allocate
- * @node:	NUMA node id for memory allocation
- * @arg:	domain specific argument
- * @realloc:	IRQ descriptors have already been allocated if true
- * @affinity:	Optional irq affinity mask for multiqueue devices
+ * 从 irq_domain 分配 IRQ
+ * @domain:	要从中分配 IRQ 的域（domain）
+ * @irq_base:	如果 irq_base >= 0，则分配指定的 IRQ 号，否则分配任意可用的 IRQ 号
+ * @nr_irqs:	要分配的 IRQ 数量
+ * @node:	    用于内存分配的 NUMA 节点 ID
+ * @arg:	    该 domain 专用的参数
+ * @realloc:	如果为 true，表示 IRQ 描述符（IRQ descriptors）之前已经分配好了
+ * @affinity:	可选的 IRQ 亲和性掩码，用于多队列（multiqueue）设备
  *
- * Allocate IRQ numbers and initialized all data structures to support
- * hierarchy IRQ domains.
- * Parameter @realloc is mainly to support legacy IRQs.
- * Returns error code or allocated IRQ number
+ * 分配 IRQ 号并初始化所有数据结构，以支持层级（hierarchy）irq_domain。
+ * 参数 @realloc 主要用于支持传统（legacy）IRQ。
+ * 返回错误码或分配到的 IRQ 号
  *
- * The whole process to setup an IRQ has been split into two steps.
- * The first step, __irq_domain_alloc_irqs(), is to allocate IRQ
- * descriptor and required hardware resources. The second step,
- * irq_domain_activate_irq(), is to program the hardware with preallocated
- * resources. In this way, it's easier to rollback when failing to
- * allocate resources.
+ * 整个 IRQ 的建立过程被拆成两步：
+ * 第一步 __irq_domain_alloc_irqs()：分配 IRQ 描述符以及所需的硬件资源。
+ * 第二步 irq_domain_activate_irq()：用预先分配好的资源去配置/编程硬件。
+ * 这样做的好处是：如果在资源分配阶段失败，更容易回滚
  */
 int __irq_domain_alloc_irqs(struct irq_domain *domain, int irq_base,
 			    unsigned int nr_irqs, int node, void *arg,
@@ -1558,6 +1556,7 @@ int __irq_domain_alloc_irqs(struct irq_domain *domain, int irq_base,
 
 	if (domain == NULL) {
 		domain = irq_default_domain;
+		pr_err("No irq_domain provided for IRQ allocation\n");
 		if (WARN(!domain, "domain is NULL; cannot allocate IRQ\n"))
 			return -EINVAL;
 	}
@@ -1827,7 +1826,7 @@ static int __irq_domain_activate_irq(struct irq_data *irqd, bool reserve)
 			ret = __irq_domain_activate_irq(irqd->parent_data,
 							reserve);
 		if (!ret && domain->ops->activate) {
-			ret = domain->ops->activate(domain, irqd, reserve);
+			ret = domain->ops->activate(domain, irqd, reserve);// msi_domain_activate
 			/* Rollback in case of error */
 			if (ret && irqd->parent_data)
 				__irq_domain_deactivate_irq(irqd->parent_data);
