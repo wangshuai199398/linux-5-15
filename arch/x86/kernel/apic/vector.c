@@ -867,6 +867,7 @@ static int apic_set_affinity(struct irq_data *irqd,
 
 	raw_spin_lock(&vector_lock);
 	cpumask_and(vector_searchmask, dest, cpu_online_mask);
+	pr_err("%s: irqd_affinity_is_managed %d", __func__, irqd_affinity_is_managed(irqd));
 	if (irqd_affinity_is_managed(irqd))
 		err = assign_managed_vector(irqd, vector_searchmask);
 	else
