@@ -288,7 +288,7 @@ static int assign_irq_vector_any_locked(struct irq_data *irqd)
 	/* Try the full affinity mask */
 	cpumask_and(vector_searchmask, affmsk, cpu_online_mask);
 	pr_err("%s: cpumask_and\n", __func__, irqd->irq);
-	if (!assign_vector_locked(irqd, vector_searchmask))
+	if (!assign_vector_locked(irqd, vector_searchmask))//
 		return 0;
 	pr_err("%s: Assigning vector for IRQ %u node %d\n", __func__, irqd->irq, node);
 	if (node != NUMA_NO_NODE) {
@@ -462,9 +462,9 @@ static int x86_vector_activate(struct irq_domain *dom, struct irq_data *irqd,
 			      apicd->can_reserve, reserve);
 
 	raw_spin_lock_irqsave(&vector_lock, flags);
+	pr_err("%s apicd->can_reserve %d apicd->is_managed %d", __func__, apicd->can_reserve, apicd->is_managed);
 	if (!apicd->can_reserve && !apicd->is_managed) {
 		assign_irq_vector_any_locked(irqd);
-		pr_err("%s assign_irq_vector_any_locked", __func__);
 	}
 		
 	else if (reserve || irqd_is_managed_and_shutdown(irqd))

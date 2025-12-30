@@ -1479,7 +1479,7 @@ int irq_domain_alloc_irqs_hierarchy(struct irq_domain *domain,
 		return -ENOSYS;
 	}
 	pr_err("%s domain name %s", __func__, domain->name);
-	return domain->ops->alloc(domain, irq_base, nr_irqs, arg);// msi_domain_alloc parent 是 x86_vector_alloc_irqs
+	return domain->ops->alloc(domain, irq_base, nr_irqs, arg);// msi_domain_alloc parent 是 intel_irq_remapping_alloc parent 是 x86_vector_alloc_irqs
 }
 /* 在持锁情况下，从某个 irq_domain 给设备分配一段 Linux IRQ 号（virq），并把这些 virq 和该 domain 的层级（hierarchy）irqdomain 结构建立起来 */
 static int irq_domain_alloc_irqs_locked(struct irq_domain *domain, int irq_base,
@@ -1823,8 +1823,8 @@ static int __irq_domain_activate_irq(struct irq_data *irqd, bool reserve)
 		struct irq_domain *domain = irqd->domain;
 
 		if (irqd->parent_data)
-			ret = __irq_domain_activate_irq(irqd->parent_data,
-							reserve);
+			ret = __irq_domain_activate_irq(irqd->parent_data, reserve);
+		pr_err("%s domain name %s irqd->parent_data %p\n", __func__, domain->name, irqd->parent_data);
 		if (!ret && domain->ops->activate) {
 			ret = domain->ops->activate(domain, irqd, reserve);// msi_domain_activate
 			/* Rollback in case of error */
