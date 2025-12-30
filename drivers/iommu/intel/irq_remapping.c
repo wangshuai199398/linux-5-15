@@ -613,7 +613,7 @@ static int intel_setup_irq_remapping(struct intel_iommu *iommu)
 			pr_info("Copied IR table for %s from previous kernel\n",
 				iommu->name);
 	}
-
+	pr_err("%s ->iommu_set_irq_remapping", __func__);
 	iommu_set_irq_remapping(iommu, eim_mode);
 
 	return 0;
