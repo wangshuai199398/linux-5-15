@@ -780,6 +780,7 @@ static int __init intel_prepare_irq_remapping(void)
 
 	/* Do the initializations early */
 	for_each_iommu(iommu, drhd) {
+		pr_err("%s ->intel_setup_irq_remapping", __func__);
 		if (intel_setup_irq_remapping(iommu)) {
 			pr_err("Failed to setup irq remapping for %s\n",
 			       iommu->name);
@@ -1468,7 +1469,7 @@ static int dmar_ir_add(struct dmar_drhd_unit *dmaru, struct intel_iommu *iommu)
 	}
 
 	/* TODO: check all IOAPICs are covered by IOMMU */
-
+	pr_err("%s ->intel_setup_irq_remapping", __func__);
 	/* Setup Interrupt-remapping now. */
 	ret = intel_setup_irq_remapping(iommu);
 	if (ret) {
