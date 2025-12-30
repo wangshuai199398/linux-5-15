@@ -643,7 +643,7 @@ int msi_domain_alloc_irqs(struct irq_domain *domain, struct device *dev,
 {
 	struct msi_domain_info *info = domain->host_data;
 	struct msi_domain_ops *ops = info->ops;
-	pr_err("msi_domain_alloc_irqs: dev %s nvec %d domain name %s\n", dev_name(dev), nvec, domain->name);
+	pr_err("msi_domain_alloc_irqs: dev %s nvec %d domain name %s chip name %s\n", dev_name(dev), nvec, domain->name, info->chip->name);
 	return ops->domain_alloc_irqs(domain, dev, nvec);// __msi_domain_alloc_irqs
 }
 
