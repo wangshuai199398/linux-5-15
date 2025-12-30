@@ -493,7 +493,7 @@ EXPORT_SYMBOL_GPL(irq_domain_check_msi_remap);
  */
 void irq_set_default_host(struct irq_domain *domain)
 {
-	pr_err("Default domain set to @0x%p\n", domain);
+	pr_err("Default domain set to %s\n", domain->name);
 
 	irq_default_domain = domain;
 }
@@ -1479,7 +1479,7 @@ int irq_domain_alloc_irqs_hierarchy(struct irq_domain *domain,
 		return -ENOSYS;
 	}
 
-	return domain->ops->alloc(domain, irq_base, nr_irqs, arg);// msi_domain_alloc
+	return domain->ops->alloc(domain, irq_base, nr_irqs, arg);// msi_domain_alloc parent是 x86_vector_alloc_irqs
 }
 /* 在持锁情况下，从某个 irq_domain 给设备分配一段 Linux IRQ 号（virq），并把这些 virq 和该 domain 的层级（hierarchy）irqdomain 结构建立起来 */
 static int irq_domain_alloc_irqs_locked(struct irq_domain *domain, int irq_base,
