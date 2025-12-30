@@ -568,6 +568,7 @@ static int intel_setup_irq_remapping(struct intel_iommu *iommu)
 					    0, INTR_REMAP_TABLE_ENTRIES,
 					    fn, &intel_ir_domain_ops,
 					    iommu);
+	pr_err("%s ->irq_domain_alloc_named_id_fwnode name %s\n", __func__, iommu->ir_domain->name);
 	if (!iommu->ir_domain) {
 		pr_err("IR%d: failed to allocate irqdomain\n", iommu->seq_id);
 		goto out_free_fwnode;
@@ -576,6 +577,7 @@ static int intel_setup_irq_remapping(struct intel_iommu *iommu)
 		arch_create_remap_msi_irq_domain(iommu->ir_domain,
 						 "INTEL-IR-MSI",
 						 iommu->seq_id);
+	pr_err("%s ->arch_create_remap_msi_irq_domain name %s\n", __func__, iommu->ir_msi_domain->name);
 
 	ir_table->base = page_address(pages);
 	ir_table->bitmap = bitmap;
