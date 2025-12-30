@@ -262,7 +262,7 @@ int irq_startup(struct irq_desc *desc, bool resend, bool force)
 	} else {
 		switch (__irq_startup_managed(desc, aff, force)) {
 		case IRQ_STARTUP_NORMAL:
-			pr_err("Starting up non-managed IRQ %d\n", d->irq);
+			pr_err("Starting up non-managed IRQ %d flag 0x%x\n", d->irq, d->chip->flags);
 			if (d->chip->flags & IRQCHIP_AFFINITY_PRE_STARTUP)
 				irq_setup_affinity(desc);
 			ret = __irq_startup(desc);
