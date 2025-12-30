@@ -4320,7 +4320,7 @@ int __init intel_iommu_init(void)
 			panic("tboot: Failed to initialize DMAR table\n");
 		goto out_free_dmar;
 	}
-
+	pr_err("%s ", __func__);
 	if (dmar_dev_scope_init() < 0) {
 		if (force_on)
 			panic("tboot: Failed to initialize DMAR device scope\n");

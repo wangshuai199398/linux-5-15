@@ -315,7 +315,7 @@ static int dmar_pci_bus_add_dev(struct dmar_pci_notify_info *info)
 		ret = dmar_iommu_notify_scope_dev(info);
 	if (ret < 0 && dmar_dev_scope_status == 0)
 		dmar_dev_scope_status = ret;
-
+	pr_err("%s ->ret %d", __func__, ret);
 	if (ret >= 0)
 		intel_irq_remap_add_device(info);
 
@@ -372,6 +372,7 @@ static int dmar_pci_bus_notifier(struct notifier_block *nb,
 		return NOTIFY_DONE;
 
 	down_write(&dmar_global_lock);
+	pr_err("%s action %d", __func__, action);
 	if (action == BUS_NOTIFY_ADD_DEVICE)
 		dmar_pci_bus_add_dev(info);
 	else if (action == BUS_NOTIFY_REMOVED_DEVICE)
@@ -825,6 +826,7 @@ int __init dmar_dev_scope_init(void)
 				pci_dev_put(dev);
 				return dmar_dev_scope_status;
 			} else {
+				pr_err("%s", __func__);
 				dmar_pci_bus_add_dev(info);
 				dmar_free_pci_notify_info(info);
 			}

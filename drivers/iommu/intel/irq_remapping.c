@@ -1030,6 +1030,7 @@ static int __init ir_dev_scope_init(void)
 		return 0;
 
 	down_write(&dmar_global_lock);
+	pr_err("%s ->dmar_dev_scope_init", __func__);
 	ret = dmar_dev_scope_init();
 	up_write(&dmar_global_lock);
 
