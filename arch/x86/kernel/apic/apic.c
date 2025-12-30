@@ -1929,7 +1929,7 @@ void __init enable_IR_x2apic(void)
 		pr_info("Not enabling interrupt remapping due to skipped IO-APIC setup\n");
 		return;
 	}
-
+	pr_info("%s Enabling interrupt remapping\n", __func__);
 	ir_stat = irq_remapping_prepare();
 	if (ir_stat < 0 && !x2apic_supported())
 		return;
