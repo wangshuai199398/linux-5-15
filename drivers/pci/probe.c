@@ -848,12 +848,11 @@ static struct irq_domain *pci_host_bridge_msi_domain(struct pci_bus *bus)
 {
 	struct irq_domain *d;
 
-	/* If the host bridge driver sets a MSI domain of the bridge, use it */
+	/* 如果主机桥（host bridge）驱动为该桥设置了一个 MSI 域（MSI domain），就使用它 */
 	d = dev_get_msi_domain(bus->bridge);
 
 	/*
-	 * Any firmware interface that can resolve the msi_domain
-	 * should be called from here.
+	 * 任何能够解析（确定）msi_domain 的固件接口，都应该在这里被调用
 	 */
 	if (!d)
 		d = pci_host_bridge_of_msi_domain(bus);
@@ -862,8 +861,7 @@ static struct irq_domain *pci_host_bridge_msi_domain(struct pci_bus *bus)
 
 #ifdef CONFIG_PCI_MSI_IRQ_DOMAIN
 	/*
-	 * If no IRQ domain was found via the OF tree, try looking it up
-	 * directly through the fwnode_handle.
+	 * 如果没有通过 OF（设备树）找到 IRQ domain，那么就尝试直接通过 fwnode_handle 来查找它
 	 */
 	if (!d) {
 		struct fwnode_handle *fwnode = pci_root_bus_fwnode(bus);
@@ -883,9 +881,7 @@ static void pci_set_bus_msi_domain(struct pci_bus *bus)
 	struct pci_bus *b;
 
 	/*
-	 * The bus can be a root bus, a subordinate bus, or a virtual bus
-	 * created by an SR-IOV device.  Walk up to the first bridge device
-	 * found or derive the domain from the host bridge.
+	 * 这条总线可能是根总线（root bus）、下级总线（subordinate bus），也可能是由 SR-IOV 设备创建的虚拟总线。沿着总线向上遍历，直到找到第一个桥设备；如果找不到桥设备，则从主机桥（host bridge）推导出该域（domain）
 	 */
 	for (b = bus, d = NULL; !d && !pci_is_root_bus(b); b = b->parent) {
 		if (b->self)
@@ -2520,6 +2516,7 @@ static void pci_init_capabilities(struct pci_dev *dev)
 	pci_pm_init(dev);		/* Power Management */
 	pci_vpd_init(dev);		/* Vital Product Data */
 	pci_configure_ari(dev);		/* Alternative Routing-ID Forwarding */
+	// 
 	pci_iov_init(dev);		/* Single Root I/O Virtualization */
 	pci_ats_init(dev);		/* Address Translation Services */
 	pci_pri_init(dev);		/* Page Request Interface */
@@ -2535,25 +2532,21 @@ static void pci_init_capabilities(struct pci_dev *dev)
 }
 
 /*
- * This is the equivalent of pci_host_bridge_msi_domain() that acts on
- * devices. Firmware interfaces that can select the MSI domain on a
- * per-device basis should be called from here.
+ * 这相当于一个作用于设备的 pci_host_bridge_msi_domain()。能够按每个设备来选择 MSI 域（MSI domain）的固件接口，应该从这里被调用。
  */
 static struct irq_domain *pci_dev_msi_domain(struct pci_dev *dev)
 {
 	struct irq_domain *d;
 
 	/*
-	 * If a domain has been set through the pcibios_add_device()
-	 * callback, then this is the one (platform code knows best).
+	 * 如果已经通过 pcibios_add_device() 回调设置了一个域（domain），那么就使用它（平台代码最清楚该怎么选）
 	 */
 	d = dev_get_msi_domain(&dev->dev);
 	if (d)
 		return d;
 
 	/*
-	 * Let's see if we have a firmware interface able to provide
-	 * the domain.
+	 * 看一下我们是否有能够通过固件接口提供该域（domain）的方式
 	 */
 	d = pci_msi_get_device_domain(dev);
 	if (d)
@@ -2567,14 +2560,12 @@ static void pci_set_msi_domain(struct pci_dev *dev)
 	struct irq_domain *d;
 
 	/*
-	 * If the platform or firmware interfaces cannot supply a
-	 * device-specific MSI domain, then inherit the default domain
-	 * from the host bridge itself.
+	 * 如果平台或固件接口无法提供该设备专用的 MSI 域（MSI domain），那么就从主机桥（host bridge）本身继承默认的域
 	 */
 	d = pci_dev_msi_domain(dev);
 	if (!d)
 		d = dev_get_msi_domain(&dev->bus->dev);
-
+	pr_err("PCI %s -> dev_set_msi_domain name %s\n", __func__, d->name);
 	dev_set_msi_domain(&dev->dev, d);
 }
 
@@ -2950,7 +2941,7 @@ static unsigned int pci_scan_child_bus_extend(struct pci_bus *bus,
 	 */
 	if (!bus->is_added) {
 		dev_info(&bus->dev, "fixups for bus\n");
-		pcibios_fixup_bus(bus);
+		pcibios_fixup_bus(bus);// 0000:00:01.0: PCI bridge to [bus 01]
 		bus->is_added = 1;
 	}
 
