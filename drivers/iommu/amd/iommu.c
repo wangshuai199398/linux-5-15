@@ -3180,7 +3180,7 @@ static int irq_remapping_alloc(struct irq_domain *domain, unsigned int virq,
 		ret = index;
 		goto out_free_parent;
 	}
-
+	pr_err("%s ", __func__);
 	for (i = 0; i < nr_irqs; i++) {
 		irq_data = irq_domain_get_irq_data(domain, virq + i);
 		cfg = irq_data ? irqd_cfg(irq_data) : NULL;
