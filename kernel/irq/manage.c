@@ -1678,7 +1678,7 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 		desc->istate &= ~(IRQS_AUTODETECT | IRQS_SPURIOUS_DISABLED | \
 				  IRQS_ONESHOT | IRQS_WAITING);
 		irqd_clear(&desc->irq_data, IRQD_IRQ_INPROGRESS);
-
+		// 每个 CPU 都有一份的中断（per-CPU IRQ）
 		if (new->flags & IRQF_PERCPU) {
 			irqd_set(&desc->irq_data, IRQD_PER_CPU);
 			irq_settings_set_per_cpu(desc);
@@ -1700,6 +1700,7 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 
 		if (!(new->flags & IRQF_NO_AUTOEN) &&
 		    irq_settings_can_autoenable(desc)) {
+			pr_err("->irq_startup");
 			irq_startup(desc, IRQ_RESEND, IRQ_START_COND);
 		} else {
 			/* 共享中断不适合与禁止自动使能（auto enable）一起使用。因为某个共享的中断可能会在中断仍处于禁用状态时被请求，从而导致它永远等待中断而无法触发 */
