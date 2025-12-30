@@ -671,7 +671,7 @@ static inline struct irq_domain *dev_get_msi_domain(const struct device *dev)
 
 static inline void dev_set_msi_domain(struct device *dev, struct irq_domain *d)
 {
-	pr_err("%s device name %s", __func__, device->kobj.name);
+	pr_err("%s device name %s", __func__, dev->kobj.name);
 #ifdef CONFIG_GENERIC_MSI_IRQ_DOMAIN
 	dev->msi_domain = d;
 #endif
