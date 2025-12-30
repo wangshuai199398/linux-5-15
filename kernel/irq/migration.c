@@ -76,7 +76,7 @@ void irq_move_masked_irq(struct irq_data *idata)
 	 */
 	if (cpumask_any_and(desc->pending_mask, cpu_online_mask) < nr_cpu_ids) {
 		int ret;
-
+		pr_err("%s: irq %d\n", __func__, data->irq);
 		ret = irq_do_set_affinity(data, desc->pending_mask, false);
 		/*
 		 * If the there is a cleanup pending in the underlying

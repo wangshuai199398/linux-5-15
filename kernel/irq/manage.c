@@ -274,7 +274,7 @@ int irq_do_set_affinity(struct irq_data *data, const struct cpumask *mask,
 	cpumask_and(&tmp_mask, prog_mask, cpu_online_mask);
 	pr_err("%s force %d %d", __func__, force, cpumask_empty(&tmp_mask));
 	if (!force && !cpumask_empty(&tmp_mask))
-		ret = chip->irq_set_affinity(data, &tmp_mask, force);// msi_set_affinity
+		ret = chip->irq_set_affinity(data, &tmp_mask, force);// msi_domain_set_affinity
 	else if (force)
 		ret = chip->irq_set_affinity(data, mask, force);
 	else
@@ -317,6 +317,7 @@ static inline int irq_set_affinity_pending(struct irq_data *data,
 static int irq_try_set_affinity(struct irq_data *data,
 				const struct cpumask *dest, bool force)
 {
+	pr_err("%s: Trying to set affinity for IRQ %u\n", __func__, data->irq);
 	int ret = irq_do_set_affinity(data, dest, force);
 
 	/*
@@ -633,6 +634,7 @@ int irq_setup_affinity(struct irq_desc *desc)
 		if (cpumask_intersects(&mask, nodemask))
 			cpumask_and(&mask, &mask, nodemask);
 	}
+	pr_err("%s: Setting affinity for IRQ %u\n", __func__, irq_desc_get_irq(desc));
 	ret = irq_do_set_affinity(&desc->irq_data, &mask, false);
 	raw_spin_unlock(&mask_lock);
 	return ret;

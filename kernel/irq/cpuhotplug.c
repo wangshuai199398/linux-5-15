@@ -129,6 +129,7 @@ static bool migrate_one_irq(struct irq_desc *desc)
 	 * mask and therefore might keep/reassign the irq to the outgoing
 	 * CPU.
 	 */
+	pr_err("%s Migrating IRQ %u away from CPU%u\n", __func__, d->irq, smp_processor_id());
 	err = irq_do_set_affinity(d, affinity, false);
 	if (err) {
 		pr_warn_ratelimited("IRQ%u: set affinity failed(%d).\n",
