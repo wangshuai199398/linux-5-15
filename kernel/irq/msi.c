@@ -19,9 +19,9 @@
 #include "internals.h"
 
 /**
- * alloc_msi_entry - Allocate an initialized msi_desc
+ * 分配并初始化一个 msi_desc
  * @dev:	Pointer to the device for which this is allocated
- * @nvec:	The number of vectors used in this entry
+ * @nvec:	该条目中使用的向量（vector）数量
  * @affinity:	Optional pointer to an affinity mask array size of @nvec
  *
  * If @affinity is not %NULL then an affinity array[@nvec] is allocated
@@ -209,7 +209,7 @@ void msi_destroy_sysfs(struct device *dev, const struct attribute_group **msi_ir
 static inline void irq_chip_write_msi_msg(struct irq_data *data,
 					  struct msi_msg *msg)
 {
-	data->chip->irq_write_msi_msg(data, msg);
+	data->chip->irq_write_msi_msg(data, msg);// pci_msi_domain_write_msg
 }
 
 static void msi_check_level(struct irq_domain *domain, struct msi_msg *msg)
@@ -278,9 +278,9 @@ static int msi_domain_alloc(struct irq_domain *domain, unsigned int virq,
 {
 	struct msi_domain_info *info = domain->host_data;
 	struct msi_domain_ops *ops = info->ops;
-	irq_hw_number_t hwirq = ops->get_hwirq(info, arg);
+	irq_hw_number_t hwirq = ops->get_hwirq(info, arg);// msi_domain_ops_get_hwirq
 	int i, ret;
-
+	// 查找hwirq对应的 irq_data 是否存在
 	if (irq_find_mapping(domain, hwirq) > 0)
 		return -EEXIST;
 
@@ -291,7 +291,8 @@ static int msi_domain_alloc(struct irq_domain *domain, unsigned int virq,
 	}
 
 	for (i = 0; i < nr_irqs; i++) {
-		ret = ops->msi_init(domain, info, virq + i, hwirq + i, arg);
+		// 这里传入的 hwirq+i, 上边get_hwirq返回0, 这里依次向上分配
+		ret = ops->msi_init(domain, info, virq + i, hwirq + i, arg);// msi_domain_ops_init
 		if (ret < 0) {
 			if (ops->msi_free) {
 				for (i--; i > 0; i--)
@@ -352,7 +353,7 @@ static int msi_domain_ops_init(struct irq_domain *domain,
 	irq_domain_set_hwirq_and_chip(domain, virq, hwirq, info->chip,
 				      info->chip_data);
 	if (info->handler && info->handler_name) {
-		__irq_set_handler(virq, info->handler, 0, info->handler_name);
+		__irq_set_handler(virq, info->handler, 0, info->handler_name);// handle_edge_irq
 		if (info->handler_data)
 			irq_set_handler_data(virq, info->handler_data);
 	}
@@ -450,7 +451,7 @@ int msi_domain_prepare_irqs(struct irq_domain *domain, struct device *dev,
 
 	ret = ops->msi_check(domain, info, dev);
 	if (ret == 0)
-		ret = ops->msi_prepare(domain, dev, nvec, arg);
+		ret = ops->msi_prepare(domain, dev, nvec, arg);// msi_domain_ops_prepare
 
 	return ret;
 }
@@ -549,9 +550,9 @@ int __msi_domain_alloc_irqs(struct irq_domain *domain, struct device *dev,
 	ret = msi_domain_prepare_irqs(domain, dev, nvec, &arg);
 	if (ret)
 		return ret;
-
+	// 一个msi_desc对应一个中断，驱动分配32个就使用32个
 	for_each_msi_entry(desc, dev) {
-		ops->set_desc(&arg, desc);
+		ops->set_desc(&arg, desc);// msi_domain_ops_set_desc
 
 		virq = __irq_domain_alloc_irqs(domain, -1, desc->nvec_used,
 					       dev_to_node(dev), &arg, false,
@@ -587,7 +588,7 @@ int __msi_domain_alloc_irqs(struct irq_domain *domain, struct device *dev,
 	for_each_msi_vector(desc, i, dev) {
 		if (desc->irq == i) {
 			virq = desc->irq;
-			dev_dbg(dev, "irq [%d-%d] for MSI\n",
+			dev_err(dev, "irq [%d-%d] for MSI\n",
 				virq, virq + desc->nvec_used - 1);
 		}
 
@@ -642,7 +643,7 @@ int msi_domain_alloc_irqs(struct irq_domain *domain, struct device *dev,
 	struct msi_domain_info *info = domain->host_data;
 	struct msi_domain_ops *ops = info->ops;
 
-	return ops->domain_alloc_irqs(domain, dev, nvec);
+	return ops->domain_alloc_irqs(domain, dev, nvec);// __msi_domain_alloc_irqs
 }
 
 void __msi_domain_free_irqs(struct irq_domain *domain, struct device *dev)
