@@ -466,7 +466,7 @@ static int __irq_set_affinity(unsigned int irq, const struct cpumask *mask,
 
 	if (!desc)
 		return -EINVAL;
-
+	pr_debug("%s: Setting affinity for IRQ %u\n", __func__, irq);
 	raw_spin_lock_irqsave(&desc->lock, flags);
 	ret = irq_set_affinity_locked(irq_desc_get_irq_data(desc), mask, force);
 	raw_spin_unlock_irqrestore(&desc->lock, flags);

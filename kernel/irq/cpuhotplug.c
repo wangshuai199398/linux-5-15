@@ -208,6 +208,7 @@ static void irq_restore_affinity_of_irq(struct irq_desc *desc, unsigned int cpu)
 	 * isolation mechanism requests to move it to an upcoming
 	 * housekeeping CPU.
 	 */
+	pr_debug("%s Restoring affinity for IRQ %u on CPU%u\n", __func__, data->irq, cpu);
 	if (!irqd_is_single_target(data) || hk_should_isolate(data, cpu))
 		irq_set_affinity_locked(data, affinity, false);
 }
