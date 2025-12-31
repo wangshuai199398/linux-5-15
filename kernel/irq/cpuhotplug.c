@@ -64,6 +64,7 @@ static bool migrate_one_irq(struct irq_desc *desc)
 	 * still in the radix tree. Also if the chip has no affinity setter,
 	 * nothing can be done here.
 	 */
+	pr_debug("%s Migrating IRQ %u away from CPU%u\n", __func__, d->irq, smp_processor_id());
 	if (!chip || !chip->irq_set_affinity) {
 		pr_debug("IRQ %u: Unable to migrate away\n", d->irq);
 		return false;

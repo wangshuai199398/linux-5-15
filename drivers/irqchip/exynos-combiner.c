@@ -96,7 +96,7 @@ static int combiner_set_affinity(struct irq_data *d,
 	struct combiner_chip_data *chip_data = irq_data_get_irq_chip_data(d);
 	struct irq_chip *chip = irq_get_chip(chip_data->parent_irq);
 	struct irq_data *data = irq_get_irq_data(chip_data->parent_irq);
-
+	pr_debug("%s: irq=%d\n", __func__, d->irq);
 	if (chip && chip->irq_set_affinity)
 		return chip->irq_set_affinity(data, mask_val, force);
 	else

@@ -242,7 +242,7 @@ int msi_domain_set_affinity(struct irq_data *irq_data,
 	struct irq_data *parent = irq_data->parent_data;
 	struct msi_msg msg[2] = { [1] = { }, };
 	int ret;
-	pr_err("%s called\n", __func__);
+	pr_debug("%s called\n", __func__);
 	ret = parent->chip->irq_set_affinity(parent, mask, force);
 	if (ret >= 0 && ret != IRQ_SET_MASK_OK_DONE) {
 		BUG_ON(irq_chip_compose_msi_msg(irq_data, msg));

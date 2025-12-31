@@ -43,7 +43,7 @@ msi_set_affinity(struct irq_data *irqd, const struct cpumask *mask, bool force)
 	old_cfg = *cfg;
 
 	/* Allocate a new target vector */
-	pr_err("%s: irq %d cpu %u\n", __func__, irqd->irq, cpu);
+	pr_debug("%s: irq %d cpu %u\n", __func__, irqd->irq, cpu);
 	ret = parent->chip->irq_set_affinity(parent, mask, force);
 	if (ret < 0 || ret == IRQ_SET_MASK_OK_DONE)
 		return ret;

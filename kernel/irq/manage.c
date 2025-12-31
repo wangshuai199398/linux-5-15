@@ -272,7 +272,7 @@ int irq_do_set_affinity(struct irq_data *data, const struct cpumask *mask,
 	 * case we do as we are told).
 	 */
 	cpumask_and(&tmp_mask, prog_mask, cpu_online_mask);
-	pr_err("%s force %d %d", __func__, force, cpumask_empty(&tmp_mask));
+	pr_debug("%s force %d %d", __func__, force, cpumask_empty(&tmp_mask));
 	if (!force && !cpumask_empty(&tmp_mask))
 		ret = chip->irq_set_affinity(data, &tmp_mask, force);// msi_domain_set_affinity
 	else if (force)

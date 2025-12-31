@@ -1434,7 +1434,7 @@ int irq_chip_set_affinity_parent(struct irq_data *data,
 				 const struct cpumask *dest, bool force)
 {
 	data = data->parent_data;
-	pr_err("%s irq_chip_set_affinity_parent %p\n", __func__, data->chip->irq_set_affinity);
+	pr_debug("%s irq_chip_set_affinity_parent %p\n", __func__, data->chip->irq_set_affinity);
 	if (data->chip->irq_set_affinity)
 		return data->chip->irq_set_affinity(data, dest, force);
 
