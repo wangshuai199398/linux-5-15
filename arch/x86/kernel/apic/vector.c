@@ -462,7 +462,7 @@ static int x86_vector_activate(struct irq_domain *dom, struct irq_data *irqd,
 			      apicd->can_reserve, reserve);
 
 	raw_spin_lock_irqsave(&vector_lock, flags);
-	pr_err("%s apicd->can_reserve %d apicd->is_managed %d", __func__, apicd->can_reserve, apicd->is_managed);
+	pr_err("%s apicd->can_reserve %d apicd->is_managed %d apicd->has_reserved %d", __func__, apicd->can_reserve, apicd->is_managed, apicd->has_reserved);
 	if (!apicd->can_reserve && !apicd->is_managed) {
 		assign_irq_vector_any_locked(irqd);
 	}
