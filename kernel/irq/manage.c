@@ -499,6 +499,7 @@ EXPORT_SYMBOL_GPL(irq_set_affinity);
  */
 int irq_force_affinity(unsigned int irq, const struct cpumask *cpumask)
 {
+	pr_debug("%s: Forcing affinity for IRQ %u\n", __func__, irq);
 	return __irq_set_affinity(irq, cpumask, true);
 }
 EXPORT_SYMBOL_GPL(irq_force_affinity);
@@ -512,6 +513,7 @@ int irq_set_affinity_hint(unsigned int irq, const struct cpumask *m)
 		return -EINVAL;
 	desc->affinity_hint = m;
 	irq_put_desc_unlock(desc, flags);
+	pr_debug("%s: Setting affinity hint for IRQ %u\n", __func__, irq);
 	/* set the initial affinity to prevent every interrupt being on CPU0 */
 	if (m)
 		__irq_set_affinity(irq, m, false);
