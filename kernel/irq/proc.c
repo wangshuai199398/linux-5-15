@@ -166,6 +166,7 @@ static ssize_t write_irq_affinity(int type, struct file *file,
 		 */
 		err = irq_select_affinity_usr(irq) ? -EINVAL : count;
 	} else {
+		pr_debug("%s: Setting affinity for IRQ %u\n", __func__, irq);
 		err = irq_set_affinity(irq, new_value);
 		if (!err)
 			err = count;
@@ -179,6 +180,7 @@ free_cpumask:
 static ssize_t irq_affinity_proc_write(struct file *file,
 		const char __user *buffer, size_t count, loff_t *pos)
 {
+	pr_debug("%s called\n", __func__);
 	return write_irq_affinity(0, file, buffer, count, pos);
 }
 
