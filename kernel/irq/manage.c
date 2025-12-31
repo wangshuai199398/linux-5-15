@@ -482,6 +482,7 @@ static int __irq_set_affinity(unsigned int irq, const struct cpumask *mask,
  */
 int irq_set_affinity(unsigned int irq, const struct cpumask *cpumask)
 {
+	pr_debug("%s: Setting affinity for IRQ %u\n", __func__, irq);
 	return __irq_set_affinity(irq, cpumask, false);
 }
 EXPORT_SYMBOL_GPL(irq_set_affinity);
