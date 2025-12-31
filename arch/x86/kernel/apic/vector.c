@@ -234,8 +234,11 @@ assign_vector_locked(struct irq_data *irqd, const struct cpumask *dest)
 	 * affinity mask, there is no point in moving the interrupt from
 	 * one CPU to another.
 	 */
-	if (vector && cpu_online(cpu) && cpumask_test_cpu(cpu, dest))
+	if (vector && cpu_online(cpu) && cpumask_test_cpu(cpu, dest)) {
+		pr_debug("%s: IRQ %u already assigned to vector %u on CPU %u\n",
+			 __func__, irqd->irq, vector, cpu);
 		return 0;
+	}
 
 	/*
 	 * Careful here. @apicd might either have move_in_progress set or
@@ -468,13 +471,13 @@ static int x86_vector_activate(struct irq_domain *dom, struct irq_data *irqd,
 	}
 		
 	else if (reserve || irqd_is_managed_and_shutdown(irqd))
-		vector_assign_managed_shutdown(irqd);
+		vector_assign_managed_shutdown(irqd);//分配中断的时候reserve是1，进这个
 	else if (apicd->is_managed) {
 		pr_err("%s", __func__);
 		ret = activate_managed(irqd);
 	}
 	else if (apicd->has_reserved)
-		ret = activate_reserved(irqd);
+		ret = activate_reserved(irqd);//irq_activate会进这里
 	raw_spin_unlock_irqrestore(&vector_lock, flags);
 	return ret;
 }
@@ -881,7 +884,7 @@ static int apic_set_affinity(struct irq_data *irqd,
 	if (irqd_affinity_is_managed(irqd))
 		err = assign_managed_vector(irqd, vector_searchmask);
 	else
-		err = assign_vector_locked(irqd, vector_searchmask);
+		err = assign_vector_locked(irqd, vector_searchmask);//
 	raw_spin_unlock(&vector_lock);
 	return err ? err : IRQ_SET_MASK_OK;
 }
