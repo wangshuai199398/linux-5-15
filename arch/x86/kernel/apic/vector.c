@@ -171,7 +171,7 @@ setnew:
 	apicd->vector = newvec;
 	apicd->cpu = newcpu;
 	BUG_ON(!IS_ERR_OR_NULL(per_cpu(vector_irq, newcpu)[newvec]));
-	pr_err("%s: Assigning vector %u on CPU %u for IRQ %u\n", __func__, newvec, newcpu, irqd->irq);
+	pr_debug("%s: Assigning vector %u on CPU %u for IRQ %u\n", __func__, newvec, newcpu, irqd->irq);
 	per_cpu(vector_irq, newcpu)[newvec] = desc;
 }
 
@@ -253,7 +253,7 @@ assign_vector_locked(struct irq_data *irqd, const struct cpumask *dest)
 	trace_vector_alloc(irqd->irq, vector, resvd, vector);
 	if (vector < 0)
 		return vector;
-	pr_err("%s: Assigned vector %u on CPU %u for IRQ %u\n", __func__, vector, cpu, irqd->irq);
+	pr_debug("%s: Assigned vector %u on CPU %u for IRQ %u\n", __func__, vector, cpu, irqd->irq);
 	apic_update_vector(irqd, vector, cpu);
 	apic_update_irq_cfg(irqd, vector, cpu);
 
@@ -266,7 +266,7 @@ static int assign_irq_vector(struct irq_data *irqd, const struct cpumask *dest)
 {
 	unsigned long flags;
 	int ret;
-	pr_err("%s: Assigning vector for IRQ %u\n", __func__, irqd->irq);
+	pr_debug("%s: Assigning vector for IRQ %u\n", __func__, irqd->irq);
 	raw_spin_lock_irqsave(&vector_lock, flags);
 	cpumask_and(vector_searchmask, dest, cpu_online_mask);
 	ret = assign_vector_locked(irqd, vector_searchmask);
@@ -279,7 +279,7 @@ static int assign_irq_vector_any_locked(struct irq_data *irqd)
 	/* Get the affinity mask - either irq_default_affinity or (user) set */
 	const struct cpumask *affmsk = irq_data_get_affinity_mask(irqd);
 	int node = irq_data_get_node(irqd);
-	pr_err("%s: Assigning vector for IRQ %u node %d\n", __func__, irqd->irq, node);
+	pr_debug("%s: Assigning vector for IRQ %u node %d\n", __func__, irqd->irq, node);
 
 	if (node != NUMA_NO_NODE) {
 		/* Try the intersection of @affmsk and node mask */
@@ -290,10 +290,10 @@ static int assign_irq_vector_any_locked(struct irq_data *irqd)
 
 	/* Try the full affinity mask */
 	cpumask_and(vector_searchmask, affmsk, cpu_online_mask);
-	pr_err("%s: cpumask_and\n", __func__);
+	pr_debug("%s: cpumask_and\n", __func__);
 	if (!assign_vector_locked(irqd, vector_searchmask))//
 		return 0;
-	pr_err("%s: Assigning vector for IRQ %u node %d\n", __func__, irqd->irq, node);
+	pr_debug("%s: Assigning vector for IRQ %u node %d\n", __func__, irqd->irq, node);
 	if (node != NUMA_NO_NODE) {
 		/* Try the node mask */
 		if (!assign_vector_locked(irqd, cpumask_of_node(node)))
@@ -301,7 +301,7 @@ static int assign_irq_vector_any_locked(struct irq_data *irqd)
 	}
 
 	/* Try the full online mask */
-	pr_err("%s: assign_vector_locked\n", __func__);
+	pr_debug("%s: assign_vector_locked\n", __func__);
 	return assign_vector_locked(irqd, cpu_online_mask);
 }
 
@@ -310,10 +310,10 @@ assign_irq_vector_policy(struct irq_data *irqd, struct irq_alloc_info *info)
 {
 	if (irqd_affinity_is_managed(irqd))
 		return reserve_managed_vector(irqd);
-	pr_err("%s assign_irq_vector called for non-managed irq %u\n", __func__, irqd->irq);
+	pr_debug("%s assign_irq_vector called for non-managed irq %u\n", __func__, irqd->irq);
 	if (info->mask)
 		return assign_irq_vector(irqd, info->mask);
-	pr_err("%s reserve_irq_vector called for non-managed irq %u\n", __func__, irqd->irq);
+	pr_debug("%s reserve_irq_vector called for non-managed irq %u\n", __func__, irqd->irq);
 	/*
 	 * Make only a global reservation with no guarantee. A real vector
 	 * is associated at activation time.
@@ -338,7 +338,7 @@ assign_managed_vector(struct irq_data *irqd, const struct cpumask *dest)
 	trace_vector_alloc_managed(irqd->irq, vector, vector);
 	if (vector < 0)
 		return vector;
-	pr_err("%s: Assigned vector %u on CPU %u for IRQ %u\n", __func__, vector, cpu, irqd->irq);
+	pr_debug("%s: Assigned vector %u on CPU %u for IRQ %u\n", __func__, vector, cpu, irqd->irq);
 	apic_update_vector(irqd, vector, cpu);
 	apic_update_irq_cfg(irqd, vector, cpu);
 	return 0;
@@ -441,7 +441,7 @@ static int activate_managed(struct irq_data *irqd)
 		pr_err("Managed startup for irq %u, but no CPU\n", irqd->irq);
 		return -EINVAL;
 	}
-	pr_err("%s: Activating managed irq %u\n", __func__, irqd->irq);
+	pr_debug("%s: Activating managed irq %u\n", __func__, irqd->irq);
 	ret = assign_managed_vector(irqd, vector_searchmask);
 	/*
 	 * This should not happen. The vector reservation got buggered.  Handle
@@ -465,7 +465,7 @@ static int x86_vector_activate(struct irq_domain *dom, struct irq_data *irqd,
 			      apicd->can_reserve, reserve);
 
 	raw_spin_lock_irqsave(&vector_lock, flags);
-	pr_err("%s apicd->can_reserve %d apicd->is_managed %d apicd->has_reserved %d", __func__, apicd->can_reserve, apicd->is_managed, apicd->has_reserved);
+	pr_debug("%s apicd->can_reserve %d apicd->is_managed %d apicd->has_reserved %d", __func__, apicd->can_reserve, apicd->is_managed, apicd->has_reserved);
 	if (!apicd->can_reserve && !apicd->is_managed) {
 		assign_irq_vector_any_locked(irqd);
 	}
@@ -473,7 +473,7 @@ static int x86_vector_activate(struct irq_domain *dom, struct irq_data *irqd,
 	else if (reserve || irqd_is_managed_and_shutdown(irqd))
 		vector_assign_managed_shutdown(irqd);//分配中断的时候reserve是1，进这个
 	else if (apicd->is_managed) {
-		pr_err("%s", __func__);
+		pr_debug("%s", __func__);
 		ret = activate_managed(irqd);
 	}
 	else if (apicd->has_reserved)
@@ -568,7 +568,7 @@ static int x86_vector_alloc_irqs(struct irq_domain *domain, unsigned int virq,
 	if (WARN_ON_ONCE(info->flags & X86_IRQ_ALLOC_LEGACY &&
 			 virq == PIC_CASCADE_IR))
 		return -EINVAL;
-	pr_err("%s: virq=%u nr_irqs=%u info->flags 0x%x\n", __func__, virq, nr_irqs, info->flags);
+	pr_debug("%s: virq=%u nr_irqs=%u info->flags 0x%x\n", __func__, virq, nr_irqs, info->flags);
 	for (i = 0; i < nr_irqs; i++) {
 		irqd = irq_domain_get_irq_data(domain, virq + i);
 		BUG_ON(!irqd);
@@ -880,7 +880,7 @@ static int apic_set_affinity(struct irq_data *irqd,
 
 	raw_spin_lock(&vector_lock);
 	cpumask_and(vector_searchmask, dest, cpu_online_mask);
-	pr_err("%s: irqd_affinity_is_managed %d", __func__, irqd_affinity_is_managed(irqd));
+	pr_debug("%s: irqd_affinity_is_managed %d", __func__, irqd_affinity_is_managed(irqd));
 	if (irqd_affinity_is_managed(irqd))
 		err = assign_managed_vector(irqd, vector_searchmask);
 	else
