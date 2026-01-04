@@ -283,13 +283,15 @@ void __pci_read_msi_msg(struct msi_desc *entry, struct msi_msg *msg)
 	}
 }
 
+/* 把内核计算好的 MSI Message（地址 + 数据）写进 PCI 设备的 MSI / MSI-X 寄存器里，让设备以后按这个方式向 CPU 发中断 */
 void __pci_write_msi_msg(struct msi_desc *entry, struct msi_msg *msg)
 {
 	struct pci_dev *dev = msi_desc_to_pci_dev(entry);
-
+	// 设备没上电 / 已断开，缓存 msg 到 entry->msg（后面会用）
 	if (dev->current_state != PCI_D0 || pci_dev_is_disconnected(dev)) {
 		/* Don't touch the hardware now */
-	} else if (entry->msi_attrib.is_msix) {
+	} else if (entry->msi_attrib.is_msix) {//MSI-X 使用 MMIO 表（不是 PCI config）
+		// 指向 MSI-X Table Entry，每个 MSI-X 向量都有一项
 		void __iomem *base = pci_msix_desc_addr(entry);
 		u32 ctrl = entry->msix_ctrl;
 		bool unmasked = !(ctrl & PCI_MSIX_ENTRY_CTRL_MASKBIT);
@@ -304,10 +306,11 @@ void __pci_write_msi_msg(struct msi_desc *entry, struct msi_msg *msg)
 		 * "If software changes the Address or Data value of an
 		 * entry while the entry is unmasked, the result is
 		 * undefined."
+		 * MSI-X 规范要求：写之前必须 mask，写完后恢复 mask 状态
 		 */
 		if (unmasked)
 			pci_msix_write_vector_ctrl(entry, ctrl | PCI_MSIX_ENTRY_CTRL_MASKBIT);
-
+		// 写 MSI Message
 		writel(msg->address_lo, base + PCI_MSIX_ENTRY_LOWER_ADDR);
 		writel(msg->address_hi, base + PCI_MSIX_ENTRY_UPPER_ADDR);
 		writel(msg->data, base + PCI_MSIX_ENTRY_DATA);
@@ -316,6 +319,7 @@ void __pci_write_msi_msg(struct msi_desc *entry, struct msi_msg *msg)
 			pci_msix_write_vector_ctrl(entry, ctrl);
 
 		/* Ensure that the writes are visible in the device */
+		// 确保写入生效（posted write flush）
 		readl(base + PCI_MSIX_ENTRY_DATA);
 	} else {
 		int pos = dev->msi_cap;
@@ -342,11 +346,16 @@ void __pci_write_msi_msg(struct msi_desc *entry, struct msi_msg *msg)
 	}
 
 skip:
+	// 设备当前“生效的 MSI Message”，以后 CPU 热插拔 / 迁移中断 / affinity 改变会基于这个值重新写硬件
 	entry->msg = *msg;
-
-	if (entry->write_msi_msg)
+	/* 平台/架构回调（如中断重映射），在 x86 上，这通常是：
+	•	Intel VT-d Interrupt Remapping
+	•	ARM ITS
+	•	IOMMU MSI remap */
+	if (entry->write_msi_msg) {
+		pr_debug("PCI MSI: calling platform write_msi_msg callback %p\n", entry->write_msi_msg);
 		entry->write_msi_msg(entry, entry->write_msi_msg_data);
-
+	}
 }
 
 void pci_write_msi_msg(unsigned int irq, struct msi_msg *msg)
@@ -1273,17 +1282,17 @@ EXPORT_SYMBOL_GPL(msi_desc_to_pci_sysdata);
 
 #ifdef CONFIG_PCI_MSI_IRQ_DOMAIN
 /**
- * pci_msi_domain_write_msg - Helper to write MSI message to PCI config space
- * @irq_data:	Pointer to interrupt data of the MSI interrupt
- * @msg:	Pointer to the message
+ * 将 MSI 消息写入 PCI 配置空间的辅助函数
+ * @irq_data:  指向 MSI 中断 对应的 irq_data 结构的指针
+ * @msg:	   指向 MSI 消息（MSI message） 的指针
  */
 void pci_msi_domain_write_msg(struct irq_data *irq_data, struct msi_msg *msg)
 {
 	struct msi_desc *desc = irq_data_get_msi_desc(irq_data);
 
 	/*
-	 * For MSI-X desc->irq is always equal to irq_data->irq. For
-	 * MSI only the first interrupt of MULTI MSI passes the test.
+	 * 对于 MSI-X，desc->irq 始终等于 irq_data->irq。
+	 * 而对于 MSI（非 MSI-X），只有“多 MSI（MULTI MSI）”中的第一个中断才能通过这个检查
 	 */
 	if (desc->irq == irq_data->irq)
 		__pci_write_msi_msg(desc, msg);
