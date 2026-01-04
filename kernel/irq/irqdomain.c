@@ -1821,12 +1821,12 @@ static int __irq_domain_activate_irq(struct irq_data *irqd, bool reserve)
 
 	if (irqd && irqd->domain) {
 		struct irq_domain *domain = irqd->domain;
-		pr_err("%s domain name %s irqd->parent_data %p\n", __func__, domain->name, irqd->parent_data);
+		pr_debug("%s domain name %s irqd->parent_data %p\n", __func__, domain->name, irqd->parent_data);
 		if (irqd->parent_data)
 			ret = __irq_domain_activate_irq(irqd->parent_data, reserve);
-		pr_err("%s domain name %s irqd->parent_data %p\n", __func__, domain->name, irqd->parent_data);
+		pr_debug("%s domain name %s irqd->parent_data %p\n", __func__, domain->name, irqd->parent_data);
 		if (!ret && domain->ops->activate) {
-			ret = domain->ops->activate(domain, irqd, reserve);// x86_vector_activate
+			ret = domain->ops->activate(domain, irqd, reserve);// msi_domain_activate x86_vector_activate
 			/* Rollback in case of error */
 			if (ret && irqd->parent_data)
 				__irq_domain_deactivate_irq(irqd->parent_data);

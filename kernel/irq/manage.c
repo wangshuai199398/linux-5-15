@@ -141,6 +141,7 @@ void synchronize_irq(unsigned int irq)
 EXPORT_SYMBOL(synchronize_irq);
 
 #ifdef CONFIG_SMP
+/* 系统默认的 IRQ 亲和性掩码（通常是一组 CPU） */
 cpumask_var_t irq_default_affinity;
 
 static bool __irq_can_set_affinity(struct irq_desc *desc)
@@ -216,10 +217,13 @@ static inline void irq_validate_effective_affinity(struct irq_data *data) { }
 static inline void irq_init_effective_affinity(struct irq_data *data,
 					       const struct cpumask *mask) { }
 #endif
-
+/* 把某个 IRQ 的 CPU 亲和性（affinity）设置到指定的 CPU mask 上 
+   force=false：只允许设置到在线 CPU；如果过滤后为空就失败
+   force=true：按调用者要求来，即使包含离线 CPU 也传给 irqchip（用于一些特殊流程，比如 CPU hotplug 迁移/恢复 */
 int irq_do_set_affinity(struct irq_data *data, const struct cpumask *mask,
 			bool force)
 {
+	// 取出当前 IRQ 的描述符和控制器（irq_chip）
 	struct irq_desc *desc = irq_data_to_desc(data);
 	struct irq_chip *chip = irq_data_get_irq_chip(data);
 	const struct cpumask  *prog_mask;
@@ -258,6 +262,7 @@ int irq_do_set_affinity(struct irq_data *data, const struct cpumask *mask,
 		hk_mask = housekeeping_cpumask(HK_FLAG_MANAGED_IRQ);
 
 		cpumask_and(&tmp_mask, mask, hk_mask);
+		/*如果请求的 mask 里包含 housekeeping CPU，那么就把目标限制在 housekeeping CPU 上去掉隔离 CPU，避免housekeeping CPU 发起 I/O，结果中断打到隔离 CPU” */
 		if (!cpumask_intersects(&tmp_mask, cpu_online_mask))
 			prog_mask = mask;
 		else
@@ -271,6 +276,7 @@ int irq_do_set_affinity(struct irq_data *data, const struct cpumask *mask,
 	 * unless we are being asked to force the affinity (in which
 	 * case we do as we are told).
 	 */
+	//过滤掉离线 CPU
 	cpumask_and(&tmp_mask, prog_mask, cpu_online_mask);
 	pr_debug("%s force %d %d", __func__, force, cpumask_empty(&tmp_mask));
 	if (!force && !cpumask_empty(&tmp_mask))
@@ -285,11 +291,12 @@ int irq_do_set_affinity(struct irq_data *data, const struct cpumask *mask,
 	switch (ret) {
 	case IRQ_SET_MASK_OK:
 	case IRQ_SET_MASK_OK_DONE:
+		//如果成功把“用户请求的 mask”保存到 desc->irq_common_data.affinity（用于 /proc/irq 的显示等）
 		cpumask_copy(desc->irq_common_data.affinity, mask);
 		fallthrough;
 	case IRQ_SET_MASK_OK_NOCOPY:
-		irq_validate_effective_affinity(data);
-		irq_set_thread_affinity(desc);
+		irq_validate_effective_affinity(data);//校验/更新“effective affinity”（实际生效的 CPU，可能因为限制比请求更窄）
+		irq_set_thread_affinity(desc);//如果 IRQ 有线程化 handler，更新其 kthread 的 CPU 亲和性，让处理线程和中断目标一致
 		ret = 0;
 	}
 
@@ -317,7 +324,7 @@ static inline int irq_set_affinity_pending(struct irq_data *data,
 static int irq_try_set_affinity(struct irq_data *data,
 				const struct cpumask *dest, bool force)
 {
-	pr_err("%s: Trying to set affinity for IRQ %u\n", __func__, data->irq);
+	pr_debug("%s: Trying to set affinity for IRQ %u\n", __func__, data->irq);
 	int ret = irq_do_set_affinity(data, dest, force);
 
 	/*
@@ -598,17 +605,19 @@ EXPORT_SYMBOL_GPL(irq_set_affinity_notifier);
 #ifndef CONFIG_AUTO_IRQ_AFFINITY
 /*
  * Generic version of the affinity autoselector.
+ * 选一个合理的 CPU 集合（优先沿用 managed/用户设置，其次用默认 affinity；都要保证在线；有 NUMA 就优先同节点），然后调用 irq_do_set_affinity() 把 IRQ 绑定到这个 CPU 集合
  */
 int irq_setup_affinity(struct irq_desc *desc)
 {
 	struct cpumask *set = irq_default_affinity;
+	/* IRQ 所属的 NUMA 节点 */
 	int ret, node = irq_desc_get_node(desc);
 	static DEFINE_RAW_SPINLOCK(mask_lock);
 	static struct cpumask mask;
 
 	/* Excludes PER_CPU and NO_BALANCE interrupts */
 	if (!__irq_can_set_affinity(desc)) {
-		pr_err("irq %u: cannot set affinity\n", irq_desc_get_irq(desc));
+		pr_debug("irq %u: cannot set affinity\n", irq_desc_get_irq(desc));
 		return 0;
 	}
 
@@ -616,28 +625,32 @@ int irq_setup_affinity(struct irq_desc *desc)
 	/*
 	 * Preserve the managed affinity setting and a userspace affinity
 	 * setup, but make sure that one of the targets is online.
+	 * 如果已经有“managed affinity”或用户设置过 affinity，就尽量沿用它
 	 */
 	if (irqd_affinity_is_managed(&desc->irq_data) ||
 	    irqd_has_set(&desc->irq_data, IRQD_AFFINITY_SET)) {
+		/* 如果原来的 desc->irq_common_data.affinity 跟 cpu_online_mask 有交集（至少有一个 CPU 在线），就用它作为 set。
+	       否则说明原来的 affinity 指向的 CPU 都不在线了，就清掉 “用户已设置” 标志，让后面走默认策略 */
 		if (cpumask_intersects(desc->irq_common_data.affinity,
 				       cpu_online_mask))
 			set = desc->irq_common_data.affinity;
 		else
 			irqd_clear(&desc->irq_data, IRQD_AFFINITY_SET);
 	}
-
+	/* 算交集，如果交集为空（比如 set 里全是离线 CPU），那就退化成：允许所有在线 CPU */
 	cpumask_and(&mask, cpu_online_mask, set);
 	if (cpumask_empty(&mask))
 		cpumask_copy(&mask, cpu_online_mask);
-
+	/* 如果 IRQ 有 NUMA node 属性，尽量限制到同 NUMA 节点的 CPU */
 	if (node != NUMA_NO_NODE) {
 		const struct cpumask *nodemask = cpumask_of_node(node);
 
-		/* make sure at least one of the cpus in nodemask is online */
+		/* make sure at least one of the cpus in nodemask is online 
+		   如果这个节点有 CPU 在线，就进一步把 affinity 限制在这个节点内（更利于缓存/内存本地性）*/
 		if (cpumask_intersects(&mask, nodemask))
 			cpumask_and(&mask, &mask, nodemask);
 	}
-	pr_err("%s: Setting affinity for IRQ %u\n", __func__, irq_desc_get_irq(desc));
+	pr_debug("%s: Setting affinity for IRQ %u\n", __func__, irq_desc_get_irq(desc));
 	ret = irq_do_set_affinity(&desc->irq_data, &mask, false);
 	raw_spin_unlock(&mask_lock);
 	return ret;
@@ -1412,7 +1425,7 @@ static int irq_request_resources(struct irq_desc *desc)
 {
 	struct irq_data *d = &desc->irq_data;
 	struct irq_chip *c = d->chip;
-	pr_err("Requesting resources for irq %d c->irq_request_resources %p\n", irq_desc_get_irq(desc), c->irq_request_resources);
+	pr_debug("Requesting resources for irq %d c->irq_request_resources %p\n", irq_desc_get_irq(desc), c->irq_request_resources);
 	return c->irq_request_resources ? c->irq_request_resources(d) : 0;
 }
 
@@ -1631,7 +1644,7 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 
 	/* 为启用了 ONESHOT 的 irqaction 设置线程掩码（thread mask）。对于非 ONESHOT 的中断（!ONESHOT），线程掩码为 0，这样就可以在 irq_wake_thread 中避免使用条件判断 */
 	//设置 thread_mask 用于 ONESHOT 中断
-	pr_err("new->flags 0x%x shared %d", new->flags, shared);
+	pr_debug("new->flags 0x%x shared %d", new->flags, shared);
 	if (new->flags & IRQF_ONESHOT) {
 		/*
 		 * Unlikely to have 32 resp 64 irqs sharing one line,
@@ -1708,7 +1721,7 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 
 		if (!(new->flags & IRQF_NO_AUTOEN) &&
 		    irq_settings_can_autoenable(desc)) {
-			pr_err("->irq_startup");
+			pr_debug("->irq_startup");
 			irq_startup(desc, IRQ_RESEND, IRQ_START_COND);
 		} else {
 			/* 共享中断不适合与禁止自动使能（auto enable）一起使用。因为某个共享的中断可能会在中断仍处于禁用状态时被请求，从而导致它永远等待中断而无法触发 */
