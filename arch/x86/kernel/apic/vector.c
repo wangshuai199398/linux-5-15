@@ -290,7 +290,7 @@ static int assign_irq_vector_any_locked(struct irq_data *irqd)
 
 	/* Try the full affinity mask */
 	cpumask_and(vector_searchmask, affmsk, cpu_online_mask);
-	pr_err("%s: cpumask_and\n", __func__, irqd->irq);
+	pr_err("%s: cpumask_and\n", __func__);
 	if (!assign_vector_locked(irqd, vector_searchmask))//
 		return 0;
 	pr_err("%s: Assigning vector for IRQ %u node %d\n", __func__, irqd->irq, node);
@@ -301,7 +301,7 @@ static int assign_irq_vector_any_locked(struct irq_data *irqd)
 	}
 
 	/* Try the full online mask */
-	pr_err("%s: assign_vector_locked\n", __func__, irqd->irq);
+	pr_err("%s: assign_vector_locked\n", __func__);
 	return assign_vector_locked(irqd, cpu_online_mask);
 }
 
