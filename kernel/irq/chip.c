@@ -237,7 +237,7 @@ static int __irq_startup(struct irq_desc *desc)
 
 	/* Warn if this interrupt is not activated but try nevertheless */
 	WARN_ON_ONCE(!irqd_is_activated(d));
-	pr_err("Starting up irq_startup %p\n", d->chip->irq_startup);
+	pr_debug("Starting up irq_startup %p\n", d->chip->irq_startup);
 	if (d->chip->irq_startup) {
 		ret = d->chip->irq_startup(d);
 		irq_state_clr_disabled(desc);
@@ -262,7 +262,7 @@ int irq_startup(struct irq_desc *desc, bool resend, bool force)
 	} else {
 		switch (__irq_startup_managed(desc, aff, force)) {
 		case IRQ_STARTUP_NORMAL:
-			pr_err("Starting up non-managed IRQ %d flag 0x%lx\n", d->irq, d->chip->flags);
+			pr_debug("Starting up non-managed IRQ %d flag 0x%lx\n", d->irq, d->chip->flags);
 			if (d->chip->flags & IRQCHIP_AFFINITY_PRE_STARTUP)
 				irq_setup_affinity(desc);//
 			ret = __irq_startup(desc);
@@ -270,7 +270,7 @@ int irq_startup(struct irq_desc *desc, bool resend, bool force)
 				irq_setup_affinity(desc);
 			break;
 		case IRQ_STARTUP_MANAGED:
-			pr_err("Starting up IRQ_STARTUP_MANAGED %d\n", d->irq);
+		pr_debug("Starting up IRQ_STARTUP_MANAGED %d\n", d->irq);
 			irq_do_set_affinity(d, aff, false);
 			ret = __irq_startup(desc);
 			break;
@@ -290,7 +290,7 @@ int irq_activate(struct irq_desc *desc)
 	struct irq_data *d = irq_desc_get_irq_data(desc);
 
 	if (!irqd_affinity_is_managed(d)) {
-		pr_err("irq_domain_activate_irq is going\n");
+		pr_debug("irq_domain_activate_irq is going\n");
 		return irq_domain_activate_irq(d, false);
 	}
 	return 0;
@@ -338,7 +338,7 @@ void irq_enable(struct irq_desc *desc)
 	//逻辑上并没有走 disable 计数/disable 状态，只是可能处于 masked（屏蔽）状态
 	if (!irqd_irq_disabled(&desc->irq_data)) {
 		unmask_irq(desc);//让硬件/控制器取消屏蔽，中断可以触发
-		pr_err("%s irq %d already enabled irq_enable %p\n", __func__, desc->irq_data.irq, desc->irq_data.chip->irq_enable);
+		pr_debug("%s irq %d already enabled irq_enable %p\n", __func__, desc->irq_data.irq, desc->irq_data.chip->irq_enable);
 	} else {
 		//清掉 desc 里的 “disabled” 软件状态标志：表示我们要把它从 disabled 变回 enabled
 		irq_state_clr_disabled(desc);
