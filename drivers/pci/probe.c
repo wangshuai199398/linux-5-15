@@ -1332,6 +1332,7 @@ static int pci_scan_bridge_extend(struct pci_bus *bus, struct pci_dev *dev,
 	if ((secondary || subordinate) && !pcibios_assign_all_busses() &&
 	    !is_cardbus && !broken) {
 		unsigned int cmax, buses;
+		pci_err(dev, "%s", __func__);
 
 		/*
 		 * Bus already configured by firmware, process it in the
@@ -1348,7 +1349,7 @@ static int pci_scan_bridge_extend(struct pci_bus *bus, struct pci_dev *dev,
 		 */
 		child = pci_find_bus(pci_domain_nr(bus), secondary);
 		if (!child) {
-			child = pci_add_new_bus(bus, dev, secondary);
+			child = pci_add_new_bus(bus, dev, secondary);// 创建 0000:01
 			if (!child)
 				goto out;
 			child->primary = primary;
@@ -1357,7 +1358,7 @@ static int pci_scan_bridge_extend(struct pci_bus *bus, struct pci_dev *dev,
 		}
 
 		buses = subordinate - secondary;
-		cmax = pci_scan_child_bus_extend(child, buses);
+		cmax = pci_scan_child_bus_extend(child, buses);//递归
 		if (cmax > subordinate)
 			pci_warn(dev, "bridge has subordinate %02x but max busn %02x\n",
 				 subordinate, cmax);
@@ -2718,6 +2719,7 @@ int pci_scan_slot(struct pci_bus *bus, int devfn)
 		nr++;
 
 	for (fn = next_fn(bus, dev, 0); fn > 0; fn = next_fn(bus, dev, fn)) {
+		pr_debug("PCI next_fn %s ", __func__);
 		dev = pci_scan_single_device(bus, devfn + fn);
 		if (dev) {
 			if (!pci_dev_is_added(dev))
@@ -2912,6 +2914,7 @@ void __weak pcibios_fixup_bus(struct pci_bus *bus)
  * 如果传入 @available_buses，则会把剩余的总线号空间在支持热插拔（hotplug-capable）的桥（bridge）之间平均分配，以便将来能够进一步扩展总线层级结构
  * 
  * 是分配PCI总线树的PCI总线号
+ * 递归函数
  */
 static unsigned int pci_scan_child_bus_extend(struct pci_bus *bus,
 					      unsigned int available_buses)
@@ -2924,8 +2927,10 @@ static unsigned int pci_scan_child_bus_extend(struct pci_bus *bus,
 
 	dev_err(&bus->dev, "scanning bus\n");
 
-	/* 一条PCI总线上最多有32个设备，每个设备最多有8个Function。因此需要调用256次pci_scan_slot */
+	/* 一条PCI总线上最多有32个设备，每个设备最多有8个Function。先初始化与HOST主桥直接相连的PCI设备，即Bus号为0的PCI设备 */
 	for (devfn = 0; devfn < 256; devfn += 8) {
+		/* 一开始0000:00会创建：0 -> 0000:00:00.0, 8 -> 0000:00:01.0, 16 -> 0000:00:02.0, 48 -> 0000:00:06.0, 64 -> 0000:00:08.0, 80 -> 0000:00:0a.0, 160 -> 0000:00:14.0, 162 -> 0000:00:14.2, 163 -> 0000:00:14.3, 176 -> 0000:00:16.0, 184 -> 0000:00:17.0, 224 -> 0000:00:1c.0, 225 -> 0000:00:1c.1, 227 -> 0000:00:1c.3, 248 -> 0000:00:1f.0, 251 -> 0000:00:1f.3, 252 -> 0000:00:1f.4, 253 -> 0000:00:1f.5 */
+		/* 从0000:00:01.0中进来创建：0 -> 0000:01:00.0, 1 -> 0000:01:00.1, 2 -> 0000:01:00.2 ... */
 		nr_devs = pci_scan_slot(bus, devfn);//首先扫描当前HOST主桥下所有设备，即bus号为0的所有pci设备
 
 		/* Jailhouse 管理程序（hypervisor）可能会把一个多功能设备中的某些单独功能分配给来宾（guest），而不一定会把功能 0 一起分配。因此也要把这些功能一并查找出来*/
@@ -2970,7 +2975,7 @@ static unsigned int pci_scan_child_bus_extend(struct pci_bus *bus,
 		cmax = max;
 		pr_err("PCI %s -> pci_scan_bridge_extend", __func__);
 		//函数处理当前PCI总线上所挂接的PCI桥，并初始化在这个桥片Secondary PCI总线上的PCI设备
-		max = pci_scan_bridge_extend(bus, dev, max, 0, 0);
+		max = pci_scan_bridge_extend(bus, dev, max, 0, 0);// 这里会递归调用桥下的设备
 
 		/*
 		 * 现在先为每个桥（bridge）预留一个总线号，以避免在下面的第二次扫描中把支持热插拔的桥（hotplug bridges）的总线范围扩展得过大。
