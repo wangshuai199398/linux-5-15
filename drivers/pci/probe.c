@@ -336,7 +336,8 @@ out:
 
 	return (res->flags & IORESOURCE_MEM_64) ? 1 : 0;
 }
-
+/* 数访问PCI设备的BAR空间和ROM空间，并初始化 pci_-dev→resource 
+数获取BAR空间长度的方法。PCI总线规范规定了获取BAR空间的标准实现方法。其步骤是首先向BAR寄存器写全1，之后再读取BAR寄存器的内容，即可获得BAR空间的大小*/
 static void pci_read_bases(struct pci_dev *dev, unsigned int howmany, int rom)
 {
 	unsigned int pos, reg;
@@ -528,7 +529,8 @@ static void pci_read_bridge_mmio_pref(struct pci_bus *child)
 		pci_info(dev, "  bridge window %pR\n", res);
 	}
 }
-
+/* 将读取当前PCI桥的I/O Limit、I/O Base、Memory Limit、Memory Base、Prefetchable Memory Limit和Pre-fetchable Memory Base寄存器
+并根据这些寄存器的值，初始化pci_bus→resource参数，该参数存放当前PCI桥所能管理的地址空间 */
 void pci_read_bridge_bases(struct pci_bus *child)
 {
 	struct pci_dev *dev = child->self;
@@ -1326,7 +1328,7 @@ static int pci_scan_bridge_extend(struct pci_bus *bus, struct pci_dev *dev,
 			      bctl & ~PCI_BRIDGE_CTL_MASTER_ABORT);
 
 	pci_enable_crs(dev);
-
+	/* 如果Subordinate或者Secondary总线号不为0，则表示该PCI桥已经被Firmware遍历；如果为0，表示没有被Firmware遍历 */
 	if ((secondary || subordinate) && !pcibios_assign_all_busses() &&
 	    !is_cardbus && !broken) {
 		unsigned int cmax, buses;
@@ -1531,6 +1533,8 @@ EXPORT_SYMBOL(pci_scan_bridge);
 /*
  * Read interrupt line and base address registers.
  * The architecture-dependent code can tweak these, of course.
+ * 是读取PCI设备配置空间的Interrupt Pin和Interrupt Line寄存器，并将结构赋值到pci_dev→pin和irq参数中。
+ * 其中pin参数记录当前PCI设备使用的中断引脚，而irq参数存放系统软件使用的irq号
  */
 static void pci_read_irq(struct pci_dev *dev)
 {
@@ -1542,14 +1546,14 @@ static void pci_read_irq(struct pci_dev *dev)
 		dev->irq = 0;
 		return;
 	}
-
+	// pci_dev→irq 参数在设备驱动程序调用pci_enable_msi/pci_enable_msix函数后也将会发生变
 	pci_read_config_byte(dev, PCI_INTERRUPT_PIN, &irq);
 	dev->pin = irq;
 	if (irq)
 		pci_read_config_byte(dev, PCI_INTERRUPT_LINE, &irq);
 	dev->irq = irq;
 }
-
+/* 处理 PCI Express Extended Capabilities 结构，并将其保存在pci_dev→pcie_type参数 */
 void set_pcie_port_type(struct pci_dev *pdev)
 {
 	int pos;
@@ -1951,7 +1955,7 @@ int pci_setup_device(struct pci_dev *dev)
 
 	/* Clear errors left from system firmware */
 	pci_write_config_word(dev, PCI_STATUS, 0xffff);
-
+	/* 判断当前PCI设备是PCIAgent设备、PCI桥还是Card Bus */
 	switch (dev->hdr_type) {		    /* header type */
 	case PCI_HEADER_TYPE_NORMAL:		    /* standard header */
 		if (class == PCI_CLASS_BRIDGE_PCI)
@@ -2459,6 +2463,7 @@ EXPORT_SYMBOL(pci_bus_read_dev_vendor_id);
 /*
  * Read the config data for a PCI device, sanity-check it,
  * and fill in the dev structure.
+ * 数首先读取PCI设备的 Vendor ID和Header Type寄存器，并根据这两个寄存器的内容对PCI设备进行完整性检查，之后创建pci_dev结构，并对该结构进行基本的初始化
  */
 static struct pci_dev *pci_scan_device(struct pci_bus *bus, int devfn)
 {
@@ -2467,7 +2472,7 @@ static struct pci_dev *pci_scan_device(struct pci_bus *bus, int devfn)
 
 	if (!pci_bus_read_dev_vendor_id(bus, devfn, &l, 60*1000))
 		return NULL;
-	pr_err("\nPCI %s -> pci_alloc_dev", __func__);
+	pr_debug("\nPCI %s -> pci_alloc_dev", __func__);
 	dev = pci_alloc_dev(bus);
 	if (!dev)
 		return NULL;
@@ -2475,7 +2480,7 @@ static struct pci_dev *pci_scan_device(struct pci_bus *bus, int devfn)
 	dev->devfn = devfn;
 	dev->vendor = l & 0xffff;
 	dev->device = (l >> 16) & 0xffff;
-	pr_err("PCI %s -> pci_setup_device devfn %d", __func__, devfn);
+	pr_debug("PCI %s -> pci_setup_device devfn %d", __func__, devfn);
 	if (pci_setup_device(dev)) {
 		pci_bus_put(dev->bus);
 		kfree(dev);
@@ -2512,7 +2517,7 @@ static void pci_init_capabilities(struct pci_dev *dev)
 
 	/* Buffers for saving PCIe and PCI-X capabilities */
 	pci_allocate_cap_save_buffers(dev);
-	pr_err("PCI %s ->pci_pm_init", __func__);
+	pr_debug("PCI %s ->pci_pm_init", __func__);
 	pci_pm_init(dev);		/* Power Management */
 	pci_vpd_init(dev);		/* Vital Product Data */
 	pci_configure_ari(dev);		/* Alternative Routing-ID Forwarding */
@@ -2565,7 +2570,7 @@ static void pci_set_msi_domain(struct pci_dev *dev)
 	d = pci_dev_msi_domain(dev);
 	if (!d)
 		d = dev_get_msi_domain(&dev->bus->dev);
-	pr_err("PCI %s -> dev_set_msi_domain name %s\n", __func__, d->name);
+	pr_debug("PCI %s -> dev_set_msi_domain name %s\n", __func__, d->name);
 	dev_set_msi_domain(&dev->dev, d);
 }
 
@@ -2592,7 +2597,7 @@ void pci_device_add(struct pci_dev *dev, struct pci_bus *bus)
 	pci_reassigndev_resource_alignment(dev);
 
 	dev->state_saved = false;
-	pr_err("PCI %s -> pci_init_capabilities", __func__);
+	pr_debug("PCI %s -> pci_init_capabilities", __func__);
 	pci_init_capabilities(dev);
 
 	/*
@@ -2624,11 +2629,12 @@ struct pci_dev *pci_scan_single_device(struct pci_bus *bus, int devfn)
 		pci_dev_put(dev);
 		return dev;
 	}
-
+	// 函数主要对PCI设备的配置寄存器进行读写操作，侧重于PCI设备进行硬件层面的初始化操作
 	dev = pci_scan_device(bus, devfn);
 	if (!dev)
 		return NULL;
-	pr_err("PCI %s -> pci_device_add", __func__);
+	pr_debug("PCI %s -> pci_device_add", __func__);
+	//函数侧重于软件层面的初始化
 	pci_device_add(dev, bus);
 
 	return dev;
@@ -2700,6 +2706,7 @@ int pci_scan_slot(struct pci_bus *bus, int devfn)
 {
 	unsigned fn, nr = 0;
 	struct pci_dev *dev;
+	pr_debug("PCI %s ", __func__);
 
 	if (only_one_child(bus) && (devfn > 0))
 		return 0; /* Already scanned the entire slot */
@@ -2903,6 +2910,8 @@ void __weak pcibios_fixup_bus(struct pci_bus *bus)
  *
  * 扫描 @bus 下面的所有设备，包括其下级（subordinate）总线。返回值是新的下级总线号（subordinate number），它包含扫描到的所有设备/总线范围
  * 如果传入 @available_buses，则会把剩余的总线号空间在支持热插拔（hotplug-capable）的桥（bridge）之间平均分配，以便将来能够进一步扩展总线层级结构
+ * 
+ * 是分配PCI总线树的PCI总线号
  */
 static unsigned int pci_scan_child_bus_extend(struct pci_bus *bus,
 					      unsigned int available_buses)
@@ -2915,13 +2924,11 @@ static unsigned int pci_scan_child_bus_extend(struct pci_bus *bus,
 
 	dev_err(&bus->dev, "scanning bus\n");
 
-	/* Go find them, Rover! */
+	/* 一条PCI总线上最多有32个设备，每个设备最多有8个Function。因此需要调用256次pci_scan_slot */
 	for (devfn = 0; devfn < 256; devfn += 8) {
-		nr_devs = pci_scan_slot(bus, devfn);//添加若干 Host Bridge（主桥/内存控制器相关的桥），PCIe 端口/桥
+		nr_devs = pci_scan_slot(bus, devfn);//首先扫描当前HOST主桥下所有设备，即bus号为0的所有pci设备
 
-		/*
-		 * Jailhouse 管理程序（hypervisor）可能会把一个多功能设备中的某些单独功能分配给来宾（guest），而不一定会把功能 0 一起分配。因此也要把这些功能一并查找出来
-		 */
+		/* Jailhouse 管理程序（hypervisor）可能会把一个多功能设备中的某些单独功能分配给来宾（guest），而不一定会把功能 0 一起分配。因此也要把这些功能一并查找出来*/
 		if (jailhouse_paravirt() && nr_devs == 0) {
 			for (fn = 1; fn < 8; fn++) {
 				pr_err("PCI %s -> pci_scan_single_device", __func__);
@@ -2957,10 +2964,12 @@ static unsigned int pci_scan_child_bus_extend(struct pci_bus *bus,
 
 	/*
 	 * 扫描那些已经完成配置的桥（bridge）。我们不会去修改它们，除非它们存在配置错误（这种情况会在下面的第二次扫描中处理并修正）。
+	 * 当pass参数等于0时，pci_scan_bridge函数处理“已完成枚举”的PCI桥；当pass参数等于1时，pci_scan_bridge函数处理“尚未完成枚举”的PCI桥
 	 */
 	for_each_pci_bridge(dev, bus) {
 		cmax = max;
 		pr_err("PCI %s -> pci_scan_bridge_extend", __func__);
+		//函数处理当前PCI总线上所挂接的PCI桥，并初始化在这个桥片Secondary PCI总线上的PCI设备
 		max = pci_scan_bridge_extend(bus, dev, max, 0, 0);
 
 		/*
