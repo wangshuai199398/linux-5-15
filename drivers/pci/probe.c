@@ -1574,11 +1574,12 @@ void set_pcie_port_type(struct pci_dev *pdev)
 	// 设备能力
 	pci_read_config_dword(pdev, pos + PCI_EXP_DEVCAP, &pdev->devcap);
 	pdev->pcie_mpss = FIELD_GET(PCI_EXP_DEVCAP_PAYLOAD, pdev->devcap);
-	pr_debug("%s: pos 0x%x devcap=0x%x, mpss=%d\n", __func__, pos, pdev->devcap, pdev->pcie_mpss);
 
 	parent = pci_upstream_bridge(pdev);
+	pr_debug("%s: pos 0x%x devcap=0x%x, mpss=%d\n", __func__, pos, pdev->devcap, pdev->pcie_mpss);
 	if (!parent)
 		return;
+	pr_debug("parend vendor 0x%x device 0x%x", parent->vendor, parent->device);
 
 	/*
 	 * Some systems do not identify their upstream/downstream ports
