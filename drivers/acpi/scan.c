@@ -2372,7 +2372,7 @@ int acpi_bus_scan(acpi_handle handle)
 
 	if (!device)
 		return -ENODEV;
-	pr_err("ACPI %s", __func__);
+	pr_err("ACPI %s dev name: %s", __func__, dev_name(&device->dev));
 	acpi_bus_attach(device, true);
 
 	if (!acpi_bus_scan_second_pass)
