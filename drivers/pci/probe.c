@@ -1136,7 +1136,7 @@ static struct pci_bus *pci_alloc_child_bus(struct pci_bus *parent,
 	 */
 	child->dev.class = &pcibus_class;
 	dev_set_name(&child->dev, "%04x:%02x", pci_domain_nr(child), busnr);
-	pr_debug("PCI %s Allocating PCI bus %s\n", __func__, dev_name(&child->dev));
+	pr_debug("PCI %s Allocating PCI bus %s host->child_ops %p\n", __func__, dev_name(&child->dev), host->child_ops);
 
 	/* Set up the primary, secondary and subordinate bus numbers */
 	child->number = child->busn_res.start = busnr;
