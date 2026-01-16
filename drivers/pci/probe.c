@@ -1574,6 +1574,7 @@ void set_pcie_port_type(struct pci_dev *pdev)
 	// 设备能力
 	pci_read_config_dword(pdev, pos + PCI_EXP_DEVCAP, &pdev->devcap);
 	pdev->pcie_mpss = FIELD_GET(PCI_EXP_DEVCAP_PAYLOAD, pdev->devcap);
+	pr_debug("%s: pos 0x%x devcap=0x%x, mpss=%d\n", __func__, pos, pdev->devcap, pdev->pcie_mpss);
 
 	parent = pci_upstream_bridge(pdev);
 	if (!parent)
@@ -1890,11 +1891,11 @@ int pci_setup_device(struct pci_dev *dev)
 
 	hdr_type = pci_hdr_type(dev);
 
-	dev->sysdata = dev->bus->sysdata;//domain node acpi_device
+	dev->sysdata = dev->bus->sysdata;//pci_acpi_scan_root中设置domain node acpi_device
 	dev->dev.parent = dev->bus->bridge;
 	dev->dev.bus = &pci_bus_type;
-	dev->hdr_type = hdr_type & 0x7f;
-	dev->multifunction = !!(hdr_type & 0x80);
+	dev->hdr_type = hdr_type & 0x7f;//0: Non-Bridge Function; 1: PCI-to-PCI Bridge; 2: CardBus Bridge
+	dev->multifunction = !!(hdr_type & 0x80);//多功能设备标志
 	dev->error_state = pci_channel_io_normal;
 	set_pcie_port_type(dev);
 
