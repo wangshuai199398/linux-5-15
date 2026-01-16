@@ -2190,7 +2190,7 @@ static void acpi_bus_attach(struct acpi_device *device, bool first_pass)
 		acpi_device_set_enumerated(device);
 		goto ok;
 	}
-	//pr_info("ACPI %s ->device_attach", __func__);
+	pr_debug("ACPI %s ->device_attach", __func__);
 	ret = device_attach(&device->dev);
 	if (ret < 0)
 		return;
