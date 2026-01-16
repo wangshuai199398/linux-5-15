@@ -1579,7 +1579,6 @@ void set_pcie_port_type(struct pci_dev *pdev)
 	pr_debug("%s: pos 0x%x devcap=0x%x, mpss=%d\n", __func__, pos, pdev->devcap, pdev->pcie_mpss);
 	if (!parent)
 		return;
-	pr_debug("parend vendor 0x%x device 0x%x", parent->vendor, parent->device);
 
 	/*
 	 * Some systems do not identify their upstream/downstream ports
@@ -1587,6 +1586,7 @@ void set_pcie_port_type(struct pci_dev *pdev)
 	 * the port type accordingly.
 	 */
 	type = pci_pcie_type(pdev);
+	pr_debug("parend vendor 0x%x device 0x%x type %d", parent->vendor, parent->device, type);
 	if (type == PCI_EXP_TYPE_DOWNSTREAM) {
 		/*
 		 * If pdev claims to be downstream port but the parent
